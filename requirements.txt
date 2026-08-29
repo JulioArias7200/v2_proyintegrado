@@ -1,0 +1,31 @@
+reflex>=0.6.0
+crewai>=0.30.0
+langchain-openai>=0.1.0
+pymongo>=4.7.0
+motor>=3.4.0
+pydantic-settings>=2.2.0
+pydantic>=2.7.0
+loguru>=0.7.2
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+PyPDF2>=3.0.1
+pdfplumber>=0.11.0
+python-docx>=1.1.0
+striprtf>=0.0.26
+odfpy>=1.4.1
+chardet>=5.2.0
+google-api-python-client>=2.120.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
+python-dotenv>=1.0.1
+httpx>=0.27.0
+dnspython>=2.6.0
+docling>=2.0.0
+
+# ── Agente de Consistencia Normativa (embeddings + pgvector) ───────────────
+PyMuPDF>=1.24.0
+requests>=2.31.0
+
+# ── API REST Backend ────────────────────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn>=0.28.0

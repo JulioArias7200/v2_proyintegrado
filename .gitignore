@@ -1,0 +1,39 @@
+.states
+.web
+# Python & Virtualenv
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+
+# Reflex
+.web/
+.states/
+assets/external/
+
+# Data & Uploads
+*.db
+*.sqlite
+data/uploads/
+uploaded_files/
+
+# Secrets & Config
+.env
+sendgrid.env
+token.json
+client_secrets.json
+
+# Node & Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Scratch
+scratch/
+
+# OS & Logs
+.DS_Store
+Thumbs.db
+*.log
