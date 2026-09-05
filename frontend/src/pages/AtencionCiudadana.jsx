@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 
+import CssRobotAvatar from '../components/CssRobotAvatar';
+
 export default function AtencionCiudadana() {
   const [solicitudes, setSolicitudes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,18 +83,47 @@ export default function AtencionCiudadana() {
 
   return (
     <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '32px 24px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-          <span className="badge badge-green">Ventanilla Única</span>
-          <span className="badge badge-gold">Agente de Interacción Ciudadana</span>
+      {/* Header with CSS Robot Avatar Banner */}
+      <div style={{
+        marginBottom: '32px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '24px',
+        background: 'linear-gradient(135deg, rgba(4, 47, 46, 0.8) 0%, rgba(15, 118, 110, 0.5) 100%)',
+        padding: '24px 30px',
+        borderRadius: '24px',
+        border: '1.5px solid rgba(20, 184, 166, 0.4)',
+        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.25)'
+      }}>
+        <div style={{ flex: 1, minWidth: '280px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span className="badge badge-green">Ventanilla Única</span>
+            <span className="badge badge-gold">Agente de Interacción Ciudadana</span>
+          </div>
+          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff', marginBottom: '6px', letterSpacing: '-0.02em' }}>
+            Módulo de Atención y Solicitudes Ciudadanas
+          </h1>
+          <p style={{ color: '#99f6e4', fontSize: '0.96rem', maxWidth: '850px', lineHeight: 1.6 }}>
+            Recepción y canalización inteligente de peticiones ciudadanas, quejas y denuncias procesadas por el SMA con persistencia en PostgreSQL Neon.
+          </p>
         </div>
-        <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginBottom: '6px', letterSpacing: '-0.02em' }}>
-          Módulo de Atención y Solicitudes Ciudadanas
-        </h1>
-        <p style={{ color: '#475569', fontSize: '0.96rem', maxWidth: '850px', lineHeight: 1.6 }}>
-          Recepción y canalización inteligente de peticiones ciudadanas, quejas y denuncias procesadas por el SMA con persistencia en PostgreSQL Neon.
-        </p>
+
+        {/* Dynamic HTML/CSS Bot Avatar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(2, 26, 25, 0.6)', padding: '16px 24px', borderRadius: '20px', border: '1px solid rgba(20, 184, 166, 0.3)' }}>
+          <CssRobotAvatar
+            theme="teal"
+            status={isSubmitting ? 'working' : 'idle'}
+            size="lg"
+            showBubble={true}
+            thinkingText={isSubmitting ? 'Canalizando solicitud ciudadana...' : 'Atendiendo consultas en vivo'}
+          />
+          <div>
+            <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '1rem' }}>Bot Ciudadano</div>
+            <div style={{ fontSize: '0.78rem', color: '#2dd4bf', fontWeight: 600 }}>NVIDIA Nemotron 30B</div>
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '24px' }}>

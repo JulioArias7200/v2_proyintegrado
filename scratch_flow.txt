@@ -1,0 +1,87 @@
+Created At: 2026-09-05T12:42:03-04:00
+Completed At: 2026-09-05T12:42:03-04:00
+File Path: `file:///c:/Users/rebal/OneDrive/Desktop/Nueva%20carpeta%20%283%29/frontend/src/components/HorizontalAgentFlow.jsx`
+Total Lines: 814
+Total Bytes: 32227
+Showing lines 500 to 620
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+500:           overflowX: 'auto',
+501:           padding: '8px 4px 16px 4px',
+502:           scrollBehavior: 'smooth',
+503:           userSelect: 'none'
+504:         }}
+505:       >
+506:         {visibleAgents.map((agent, index) => {
+507:           const tc = themeColors[agent.theme] || themeColors.green;
+508:           const isActive = pipelineStep === agent.activeStep;
+509:           const isDone = pipelineStep >= agent.doneAtStep;
+510:           const isInspected = inspectedAgentId === agent.id;
+511:           const canInspect = isDone;
+512:           const ActionIcon = agent.workflowIcon;
+513: 
+514:           const cardBorder = isInspected
+515:             ? `2.5px solid ${tc.primary}`
+516:             : isActive
+517:             ? `2.5px solid ${tc.primary}`
+518:             : isDone
+519:             ? '2px solid rgba(16, 185, 129, 0.75)'
+520:             : '1.5px solid rgba(148, 163, 184, 0.22)';
+521: 
+522:           const cardShadow = isActive
+523:             ? `0 0 24px ${tc.glow}, 0 8px 30px rgba(0, 0, 0, 0.6)`
+524:             : isInspected
+525:             ? `0 0 20px ${tc.glow}`
+526:             : isDone
+527:             ? '0 4px 16px rgba(16, 185, 129, 0.2)'
+528:             : '0 4px 14px rgba(0, 0, 0, 0.3)';
+529: 
+530:           const imgSize = isLarge ? '84px' : '56px';
+531:           const cardWidth = isLarge ? '165px' : '138px';
+532: 
+533:           return (
+534:             <React.Fragment key={agent.id}>
+535:               {/* ── AGENT CARD ── */}
+536:               <div
+537:            
+<truncated 2241 bytes>
+         }}>
+582:                   <span style={{
+583:                     fontSize: '0.66rem',
+584:                     fontWeight: 800,
+585:                     color: tc.primary,
+586:                     background: tc.badgeBg,
+587:                     border: `1px solid ${tc.primary}55`,
+588:                     borderRadius: '6px',
+589:                     padding: '1px 6px',
+590:                     fontFamily: 'monospace'
+591:                   }}>
+592:                     P{agent.stepNumber}
+593:                   </span>
+594: 
+595:                   {/* Specific Action/Activity Icon with label */}
+596:                   <div style={{
+597:                     display: 'flex',
+598:                     alignItems: 'center',
+599:                     gap: '4px',
+600:                     background: 'rgba(0, 0, 0, 0.35)',
+601:                     padding: '2px 6px',
+602:                     borderRadius: '6px',
+603:                     fontSize: '0.64rem',
+604:                     color: tc.primary,
+605:                     fontWeight: 700
+606:                   }}>
+607:                     <ActionIcon size={12} />
+608:                     <span>{agent.iconLabel}</span>
+609:                   </div>
+610:                 </div>
+611: 
+612:                 {/* ── ROBOT HERO IMAGE (Much Larger, Detailed & Prominent) ── */}
+613:                 <div style={{
+614:                   position: 'relative',
+615:                   width: imgSize,
+616:                   height: imgSize,
+617:                   borderRadius: isLarge ? '20px' : '50%',
+618:                   marginBottom: isLarge ? '10px' : '6px',
+619:                   border: `2.5px solid ${isActive ? tc.primary : isDone ? '#10b981' : tc.border}`,
+620:                   boxShadow: isActive ? `${tc.glow}, 0 0 16px ${tc.primary}88` : '0 6px 18px rgba(0, 0, 0, 0.45)',
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

@@ -601,6 +601,10 @@ def actualizar_proyecto_con_observacion(id_proyecto: int, id_observacion: int, v
 # SOLICITUDES (ciudadanas y correspondencia)
 # ════════════════════════════════════════════════════════════════════════════
 
+# ════════════════════════════════════════════════════════════════════════════
+# SOLICITUDES Y EXPEDIENTES UNIFICADOS (Esquema sistema.proyecto_ley)
+# ════════════════════════════════════════════════════════════════════════════
+
 def guardar_solicitud_documento(
     sesion_id: str,
     texto_documento: str,
@@ -613,32 +617,43 @@ def guardar_solicitud_documento(
     usuario_id: int = 1,
 ) -> Optional[int]:
     """
-    Guarda en public.Solicitudes_Documentos (ciudadanos / correspondencia).
-    Returns solicitud_id o None si falla.
+    Guarda en sistema.proyecto_ley unificando peticiones ciudadanas,
+    oficios y correspondencia (reemplaza public.Solicitudes_Documentos).
     """
     try:
         conn = get_conn()
         cur = conn.cursor()
+        
+        tipo_doc = "Peticion_Ciudadana" if "ciudadan" in origen.lower() else ("Oficio" if "oficio" in origen.lower() or "corresp" in origen.lower() else "Peticion_Ciudadana")
+        titulo = (nombre_archivo or "Documento Mesa de Partes")[:400]
+        resumen = (resumen_ia or texto_documento[:500])[:2000]
+        ano_actual = datetime.now().year
+        num_exp = f"DOC-{ano_actual}-{sesion_id[:6].upper()}"
+
         cur.execute(
             """
-            INSERT INTO public."Solicitudes_Documentos" (
-                usuario_id, fecha_ingreso, origen, tipo_entrada,
-                nombre_archivo, texto_extraido, resumen_ia,
+            INSERT INTO sistema.proyecto_ley (
+                numero_expediente, id_usuario_presentante, titulo, resumen,
+                texto_completo, archivo_pdf, fecha_ingreso, id_estado_actual,
+                prioridad, activo, tipo_documento, observaciones_generales,
                 drive_file_id, drive_link
             ) VALUES (
-                %s, NOW(), %s, %s,
-                %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, NOW(), 1,
+                'Media', TRUE, %s, %s,
                 %s, %s
             )
-            RETURNING solicitud_id
+            RETURNING id_proyecto
             """,
             (
+                num_exp,
                 usuario_id,
-                origen[:100],
-                tipo_entrada[:100],
-                (nombre_archivo or "")[:255],
+                titulo,
+                resumen,
                 texto_documento[:50000],
-                (resumen_ia or "")[:5000],
+                (nombre_archivo or "")[:255],
+                tipo_doc,
+                f"origen:{origen} | sesion:{sesion_id}",
                 drive_file_id,
                 drive_link,
             ),
@@ -646,50 +661,52 @@ def guardar_solicitud_documento(
         row = cur.fetchone()
         conn.commit()
         cur.close()
-        solicitud_id = row[0] if row else None
-        logger.info(f"✅ Solicitud guardada → id: {solicitud_id}")
-        return solicitud_id
+        proyecto_id = row[0] if row else None
+        logger.info(f"✅ Documento guardado en sistema.proyecto_ley → id: {proyecto_id} (Tipo: {tipo_doc})")
+        return proyecto_id
     except Exception as e:
         try:
             get_conn().rollback()
         except Exception:
             pass
-        logger.warning(f"⚠️  No se pudo guardar solicitud en Neon: {e}")
+        logger.warning(f"⚠️  No se pudo guardar documento en sistema.proyecto_ley: {e}")
         return None
 
-
-# ════════════════════════════════════════════════════════════════════════════
-# CLASIFICACIONES
-# ════════════════════════════════════════════════════════════════════════════
 
 def guardar_clasificacion_agente(
     solicitud_id: Optional[int],
     agente_destino: str,
     confianza_modelo: Optional[float] = None,
 ) -> None:
-    """Registra el resultado del Agente Distribuidor en public.Clasificacion_Agente."""
+    """Registra la clasificación en la bitácora y en sistema.proyecto_ley."""
     if solicitud_id is None:
         return
     try:
+        from psycopg2.extras import Json
         conn = get_conn()
         cur = conn.cursor()
+        decision = {
+            "agente_destino": agente_destino,
+            "confianza": confianza_modelo,
+            "timestamp": datetime.now().isoformat()
+        }
         cur.execute(
             """
-            INSERT INTO public."Clasificacion_Agente" (
-                solicitud_id, agente_destino, confianza_modelo, fecha_proceso
-            ) VALUES (%s, %s, %s, NOW())
+            UPDATE sistema.proyecto_ley 
+            SET agente_distribuidor_decision = %s
+            WHERE id_proyecto = %s
             """,
-            (solicitud_id, agente_destino[:100], confianza_modelo),
+            (Json(decision), solicitud_id)
         )
         conn.commit()
         cur.close()
-        logger.debug(f"Clasificacion_Agente guardada → solicitud {solicitud_id}")
+        logger.debug(f"Clasificación actualizada en proyecto_ley #{solicitud_id}")
     except Exception as e:
         try:
             get_conn().rollback()
         except Exception:
             pass
-        logger.warning(f"⚠️  No se pudo guardar Clasificacion_Agente: {e}")
+        logger.warning(f"⚠️  No se pudo actualizar clasificación en proyecto_ley: {e}")
 
 
 def guardar_clasificacion_comision(
@@ -700,59 +717,105 @@ def guardar_clasificacion_comision(
     drive_file_id: Optional[str] = None,
     drive_link: Optional[str] = None,
 ) -> None:
-    """Registra el resultado del Agente Comisión en public.Clasificacion_Comision."""
+    """Actualiza la comisión sugerida directamente en sistema.proyecto_ley."""
     if solicitud_id is None:
         return
     try:
-        dictamen = dictamen or {}
-        palabras = comision_data.get("palabras_clave", [])
-        palabras_str = ", ".join(palabras[:10]) if isinstance(palabras, list) else str(palabras)
-        confianza_str = str(round(float(dictamen.get("confianza", 0)), 1)) if dictamen.get("confianza") is not None else None
+        nombre_comision = str(comision_data.get("comision_principal", ""))
+        asignar_comision_a_proyecto(
+            id_proyecto=solicitud_id,
+            nombre_comision=nombre_comision,
+            observaciones=comision_data.get("resumen", ""),
+        )
+    except Exception as e:
+        logger.warning(f"⚠️  No se pudo guardar comision en proyecto_ley: {e}")
 
+
+# ════════════════════════════════════════════════════════════════════════════
+# PASOS DE PROCESO (Historial visual y retroceso)
+# ════════════════════════════════════════════════════════════════════════════
+
+def registrar_paso_proceso(
+    sesion_id: str,
+    num_paso: int,
+    nombre_paso: str,
+    agente_responsable: str,
+    justificacion_paso: str,
+    estado_paso: str = "EN_PROGRESO",
+    id_proyecto: Optional[int] = None,
+    resultado: Optional[Dict[str, Any]] = None,
+    duracion_segundos: int = 0,
+) -> Optional[int]:
+    """Registra o actualiza el paso de un agente en sistema.pasos_proceso."""
+    try:
+        from psycopg2.extras import Json
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO public."Clasificacion_Comision" (
-                solicitud_id, comision_senado, palabras_clave_detectadas,
-                estado_tramite, fecha_asignacion,
-                comision_secundaria,
-                tipo_documento, nivel_complejidad, prioridad,
-                nivel_confianza,
-                cosmos_document_id, drive_file_id, drive_link
+            INSERT INTO sistema.pasos_proceso (
+                id_proyecto, sesion_id, num_paso, nombre_paso,
+                justificacion_paso, agente_responsable, estado_paso,
+                resultado, timestamp_inicio, timestamp_fin, duracion_segundos
             ) VALUES (
+                %s, %s, %s, %s,
                 %s, %s, %s,
-                %s, NOW(),
-                %s,
-                %s, %s, %s,
-                %s,
-                %s, %s, %s
+                %s, NOW(), CASE WHEN %s = 'COMPLETADO' THEN NOW() ELSE NULL END, %s
             )
+            RETURNING id
             """,
             (
-                solicitud_id,
-                str(comision_data.get("comision_principal", ""))[:200],
-                palabras_str[:500],
-                "Asignado",
-                comision_data.get("comision_secundaria", ""),
-                "Legislativo",
-                str(comision_data.get("complejidad", "Media")),
-                str(comision_data.get("prioridad", "Normal")),
-                confianza_str,
-                cosmos_document_id,
-                drive_file_id,
-                drive_link,
-            ),
+                id_proyecto,
+                sesion_id,
+                num_paso,
+                nombre_paso,
+                justificacion_paso,
+                agente_responsable,
+                estado_paso,
+                Json(resultado or {}),
+                estado_paso,
+                duracion_segundos,
+            )
         )
+        row = cur.fetchone()
         conn.commit()
         cur.close()
-        logger.debug(f"Clasificacion_Comision guardada → solicitud {solicitud_id}")
+        return row[0] if row else None
     except Exception as e:
         try:
             get_conn().rollback()
         except Exception:
             pass
-        logger.warning(f"⚠️  No se pudo guardar Clasificacion_Comision: {e}")
+        logger.warning(f"⚠️ No se pudo registrar paso de proceso: {e}")
+        return None
+
+
+def obtener_pasos_proceso(sesion_id: str) -> List[Dict[str, Any]]:
+    """Recupera los pasos ejecutados para una sesión específica."""
+    try:
+        import psycopg2.extras
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(
+            """
+            SELECT * FROM sistema.pasos_proceso
+            WHERE sesion_id = %s
+            ORDER BY num_paso ASC, timestamp_inicio ASC
+            """,
+            (sesion_id,)
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        for r in rows:
+            if isinstance(r.get("timestamp_inicio"), datetime):
+                r["timestamp_inicio"] = r["timestamp_inicio"].isoformat()
+            if isinstance(r.get("timestamp_fin"), datetime):
+                r["timestamp_fin"] = r["timestamp_fin"].isoformat()
+        return rows
+    except Exception as e:
+        logger.warning(f"No se pudieron obtener pasos de proceso: {e}")
+        return []
+
 
 
 # ════════════════════════════════════════════════════════════════════════════

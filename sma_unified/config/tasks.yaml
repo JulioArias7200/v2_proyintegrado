@@ -1,263 +1,213 @@
 # ============================================================================
-# DEFINICIÓN DE TAREAS — SMA CONGRESO (CrewAI)
+# DEFINICIÓN DE TAREAS — SMA CONGRESO (CrewAI & YAML Architecture)
 # ============================================================================
 
-tarea_clasificacion_enrutador:
-  description: >
-    Analiza el siguiente documento recibido en mesa de partes / ventanilla única
-    y determina a qué instancia corresponde:
-
-    ---
-    TEXTO DEL DOCUMENTO:
-    {texto_documento}
-    ---
-
-    REGLAS DE CLASIFICACIÓN INSTITUCIONAL (Bolivia - Estado Plurinacional):
-
-    1. Responde 'AGENTE_REGISTRO_LEGISLATIVO' si el texto corresponde al ámbito
-       legislativo o normativo:
-       - Proyectos de Ley (P.L.), Leyes Nacionales, Decretos Supremos (D.S.),
-         Resoluciones Ministeriales o Bi-Ministeriales.
-       - Declaraciones Camarales, Minutas de Comunicación o Peticiones de Informe
-         Escrito/Oral (PIE/PIO).
-       - Asuntos relativos a la Asamblea Legislativa Plurinacional (Cámara de Senadores
-         o Cámara de Diputados) o Asambleas Legislativas Departamentales (ALD).
-
-    2. Responde 'AGENTE_GESTION_CORRESPONDENCIA' si el texto es correspondencia oficial
-       interinstitucional o trámite administrativo:
-       - Cartas externas, notas de atención o correspondencia formal recibida de
-         Ministerios de Estado, Viceministerios, Direcciones Funcionales, Gobiernos
-         Autónomos Departamentales (GAD) o Municipales (GAM).
-       - Comunicaciones de entidades autárquicas/descentralizadas (AGETIC, SIN, ANB,
-         AJ, ABC, etc.).
-       - Informes técnicos o legales institucionales y comunicaciones internas entre
-         autoridades públicas.
-
-    3. Responde 'AGENTE_ATENCION_CIUDADANA' si el texto corresponde a solicitudes
-       directas de la población:
-       - Peticiones ciudadanas, cartas de solicitud de la sociedad civil, juntas
-         vecinales, OTBs, sindicatos u organizaciones sociales.
-       - Reclamos, denuncias, quejas, recursos de revocatoria/jerárquicos, o
-         solicitudes de acceso a la información pública formuladas por personas
-         naturales o jurídicas privadas.
-
-  expected_output: >
-    Única y exclusivamente una de estas tres cadenas de texto en mayúsculas, sin
-    punto final, sin explicación, sin comillas:
-    AGENTE_REGISTRO_LEGISLATIVO
-    AGENTE_GESTION_CORRESPONDENCIA
-    AGENTE_ATENCION_CIUDADANA
-
-
-tarea_clasificacion_comision:
-  description: >
-    Eres un experto en derecho parlamentario boliviano. Lee el TEXTO COMPLETO del documento a continuación
-    y determina con precisión cuál de las 10 comisiones del Senado de Bolivia debe conocerlo.
-
-    TEXTO DEL DOCUMENTO:
-    ---
-    {texto_documento}
-    ---
-
-    ## PASO 1 — EXTRAE LA MATERIA REAL DEL DOCUMENTO
-    Lee el título, el objeto (Art. 1), los artículos principales y la disposición final.
-    Identifica la materia principal basándote en el CONTENIDO REAL del texto, no en palabras sueltas.
-    NO confundas "patrimonio educativo" con "medio ambiente".
-    NO confundas "protección de un modelo educativo" con "recursos naturales".
-
-    ## PASO 2 — APLICA EL SIGUIENTE MAPA OBLIGATORIO (materia → comisión)
-    Sigue estas reglas de forma ESTRICTA en el orden indicado. La PRIMERA que coincida es la correcta:
-
-    EDUCACIÓN / PEDAGOGÍA / PATRIMONIO EDUCATIVO / MODELOS EDUCATIVOS / COLEGIOS / UNIVERSIDADES
-    / SALUD / VIVIENDA / PROGRAMAS SOCIALES / SEGURIDAD SOCIAL → COMISION DE POLITICA SOCIAL EDUCACION Y SALUD
-
-    CONSTITUCIÓN / DERECHOS HUMANOS / SISTEMA ELECTORAL / REFERÉNDUM / TRATADOS DE DDHH
-    → COMISION DE CONSTITUCION DERECHOS HUMANOS LEGISLACION Y SISTEMA ELECTORAL
-
-    JUSTICIA / SISTEMA JUDICIAL / MINISTERIO PÚBLICO / TRIBUNAL / FISCALÍA / CÓDIGO PENAL / CÓDIGO CIVIL
-    → COMISION DE JUSTICIA PLURAL MINISTERIO PUBLICO Y DEFENSA LEGAL DEL ESTADO
-
-    SEGURIDAD DEL ESTADO / FUERZAS ARMADAS / POLICÍA / NARCOTRÁFICO / DEFENSA NACIONAL
-    → COMISION DE SEGURIDAD DEL ESTADO FUERZAS ARMADAS Y POLICIA BOLIVIANA
-
-    AUTONOMÍAS / ORGANIZACIÓN TERRITORIAL / MUNICIPIOS / DEPARTAMENTOS / ESTATUTOS AUTONÓMICOS
-    → COMISION DE ORGANIZACION TERRITORIAL DEL ESTADO Y AUTONOMIAS
-
-    PRESUPUESTO / FINANZAS PÚBLICAS / POLÍTICA ECONÓMICA / IMPUESTOS / DEUDA PÚBLICA / BANCO CENTRAL
-    → COMISION DE PLANIFICACION POLITICA ECONOMICA Y FINANZAS
-
-    PRODUCCIÓN / INDUSTRIA / HIDROCARBUROS / MINERÍA / ECONOMÍA PLURAL / INDUSTRIALIZACIÓN / COOPERATIVAS
-    → COMISION DE ECONOMIA PLURAL PRODUCCION INDUSTRIA E INDUSTRIALIZACION
-
-    PUEBLOS INDÍGENAS / ORIGINARIO CAMPESINOS / INTERCULTURALIDAD / TIERRAS COMUNITARIAS / USOS Y COSTUMBRES
-    → COMISION DE NACIONES Y PUEBLOS INDIGENA ORIGINARIO CAMPESINOS E INTERCULTURALIDAD
-
-    POLÍTICA EXTERIOR / TRATADOS INTERNACIONALES / DIPLOMACIA / RELACIONES EXTERIORES / INTEGRACIÓN REGIONAL
-    → COMISION DE POLITICA INTERNACIONAL
-
-    TIERRA / PROPIEDAD AGRARIA / RECURSOS NATURALES / MEDIO AMBIENTE / CAMBIO CLIMÁTICO / AGUA / BOSQUES
-    → COMISION DE TIERRA Y TERRITORIO RECURSOS NATURALES Y MEDIO AMBIENTE
-
-    ## PASO 3 — CONFIRMACIÓN ANTI-ALUCINACIÓN
-    Antes de escribir tu respuesta, verifica:
-    - ¿El título del documento menciona explícitamente educación, modelo educativo, colegio, universidad,
-      patrimonio educativo, pedagógico, académico? → Entonces SIEMPRE es COMISION DE POLITICA SOCIAL EDUCACION Y SALUD.
-    - ¿El Art. 1 (Objeto) dice "declarar Patrimonio Educativo" o "fortalecer la calidad educativa"?
-      → Entonces SIEMPRE es COMISION DE POLITICA SOCIAL EDUCACION Y SALUD.
-    - La comisión de "Tierra y Recursos Naturales y Medio Ambiente" SOLO aplica cuando el documento
-      trata sobre suelos, agua, flora, fauna, contaminación, cambio climático o propiedad agraria.
-
-    ## INFORMACIÓN DE LAS COMISIONES DISPONIBLES EN BASE DE DATOS:
-    {comisiones_info}
-
-  expected_output: >
-    Un objeto JSON válido (sin markdown, sin bloques de código ni texto adicional) con esta estructura exacta:
-    {
-      "identificacion": {
-        "titulo": "string",
-        "tipo_documento": "string",
-        "materia_principal": "string"
-      },
-      "comision_principal": "string",
-      "comision_secundaria": "string o null",
-      "palabras_clave": ["string", "string", "string"],
-      "resumen": "string",
-      "complejidad": "Alta|Media|Baja",
-      "prioridad": "Urgente|Normal|Baja",
-      "justificacion": {
-        "fundamento_legal": "string",
-        "razon_principal": "string"
+tareas:
+  # ========== TAREA 1: CONCENTRAR OBSERVACIONES ==========
+  Concentrar_Observaciones:
+    descripcion: >
+      Integrar observaciones de múltiples agentes (Constitucional,
+      Consistencia, Comisión Legislativa) en un expediente consolidado.
+      Cada observación debe mantener trazabilidad de origen.
+    agente: "Concentrador"
+    expected_output: >
+      JSON con expediente consolidado y trazabilidad de origen.
+      Estructura:
+      {
+        "expediente_consolidado": {
+          "resumen_ejecutivo": "string",
+          "observaciones_integradas": [
+            {
+              "tipo": "CONSTITUCIONAL|CONSISTENCIA|COMISION",
+              "agente_origen": "string",
+              "contenido": "string",
+              "riesgo": "BAJO|MEDIO|ALTO|CRÍTICO",
+              "articulos_afectados": ["string"]
+            }
+          ],
+          "estado_siguiente": "LISTO_PARA_DEBATE"
+        }
       }
-    }
+    herramientas: []
+    depends_on:
+      - "Auditar_Constitucionalidad"
+      - "Analizar_Consistencia"
+      - "Asignar_Comision"
 
-
-tarea_verificacion_constitucional:
-  description: >
-    Realiza una comparación DEDUCTIVA y LITERAL artículo por artículo
-    entre el proyecto de ley y la Constitución Política del Estado de Bolivia.
-
-    MÉTODO DE COTEJO:
-    Para CADA artículo del proyecto:
-    1. Descompone el artículo en proposiciones normativas elementales.
-    2. Identifica si cada proposición COINCIDE o CONTRADICE textualmente algún artículo constitucional.
-    3. Clasifica la severidad:
-       - 'bloqueante': vulneración frontal de garantías fundamentales
-       - 'grave': conflicto claro de competencias o derechos regulados
-       - 'leve': ambigüedad formal que roza el texto constitucional
-       - 'ninguna': plenamente conforme
-
-    REGLAS ANTI-ALUCINACIÓN:
-    - Solo marca como CONTRADICCIÓN cuando la colisión sea INEQUÍVOCA.
-    - NO uses frases como 'podría interpretarse', 'en principio', 'eventualmente'.
-    - Si no hay colisión textual directa, declara 'CONFORME / SIN CONTRADICCIÓN DIRECTA'.
-    - NO infieras, NO extrapoles, NO completes vacíos normativos.
-    - SIEMPRE cita el número exacto y texto del artículo constitucional.
-
-    ARTÍCULOS CONSTITUCIONALES DISPONIBLES EN LA BASE DE DATOS OFICIAL:
-    {articulos_constitucion_info}
-
-    TEXTO DEL PROYECTO A AUDITAR:
-    {texto_documento}
-
-  expected_output: >
-    Un objeto JSON válido (sin markdown, sin texto adicional) con esta estructura:
-    {
-      "valido": true/false,
-      "confianza": 0-100,
-      "severidad_maxima": "ninguna|leve|grave|bloqueante",
-      "num_contradicciones": 0,
-      "contradicciones": [
-        {
-          "articulo_proyecto": "string",
-          "articulo_constitucional": "string",
-          "texto_constitucional_verificado": "string",
-          "fragmento_proyecto": "string",
-          "severidad": "bloqueante|grave|leve",
-          "fundamento": "string"
+  # ========== TAREA 2: REGISTRAR DEBATE ==========
+  Registrar_Debate:
+    descripcion: >
+      Capturar estructura del debate legislativo en secuencia temporal.
+      Registrar intervenciones de legisladores, votaciones nominales,
+      acuerdos y mociones. Verificar cruzadamente cada evento.
+    agente: "Secretario_Camara"
+    expected_output: >
+      JSON con acta estructurada.
+      Estructura:
+      {
+        "acta_debate": {
+          "fecha": "YYYY-MM-DD",
+          "sesion_numero": 12,
+          "intervenciones": [
+            {
+              "orden": 1,
+              "legislador": "string",
+              "partido": "string",
+              "contenido": "string",
+              "timestamp": "HH:MM"
+            }
+          ],
+          "votaciones": [
+            {
+              "articulo": 5,
+              "votacion": "APROBADO|RECHAZADO|ABSTENIDO",
+              "favor": 65,
+              "contra": 30,
+              "abstenciones": 5
+            }
+          ],
+          "acuerdos": ["string"]
         }
-      ],
-      "analisis_por_articulo": [
-        {
-          "articulo_proyecto": "string",
-          "estado": "CONFORME|CONTRADICCION",
-          "base_constitucional": "string",
-          "observacion": "string"
+      }
+    herramientas: []
+
+  # ========== TAREA 3: GESTIONAR TRÁMITE BICAMERAL ==========
+  Gestionar_Bicameral:
+    descripcion: >
+      Gestionar trámite bicameral: comparar versiones original y retornada,
+      clasificar cambios como MAYORES o MENORES, decidir ruta:
+      SANCION_DIRECTA o CONFERENCIA_BICAMERAL.
+    agente: "Bicameral"
+    expected_output: >
+      JSON con decisión bicameral.
+      Estructura:
+      {
+        "ciclo_bicameral": {
+          "proyecto_id": "string",
+          "version_original": {"articulos": []},
+          "version_retornada": {"articulos": []},
+          "cambios_detectados": [
+            {
+              "tipo": "MODIFICACION|ELIMINACION|ADICION",
+              "articulo": 5,
+              "descripcion": "string"
+            }
+          ],
+          "clasificacion_cambios": "MAYORES|MENORES",
+          "ruta_siguiente": "SANCION_DIRECTA|CONFERENCIA_BICAMERAL"
         }
-      ],
-      "fundamentacion_general": "string"
-    }
+      }
+    herramientas: []
 
+  # ========== TAREA 4: EVALUAR VETO/PROMULGACIÓN ==========
+  Evaluar_Veto_Promulgacion:
+    descripcion: >
+      Evaluación estratégica multicriterio del proyecto sancionado.
+      Analizar viabilidad política, legalidad constitucional,
+      factibilidad técnica y sostenibilidad fiscal.
+      Decidir: PROMULGAR, VETAR_TOTAL, VETAR_PARCIAL.
+    agente: "Veto_Promulgacion"
+    expected_output: >
+      JSON con decisión ejecutiva.
+      Estructura:
+      {
+        "evaluacion_veto": {
+          "proyecto_id": "string",
+          "decision": "PROMULGAR|VETAR_TOTAL|VETAR_PARCIAL",
+          "criterios": {
+            "viabilidad_politica": {"score": 8, "razon": "string"},
+            "legalidad_constitucional": {"score": 9, "razon": "string"},
+            "factibilidad_tecnica": {"score": 7, "razon": "string"},
+            "sostenibilidad_fiscal": {"score": 6, "razon": "string"}
+          },
+          "score_final": 7.5,
+          "observaciones_parciales": ["string"],
+          "justificacion": "string"
+        }
+      }
+    herramientas: []
+    depends_on:
+      - "Gestionar_Bicameral"
 
-tarea_atencion_ciudadana:
-  description: >
-    Analiza la petición o consulta ciudadana:
+  # ========== TAREA 5: PUBLICAR LEY OFICIAL ==========
+  Publicar_Ley_Oficial:
+    descripcion: >
+      Asignar número de ley secuencial, establecer fecha de vigencia,
+      formatear para Boletín Oficial, integrar a base normativa.
+    agente: "Publicacion_Oficial"
+    expected_output: >
+      JSON con publicación oficial.
+      Estructura:
+      {
+        "publicacion_oficial": {
+          "proyecto_id": "string",
+          "numero_ley": "Ley No. 1472",
+          "titulo": "string",
+          "fecha_promulgacion": "2025-03-20",
+          "fecha_vigencia": "2025-03-21",
+          "boletin_oficial": "BOL-2025-03-20-001",
+          "estado": "PUBLICADA"
+        }
+      }
+    herramientas: []
+    depends_on:
+      - "Evaluar_Veto_Promulgacion"
 
-    {texto_documento}
+  # ========== TAREA 6: ANALIZAR CONSTITUCIONALIDAD DE FONDO ==========
+  Analizar_Fondo_Constitucional:
+    descripcion: >
+      Análisis hermenéutico de constitucionalidad sustantiva.
+      Aplicar interpretación constitucional, buscar precedentes,
+      ponderar derechos en conflicto. Generar dictamen formal.
+    agente: "Constitucion_Fondo"
+    expected_output: >
+      JSON con dictamen de fondo.
+      Estructura:
+      {
+        "dictamen_fondo": {
+          "proyecto_id": "string",
+          "viabilidad_fondo": "VIABLE|VIABLE_CON_OBSERVACIONES|NO_VIABLE",
+          "analisis_hermeneutico": {
+            "principios_aplicables": ["string"],
+            "precedentes_relevantes": ["Sentencia TC 1234/2022"],
+            "conflictos_derechos": [
+              {
+                "derecho_1": "string",
+                "derecho_2": "string",
+                "ponderacion": "string"
+              }
+            ]
+          },
+          "recomendaciones": "string",
+          "riesgo_constitucional": "BAJO|MEDIO|ALTO"
+        }
+      }
+    herramientas:
+      - "retrieve_jurisprudencia_tc"
+      - "search_constitucion_precedentes"
 
-    Determina:
-    1. Nivel de prioridad (Alta, Media, Baja).
-    2. Categoría del trámite (Petición, Queja, Consulta General, Solicitud de Información).
-    3. Unidad receptora o área interna responsable.
-    4. Borrador de respuesta inicial institucional en 2 párrafos.
+  # ========== TAREAS FUNDACIONALES ==========
+  Clasificar_Documento:
+    descripcion: >
+      Analizar el texto del documento para determinar la categoría institucional:
+      AGENTE_REGISTRO_LEGISLATIVO, AGENTE_ATENCION_CIUDADANA o AGENTE_GESTION_CORRESPONDENCIA.
+    agente: "Distribuidor"
+    expected_output: "JSON con categoria y resumen"
 
-  expected_output: >
-    Un objeto JSON válido con:
-    {"prioridad": "Alta|Media|Baja", "categoria": "...", "area_responsable": "...", "resumen": "...", "respuesta_borrador": "..."}
+  Asignar_Comision:
+    descripcion: >
+      Determinar la comisión y comité competente, prioridad y legisladores asignados.
+    agente: "Comision_Legislativa"
+    expected_output: "JSON con comision_principal y miembros"
 
+  Auditar_Constitucionalidad:
+    descripcion: >
+      Control textual formal contra los artículos de la CPE 2009.
+    agente: "Verificador_Constitucional"
+    expected_output: "JSON con valido, contradicciones y articulos_consultados"
 
-tarea_gestion_correspondencia:
-  description: >
-    Eres el Gestor de Trámites del Senado de Bolivia. Se ha recibido el siguiente documento
-    en mesa de partes y DEBES INICIAR EL TRÁMITE correspondiente de forma inmediata.
-
-    DOCUMENTO RECIBIDO:
-    {texto_documento}
-
-    INSTRUCCIONES:
-    1. Identifica al remitente (entidad, tipo de entidad, autoridad firmante).
-    2. Clasifica el tipo de comunicación (Oficio Principal, Nota Protocolar, Circular, Informe Técnico, etc.).
-    3. Asigna la unidad interna receptora (Presidencia del Senado, Secretaría General, Comisión Específica, etc.).
-    4. Establece el tipo de trámite (RESPUESTA_OFICIAL, DERIVACION_A_COMISION, ACCION_URGENTE, etc.).
-    5. Define el plazo y la instrucción de inicio de trámite.
-
-  expected_output: >
-    Un objeto JSON válido con:
-    {
-      "remitente": {"entidad": "string", "tipo_entidad": "string", "autoridad_firmante": "string"},
-      "tipo_comunicacion": "string",
-      "asunto_principal": "string",
-      "resumen": "string",
-      "unidad_receptora": "string",
-      "tipo_tramite": "RESPUESTA_OFICIAL|DERIVACION_A_COMISION|ACCION_URGENTE|SOLICITUD_DE_INFORME|COORDINACION_INTERINSTITUCIONAL|NOTA_DE_RECEPCION",
-      "nivel_urgencia": "Urgente|Normal|Ordinario|Especial",
-      "plazo_atencion": "string",
-      "instruccion_inicio_tramite": "string",
-      "palabras_clave": ["string", "string"],
-      "requiere_respuesta": true
-    }
-
-
-tarea_concentradora_expediente:
-  description: >
-    Integra el dictamen de constitucionalidad y el informe de consistencia normativa en un único reporte consolidado.
-    Identifica:
-    1. Párrafos y artículos del proyecto de ley con observaciones.
-    2. Las normas de la CPE violadas e infringidas.
-    3. Las normas jurídicas utilizadas durante el cotejo.
-    4. La comisión asignada y la lista de diputados/senadores asignados con sus correos electrónicos verificados.
-
-  expected_output: >
-    JSON con el dictamen unificado de auditoría.
-
-
-tarea_notificacion_oficial:
-  description: >
-    Redacta una notificación institucional dirigida a la comisión asignada y a sus miembros (diputados/senadores).
-    Incluye:
-    - Asunto formal de notificación
-    - Resumen ejecutivo del proyecto
-    - Lista de observaciones de constitucionalidad y consistencia
-    - Lista de destinatarios oficiales con sus correos de contacto (Gmail) y cargos
-
-  expected_output: >
-    JSON con el mensaje oficial, asunto y lista de destinatarios.
+  Analizar_Consistencia:
+    descripcion: >
+      Auditoría semántica pgvector contra el corpus de leyes vigentes.
+    agente: "Consistencia_Normativa"
+    expected_output: "JSON con analisis, nivel_riesgo_global y hallazgos"

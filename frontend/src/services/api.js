@@ -31,92 +31,67 @@ async function request(endpoint, options = {}) {
 }
 
 export const api = {
-  // Salud y KPIs
   getHealth: () => request('/health'),
   getDashboardStats: () => request('/dashboard/stats'),
 
-  // Documentos y Pipeline
   uploadDocument: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    return request('/upload', {
-      method: 'POST',
-      body: formData,
-    });
+    return request('/upload', { method: 'POST', body: formData });
   },
 
   runPhase1: (data) =>
-    request('/pipeline/phase1', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }),
+    request('/pipeline/phase1', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
   runAgentComision: (data) =>
-    request('/pipeline/agent_comision', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }),
+    request('/pipeline/agent_comision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
   runAgentConstitucional: (data) =>
-    request('/pipeline/agent_constitucional', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }),
+    request('/pipeline/agent_constitucional', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
   runAgentConsistencia: (data) =>
-    request('/pipeline/agent_consistencia', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }),
+    request('/pipeline/agent_consistencia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
   emitPdf: (data) =>
-    request('/pipeline/emit_pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }),
+    request('/pipeline/emit_pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
   runAgentNotificador: (data) =>
-    request('/pipeline/agent_notificador', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }),
+    request('/pipeline/agent_notificador', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
-  // Expedientes y Auditoría
+  // AGENTES CREWAI YAML — FLUJO LEGISLATIVO EXTENDIDO
+  runAgentConstitucionFondo: (data) =>
+    request('/pipeline/agent_constitucion_fondo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
+  runAgentConcentrador: (data) =>
+    request('/pipeline/agent_concentrador', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
+  runAgentSecretario: (data) =>
+    request('/pipeline/agent_secretario', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
+  runAgentBicameral: (data) =>
+    request('/pipeline/agent_bicameral', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
+  runAgentVetoPromulgacion: (data) =>
+    request('/pipeline/agent_veto_promulgacion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
+  runAgentPublicacion: (data) =>
+    request('/pipeline/agent_publicacion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
+  runPipelineCompleto: (data) =>
+    request('/pipeline/pipeline_completo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
   getExpedientes: (limit = 50) => request(`/expedientes?limit=${limit}`),
   getExpedienteDetalle: (id) => request(`/expedientes/${id}`),
-
-  // Comisiones y Miembros
   getComisiones: () => request('/comisiones'),
   getMiembrosComision: (id_comision) => request(`/comisiones/${id_comision}/miembros`),
   addMiembroComision: (id_comision, data) =>
-    request(`/comisiones/${id_comision}/miembros`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }),
+    request(`/comisiones/${id_comision}/miembros`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   removeMiembroComision: (id_miembro) =>
     request(`/comisiones/miembros/${id_miembro}`, { method: 'DELETE' }),
-
-
-  // Consistencia Normativa
   getNormativa: (limit = 30) => request(`/normativa?limit=${limit}`),
   searchNormativa: (query, documento = null, umbral = 0.5, top_k = 8) =>
-    request('/normativa/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, documento, umbral, top_k }),
-    }),
-
-  // Atención Ciudadana y Correspondencia
+    request('/normativa/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, documento, umbral, top_k }) }),
   getCiudadana: (limit = 50) => request(`/ciudadana?limit=${limit}`),
-
-  // Bus de Mensajes Inter-Agente (MongoDB)
   getMessages: (limit = 50, sesion_id = null) => {
     const q = sesion_id ? `?limit=${limit}&sesion_id=${sesion_id}` : `?limit=${limit}`;
     return request(`/messages${q}`);

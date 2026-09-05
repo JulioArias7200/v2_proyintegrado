@@ -637,6 +637,270 @@ def run_agent_notificador(req: NotificadorComisionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Endpoints CrewAI Flujo Legislativo Extendido ────────────────────────────
+
+@app.post("/api/pipeline/agent_constitucion_fondo")
+async def run_agent_constitucion_fondo_endpoint(payload: Dict[str, Any]):
+    """
+    Etapa 3: Agente Comisión Constitución (Fondo)
+    Análisis hermenéutico y viabilidad sustantiva (no solo formal).
+    """
+    try:
+        from sma_unified.agents.constitucion_fondo import AgenteConstitucionFondo
+        from sma_unified.db.neon_postgres import registrar_bitacora
+        
+        texto_proyecto = payload.get("texto_proyecto", "")
+        obs_formales = payload.get("obs_formales", [])
+        proyecto_info = payload.get("proyecto_info", {})
+        id_proyecto = payload.get("id_proyecto") or proyecto_info.get("id_proyecto") or proyecto_info.get("id")
+        
+        agente = AgenteConstitucionFondo()
+        resultado = agente.ejecutar(
+            texto_proyecto=texto_proyecto,
+            obs_formales=obs_formales,
+            proyecto_info=proyecto_info
+        )
+        
+        if id_proyecto:
+            try:
+                dictamen = resultado.get("dictamen_fondo", {})
+                registrar_bitacora(
+                    id_proyecto=int(id_proyecto),
+                    agente_accion="Agente_Constitucion_Fondo",
+                    accion_realizada="Análisis Hermenéutico Constitucional de Fondo",
+                    descripcion=f"Viabilidad: {dictamen.get('viabilidad_fondo', 'N/A')} | Riesgo: {dictamen.get('riesgo_constitucional', 'BAJO')}",
+                    tiempo_segundos=1
+                )
+            except Exception as be:
+                logger.warning(f"Error registrando bitácora Constitucion Fondo: {be}")
+
+        return {"success": True, "data": resultado}
+    except Exception as e:
+        logger.error(f"Error en endpoint Constitucion Fondo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/agent_concentrador")
+async def run_agent_concentrador_endpoint(payload: Dict[str, Any]):
+    """
+    Etapa 4: Agente Concentrador y Emisor
+    Consolidación y síntesis de observaciones de todos los agentes.
+    """
+    try:
+        from sma_unified.agents.concentrador import AgenteConcentrador
+        from sma_unified.db.neon_postgres import registrar_bitacora
+
+        proyecto_info = payload.get("proyecto_info", {})
+        observaciones = payload.get("observaciones", [])
+        id_proyecto = payload.get("id_proyecto") or proyecto_info.get("id_proyecto") or proyecto_info.get("id")
+
+        agente = AgenteConcentrador()
+        resultado = agente.ejecutar(
+            observaciones=observaciones,
+            proyecto_info=proyecto_info
+        )
+
+        if id_proyecto:
+            try:
+                exp = resultado.get("expediente_consolidado", {})
+                registrar_bitacora(
+                    id_proyecto=int(id_proyecto),
+                    agente_accion="Agente_Concentrador",
+                    accion_realizada="Consolidación de Expediente y Síntesis de Observaciones",
+                    descripcion=f"Riesgo Global: {exp.get('nivel_riesgo_general', 'MEDIO')} | Observaciones integradas: {len(exp.get('observaciones_integradas', []))}",
+                    tiempo_segundos=1
+                )
+            except Exception as be:
+                logger.warning(f"Error registrando bitácora Concentrador: {be}")
+
+        return {"success": True, "data": resultado}
+    except Exception as e:
+        logger.error(f"Error en endpoint Concentrador: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/agent_secretario")
+async def run_agent_secretario_endpoint(payload: Dict[str, Any]):
+    """
+    Etapa 5: Agente Secretario de Cámara
+    Registro de actas de debate parlamentario y votaciones.
+    """
+    try:
+        from sma_unified.agents.secretario import AgenteSecretarioCamara
+        from sma_unified.db.neon_postgres import registrar_bitacora
+
+        proyecto_info = payload.get("proyecto_info", {})
+        debate_data = payload.get("debate_data", {})
+        id_proyecto = payload.get("id_proyecto") or proyecto_info.get("id_proyecto") or proyecto_info.get("id")
+
+        agente = AgenteSecretarioCamara()
+        resultado = agente.ejecutar(
+            debate_data=debate_data,
+            proyecto_info=proyecto_info
+        )
+
+        if id_proyecto:
+            try:
+                acta = resultado.get("acta_debate", {})
+                registrar_bitacora(
+                    id_proyecto=int(id_proyecto),
+                    agente_accion="Agente_Secretario_Camara",
+                    accion_realizada="Registro de Debate Parlamentario y Votación Nominal",
+                    descripcion=f"Sesión: #{acta.get('sesion_numero', 1)} | Votaciones: {len(acta.get('votaciones', []))}",
+                    tiempo_segundos=1
+                )
+            except Exception as be:
+                logger.warning(f"Error registrando bitácora Secretario: {be}")
+
+        return {"success": True, "data": resultado}
+    except Exception as e:
+        logger.error(f"Error en endpoint Secretario: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/agent_bicameral")
+async def run_agent_bicameral_endpoint(payload: Dict[str, Any]):
+    """
+    Etapa 6: Agente Comunicación Bicameral
+    Coordinación y reconciliación entre Cámara de Origen y Revisora.
+    """
+    try:
+        from sma_unified.agents.bicameral import AgenteBicameral
+        from sma_unified.db.neon_postgres import registrar_bitacora
+
+        proyecto_info = payload.get("proyecto_info", {})
+        version_original = payload.get("version_original", {})
+        version_retornada = payload.get("version_retornada", {})
+        id_proyecto = payload.get("id_proyecto") or proyecto_info.get("id_proyecto") or proyecto_info.get("id")
+
+        agente = AgenteBicameral()
+        resultado = agente.ejecutar(
+            version_original=version_original,
+            version_retornada=version_retornada,
+            proyecto_info=proyecto_info
+        )
+
+        if id_proyecto:
+            try:
+                ciclo = resultado.get("ciclo_bicameral", {})
+                registrar_bitacora(
+                    id_proyecto=int(id_proyecto),
+                    agente_accion="Agente_Bicameral",
+                    accion_realizada="Control de Trámite Bicameral y Reconciliación",
+                    descripcion=f"Cambios: {ciclo.get('clasificacion_cambios', 'MENORES')} | Ruta: {ciclo.get('ruta_siguiente', 'SANCION_DIRECTA')}",
+                    tiempo_segundos=1
+                )
+            except Exception as be:
+                logger.warning(f"Error registrando bitácora Bicameral: {be}")
+
+        return {"success": True, "data": resultado}
+    except Exception as e:
+        logger.error(f"Error en endpoint Bicameral: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/agent_veto_promulgacion")
+async def run_agent_veto_promulgacion_endpoint(payload: Dict[str, Any]):
+    """
+    Etapa 7: Agente Veto y Promulgación
+    Evaluación estratégica multicriterio del Órgano Ejecutivo.
+    """
+    try:
+        from sma_unified.agents.veto_promulgacion import AgenteVetoPromulgacion
+        from sma_unified.db.neon_postgres import registrar_bitacora
+
+        proyecto_info = payload.get("proyecto_info", {})
+        expediente = payload.get("expediente", {})
+        id_proyecto = payload.get("id_proyecto") or proyecto_info.get("id_proyecto") or proyecto_info.get("id")
+
+        agente = AgenteVetoPromulgacion()
+        resultado = agente.ejecutar(
+            expediente=expediente,
+            proyecto_info=proyecto_info
+        )
+
+        if id_proyecto:
+            try:
+                ev = resultado.get("evaluacion_veto", {})
+                registrar_bitacora(
+                    id_proyecto=int(id_proyecto),
+                    agente_accion="Agente_Veto_Promulgacion",
+                    accion_realizada="Evaluación Estratégica Multicriterio de Promulgación",
+                    descripcion=f"Decisión: {ev.get('decision', 'PROMULGAR')} | Score: {ev.get('score_final', 7.5)}",
+                    tiempo_segundos=1
+                )
+            except Exception as be:
+                logger.warning(f"Error registrando bitácora Veto/Promulgación: {be}")
+
+        return {"success": True, "data": resultado}
+    except Exception as e:
+        logger.error(f"Error en endpoint Veto/Promulgacion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/agent_publicacion")
+async def run_agent_publicacion_endpoint(payload: Dict[str, Any]):
+    """
+    Etapa 8: Agente Publicación Oficial
+    Asignación de número de ley y registro en Boletín Oficial.
+    """
+    try:
+        from sma_unified.agents.publicacion import AgentePublicacionOficial
+        from sma_unified.db.neon_postgres import registrar_bitacora
+
+        proyecto_info = payload.get("proyecto_info", {})
+        evaluacion_veto = payload.get("evaluacion_veto", {})
+        id_proyecto = payload.get("id_proyecto") or proyecto_info.get("id_proyecto") or proyecto_info.get("id")
+
+        agente = AgentePublicacionOficial()
+        resultado = agente.ejecutar(
+            evaluacion_veto=evaluacion_veto,
+            proyecto_info=proyecto_info
+        )
+
+        if id_proyecto:
+            try:
+                pub = resultado.get("publicacion_oficial", {})
+                registrar_bitacora(
+                    id_proyecto=int(id_proyecto),
+                    agente_accion="Agente_Publicacion_Oficial",
+                    accion_realizada="Promulgación Oficial y Asignación de Número de Ley",
+                    descripcion=f"{pub.get('numero_ley', 'Ley')} | Boletín: {pub.get('boletin_oficial', 'BOL-OFICIAL')}",
+                    tiempo_segundos=1
+                )
+            except Exception as be:
+                logger.warning(f"Error registrando bitácora Publicación: {be}")
+
+        return {"success": True, "data": resultado}
+    except Exception as e:
+        logger.error(f"Error en endpoint Publicacion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/pipeline_completo")
+async def run_pipeline_completo_endpoint(payload: Dict[str, Any]):
+    """
+    Ejecución del pipeline completo CrewAI de extremo a extremo (Etapas 3 a 8).
+    """
+    try:
+        from sma_unified.agents.crew_orchestrator import ejecutar_pipeline_completo
+
+        proyecto_info = payload.get("proyecto_info", {})
+        texto_documento = payload.get("texto_proyecto") or payload.get("texto_documento", "")
+        observaciones_previas = payload.get("observaciones_previas", [])
+
+        resultado = ejecutar_pipeline_completo(
+            proyecto_info=proyecto_info,
+            texto_documento=texto_documento,
+            observaciones_previas=observaciones_previas
+        )
+
+        return {"success": True, "data": resultado}
+    except Exception as e:
+        logger.error(f"Error en pipeline completo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Endpoints de Expedientes y Consultas ─────────────────────────────────────
 
 @app.get("/api/expedientes")
@@ -955,24 +1219,26 @@ def search_normativa(req: SearchNormativaRequest):
 
 @app.get("/api/ciudadana")
 def get_ciudadana_solicitudes(limit: int = Query(50, ge=1, le=200)):
-    """Lista solicitudes ciudadanas y correspondencia oficial desde Neon."""
+    """Lista solicitudes ciudadanas y correspondencia oficial desde el esquema unificado sistema.proyecto_ley."""
     try:
         conn = get_conn()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(
             """
             SELECT 
-                s.solicitud_id,
-                s.fecha_ingreso,
-                s.origen,
-                s.tipo_entrada,
-                s.nombre_archivo,
-                s.resumen_ia,
-                ca.agente_destino,
-                ca.confianza_modelo
-            FROM public."Solicitudes_Documentos" s
-            LEFT JOIN public."Clasificacion_Agente" ca ON s.solicitud_id = ca.solicitud_id
-            ORDER BY s.fecha_ingreso DESC
+                p.id_proyecto as solicitud_id,
+                p.fecha_ingreso,
+                COALESCE(p.tipo_documento, 'Peticion_Ciudadana') as origen,
+                'Digital' as tipo_entrada,
+                p.archivo_pdf as nombre_archivo,
+                p.resumen as resumen_ia,
+                COALESCE(p.agente_distribuidor_decision->>'agente_destino', 'Agente_Atencion_Ciudadana') as agente_destino,
+                COALESCE((p.agente_distribuidor_decision->>'confianza')::numeric, 0.95) as confianza_modelo
+            FROM sistema.proyecto_ley p
+            WHERE p.tipo_documento IN ('Peticion_Ciudadana', 'Oficio')
+               OR p.observaciones_generales LIKE '%%Solicitudes_Documentos%%'
+               OR p.observaciones_generales LIKE '%%origen:%%'
+            ORDER BY p.fecha_ingreso DESC
             LIMIT %s
             """,
             (limit,),
@@ -992,6 +1258,40 @@ def get_ciudadana_solicitudes(limit: int = Query(50, ge=1, le=200)):
     except Exception as e:
         logger.error(f"Error obteniendo solicitudes ciudadanas: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agentes")
+def get_agentes_registrados():
+    """Lista el catálogo de agentes del SMA con sus justificaciones constitucionales y avatares."""
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT id, nombre_agente, tipo_agente, descripcion, 
+                   justificacion_constitucional, logo_url, color_tema, 
+                   estado_operativo, capabilities
+            FROM sistema.agentes_registrados
+            ORDER BY id ASC
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        return {"success": True, "data": [dict(r) for r in rows]}
+    except Exception as e:
+        logger.error(f"Error obteniendo agentes registrados: {e}")
+        return {"success": False, "data": []}
+
+
+@app.get("/api/pasos/{sesion_id}")
+def get_pasos_sesion(sesion_id: str):
+    """Obtiene el historial de pasos ejecutados para una sesión."""
+    from sma_unified.db.neon_postgres import obtener_pasos_proceso
+    try:
+        pasos = obtener_pasos_proceso(sesion_id)
+        return {"success": True, "data": pasos}
+    except Exception as e:
+        logger.error(f"Error obteniendo pasos de sesión {sesion_id}: {e}")
+        return {"success": False, "data": []}
+
 
 
 @app.get("/api/messages")

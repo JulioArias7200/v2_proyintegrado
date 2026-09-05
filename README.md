@@ -57,15 +57,48 @@ flowchart TD
 
 ---
 
-## 💾 Persistencia Dual
+## 💾 Persistencia y Estructura de Base de Datos
 
-1. **PostgreSQL (Neon DB + Extension `pgvector`)**:
-   - `public.articulos_constitucion`: Corpus constitucional vectorizado.
-   - `normativa.articulos`: Corpus de leyes y decretos vigentes con embeddings HNSW de 2048 dimensiones.
-   - `sistema.proyecto_ley`, `sistema.observaciones_constitucionales`, `normativa.analisis_consistencia`.
-2. **MongoDB Atlas**:
-   - Bus de mensajes y estados del SMA (`agent_messages`).
-   - Expedientes consolidados y trazabilidad de eventos.
+### 1. Esquema de Tablas (PostgreSQL Neon)
+
+Para mantener una arquitectura limpia y ordenada, la persistencia se divide organizativamente:
+
+*   **Esquema `sistema` (Preferido para la lógica del sistema):**
+    Aquí residen todas las tablas transaccionales y de estado del flujo de trabajo:
+    *   `sistema.proyecto_ley`: Registro maestro de expedientes, proyectos y su estado.
+    *   `sistema.observaciones_constitucionales`: Dictámenes y auditorías realizadas por los agentes.
+    *   `sistema.bitacora_proceso`: Historial y auditoría de cada evento/paso del pipeline.
+    *   `sistema.comision`: Catálogo referencial de comisiones.
+    *   `sistema.enrutamiento_documento`: Tracking del flujo de mensajes inter-agente.
+
+*   **Esquema `public` (Exclusivo para Corpus RAG):**
+    Este esquema se reserva *exclusivamente* para el corpus de lectura vectorial estático.
+    *   `public.articulos_constitucion`: Corpus constitucional vectorizado.
+    *   `public.normativas`: Corpus de leyes y decretos vigentes con embeddings.
+
+**🧹 Optimización y Reducción de Redundancia:**
+Para evitar un diseño repetitivo, se recomienda **eliminar** tablas transitorias como `Clasificacion_Agente` y `Clasificacion_Comision`. La lógica de clasificación (qué agente lo procesa o qué comisión se le asigna) se registra directamente en los campos `id_comision_actual` de `sistema.proyecto_ley` y se audita mediante inserciones en `sistema.bitacora_proceso`. Centralizar la información en el proyecto/expediente reduce la duplicidad de datos.
+
+### 2. Tablas Principales de la Lógica Backend
+Toda la lógica de ruteo en el backend (`server.py`) y la toma de decisiones de los agentes trabaja de manera centralizada con:
+1.  **`sistema.proyecto_ley`**: Centraliza el ciclo de vida del trámite.
+2.  **`sistema.observaciones_constitucionales`**: Guarda las salidas estructuradas del LLM.
+3.  **Vectores en `public`**: Para los procesos de Retrieval-Augmented Generation (RAG).
+
+### 3. Bus de Eventos Auxiliar (MongoDB Atlas)
+*   Bus de mensajes asíncronos y estados transitorios del SMA (`agent_messages`).
+*   Trazabilidad de eventos rápidos de los agentes.
+
+---
+
+## 🤖 Orquestación Multi-Agente (CrewAI + YAML)
+
+El sistema utiliza **CrewAI** como framework principal para la orquestación y delegación de tareas entre los distintos agentes de IA. Para lograr un código limpio, modular y fácilmente mantenible, el comportamiento de los agentes no está "hardcodeado", sino que se gestiona mediante archivos **YAML**:
+
+*   **`config/agents.yaml`**: Define de manera declarativa el rol, el objetivo (goal) y el contexto base (backstory) de cada agente (ej. Distribuidor, Verificador, etc.).
+*   **`config/tasks.yaml`**: Define las tareas específicas, la descripción de lo que debe hacer el LLM, los resultados esperados (expected_output) y qué agente las ejecutará.
+
+Esta separación YAML/Python permite ajustar los "prompts" de los agentes y la estructura del flujo de trabajo directamente desde los archivos de configuración sin necesidad de modificar el código fuente del orquestador.
 
 ---
 
@@ -230,3 +263,9 @@ npm run dev
 ## 📄 Licencia
 
 Desarrollado para el análisis y auditoría legislativa del Congreso. Reservados todos los derechos.
+
+
+## necesito la eliminacionn 
+public.Solicitudes_Documentos: Entrada de documentos de atención ciudadana y correspondencia institucional externa.
+public.Clasificacion_Agente: (Candidata a unificación/eliminación) Guarda el resultado inicial del Agente Distribuidor para solicitudes.
+public.Clasificacion_Comision: (Candidata a unificación/eliminación) Guarda la comisión y metadatos derivados para solicitudes.

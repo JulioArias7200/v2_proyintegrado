@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 
+import CssRobotAvatar from '../components/CssRobotAvatar';
+
 export default function ConsistenciaNormativa() {
   const [normativaData, setNormativaData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -60,18 +62,47 @@ export default function ConsistenciaNormativa() {
 
   return (
     <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '32px 24px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-          <span className="badge badge-green">Corpus Legal Vigente</span>
-          <span className="badge badge-gold">Embeddings NVIDIA + pgvector</span>
+      {/* Header with CSS Robot Avatar Banner */}
+      <div style={{
+        marginBottom: '32px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '24px',
+        background: 'linear-gradient(135deg, rgba(69, 26, 3, 0.8) 0%, rgba(120, 53, 15, 0.5) 100%)',
+        padding: '24px 30px',
+        borderRadius: '24px',
+        border: '1.5px solid rgba(245, 158, 11, 0.4)',
+        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.25)'
+      }}>
+        <div style={{ flex: 1, minWidth: '280px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span className="badge badge-green">Corpus Legal Vigente</span>
+            <span className="badge badge-gold">Embeddings NVIDIA + pgvector</span>
+          </div>
+          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff', marginBottom: '6px', letterSpacing: '-0.02em' }}>
+            Agente de Consistencia Normativa
+          </h1>
+          <p style={{ color: '#fde68a', fontSize: '0.96rem', maxWidth: '850px', lineHeight: 1.6 }}>
+            Auditoría semántica de artículos contra todo el ordenamiento jurídico vigente (leyes, decretos, códigos) usando vectores de 2048 dimensiones.
+          </p>
         </div>
-        <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginBottom: '6px', letterSpacing: '-0.02em' }}>
-          Agente de Consistencia Normativa
-        </h1>
-        <p style={{ color: '#475569', fontSize: '0.96rem', maxWidth: '850px', lineHeight: 1.6 }}>
-          Auditoría semántica de artículos contra todo el ordenamiento jurídico vigente (leyes, decretos, códigos) usando vectores de 2048 dimensiones.
-        </p>
+
+        {/* Dynamic HTML/CSS Bot Avatar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(33, 13, 2, 0.6)', padding: '16px 24px', borderRadius: '20px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+          <CssRobotAvatar
+            theme="gold"
+            status={isSearching ? 'working' : 'idle'}
+            size="lg"
+            showBubble={true}
+            thinkingText={isSearching ? 'Buscando en vectores 2048d...' : 'Auditoría semántica lista'}
+          />
+          <div>
+            <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '1rem' }}>Bot Normativo</div>
+            <div style={{ fontSize: '0.78rem', color: '#fbbf24', fontWeight: 600 }}>NVIDIA Nemotron 1B Embeddings</div>
+          </div>
+        </div>
       </div>
 
       {/* KPI Cards */}

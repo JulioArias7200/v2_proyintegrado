@@ -405,3 +405,20 @@ h6 {
     0 8px 32px rgba(0, 0, 0, 0.55);
   background: #ffffff;
 }
+
+/* ── Responsive Agent Result Split Grid ──────────────────────── */
+@media (max-width: 900px) {
+  .agent-result-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Spin Animations ── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 2s linear infinite;
+}

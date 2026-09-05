@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 
+import CssRobotAvatar from '../components/CssRobotAvatar';
+
 export default function Monitoreo() {
   const [messages, setMessages] = useState([]);
   const [dashboardStats, setDashboardStats] = useState(null);
@@ -43,6 +45,15 @@ export default function Monitoreo() {
 
   const busStats = dashboardStats?.bus_mensajes || {};
 
+  const agentList = [
+    { name: 'Agente Distribuidor', role: 'Clasificación', theme: 'cyan', level: 'Fase 1', statusText: 'Escuchando canal...' },
+    { name: 'Comisión Legislativa', role: 'Asignación Temática', theme: 'blue', level: 'Fase 2', statusText: 'Evaluando expedientes...' },
+    { name: 'Verificador Constitucional', role: 'Auditoría CPE', theme: 'green', level: 'Fase 2', statusText: 'Cotejando CPE Art. 104...' },
+    { name: 'Consistencia Normativa', role: 'Vectores pgvector', theme: 'gold', level: 'Fase 2', statusText: 'Indexando 2048d...' },
+    { name: 'Emisor de Resultados', role: 'Compilador PDF', theme: 'pink', level: 'Fase 3', statusText: 'Formateando reportes...' },
+    { name: 'Notificador Comisión', role: 'Despachador HTML', theme: 'violet', level: 'Fase 3', statusText: 'Notificando parlamentarios...' },
+  ];
+
   return (
     <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '32px 24px' }}>
       {/* Header */}
@@ -64,6 +75,46 @@ export default function Monitoreo() {
           <RefreshCw size={16} className={loading ? 'pulse-active' : ''} />
           <span>Actualizar</span>
         </button>
+      </div>
+
+      {/* Agents HTML/CSS Live Showcase */}
+      <div style={{ marginBottom: '32px' }}>
+        <h2 style={{ fontSize: '1.2rem', color: '#ffffff', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Activity size={20} color="#38bdf8" />
+          Enjambre Multi-Agente (Agentes en Ejecución)
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+          {agentList.map((ag, i) => (
+            <div
+              key={i}
+              className="glass-card"
+              style={{
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center',
+                gap: '12px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'rgba(15, 23, 42, 0.6)'
+              }}
+            >
+              <CssRobotAvatar
+                theme={ag.theme}
+                status={loading ? 'thinking' : 'idle'}
+                size="md"
+                showBubble={false}
+              />
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#ffffff' }}>{ag.name}</div>
+                <div style={{ fontSize: '0.76rem', color: '#94a3b8', fontWeight: 600 }}>{ag.role}</div>
+                <span className="badge badge-blue" style={{ fontSize: '0.65rem', marginTop: '6px' }}>
+                  {ag.level}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Services Health Cards */}

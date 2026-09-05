@@ -1,0 +1,123 @@
+# ============================================================================
+# DEFINICIÓN DE WORKFLOWS — SMA CONGRESO (CrewAI Orchestration)
+# ============================================================================
+
+workflows:
+  # ========== WORKFLOW COMPLETO ==========
+  Pipeline_Legislativo_Completo:
+    nombre: "Pipeline Legislativo Completo"
+    descripcion: "Flujo completo desde ingreso hasta publicación oficial"
+    
+    etapas:
+      Etapa_1_Clasificacion:
+        nombre: "Clasificación y Control Humano"
+        tareas:
+          - Clasificar_Documento
+        punto_control: true
+        descripcion: "El operador confirma o ajusta la clasificación automática"
+      
+      Etapa_2_Auditoria_Paralela:
+        nombre: "Auditoría en Paralelo"
+        tareas:
+          - Auditar_Constitucionalidad
+          - Analizar_Consistencia
+          - Asignar_Comision
+        paralelo: true
+        timeout_segundos: 60
+      
+      Etapa_3_Analisis_Fondo:
+        nombre: "Análisis Constitucional de Fondo"
+        tareas:
+          - Analizar_Fondo_Constitucional
+        dependencias:
+          - Etapa_2_Auditoria_Paralela
+      
+      Etapa_4_Sintesis:
+        nombre: "Síntesis Consolidada"
+        tareas:
+          - Concentrar_Observaciones
+        dependencias:
+          - Etapa_3_Analisis_Fondo
+      
+      Etapa_5_Debate:
+        nombre: "Debate Legislativo"
+        tareas:
+          - Registrar_Debate
+        punto_control: true
+        descripcion: "Debate en cámaras, registro de intervenciones y votaciones"
+      
+      Etapa_6_Bicameral:
+        nombre: "Trámite Bicameral"
+        tareas:
+          - Gestionar_Bicameral
+      
+      Etapa_7_Veto:
+        nombre: "Evaluación de Veto/Promulgación"
+        tareas:
+          - Evaluar_Veto_Promulgacion
+        dependencias:
+          - Etapa_6_Bicameral
+      
+      Etapa_8_Publicacion:
+        nombre: "Publicación Oficial"
+        tareas:
+          - Publicar_Ley_Oficial
+        dependencias:
+          - Etapa_7_Veto
+    
+    tiempo_estimado_minutos: 120
+
+  # ========== WORKFLOW SIMPLIFICADO ==========
+  Pipeline_Auditoria_Simple:
+    nombre: "Auditoría Simplificada"
+    descripcion: "Para proyectos de bajo riesgo o Peticiones"
+    
+    etapas:
+      Etapa_1_Clasificacion:
+        nombre: "Clasificación"
+        tareas:
+          - Clasificar_Documento
+        punto_control: true
+      
+      Etapa_2_Auditoria_Rapida:
+        nombre: "Auditoría Rápida"
+        tareas:
+          - Auditar_Constitucionalidad
+          - Analizar_Consistencia
+        paralelo: true
+        timeout_segundos: 30
+      
+      Etapa_3_Informe:
+        nombre: "Generación de Informe"
+        tareas:
+          - Concentrar_Observaciones
+        punto_control: true
+    
+    tiempo_estimado_minutos: 15
+
+  # ========== WORKFLOW CONSTITUCIONAL ==========
+  Pipeline_Analisis_Constitucional:
+    nombre: "Análisis Constitucional Profundo"
+    descripcion: "Análisis detallado de constitucionalidad de fondo"
+    
+    etapas:
+      Etapa_1_Revision_Formal:
+        nombre: "Revisión Constitucional Formal"
+        tareas:
+          - Auditar_Constitucionalidad
+      
+      Etapa_2_Analisis_Fondo:
+        nombre: "Análisis Hermenéutico"
+        tareas:
+          - Analizar_Fondo_Constitucional
+        dependencias:
+          - Etapa_1_Revision_Formal
+      
+      Etapa_3_Dictamen:
+        nombre: "Generación de Dictamen"
+        tareas:
+          - Concentrar_Observaciones
+        dependencias:
+          - Etapa_2_Analisis_Fondo
+    
+    tiempo_estimado_minutos: 45
