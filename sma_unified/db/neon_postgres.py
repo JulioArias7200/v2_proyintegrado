@@ -34,16 +34,20 @@ except ImportError:
 
 # ── Lazy singleton de conexión ────────────────────────────────────────────────
 _conn = None
+_tables_ensured = False
 
 
 def get_conn():
     """Retorna una conexión psycopg2 a Neon PostgreSQL (singleton)."""
-    global _conn
+    global _conn, _tables_ensured
     try:
         if _conn is not None and not _conn.closed:
+            # Test that connection is alive
+            with _conn.cursor() as cur:
+                cur.execute("SELECT 1")
             return _conn
     except Exception:
-        pass
+        _conn = None
 
     try:
         import psycopg2
@@ -52,12 +56,18 @@ def get_conn():
         if not url:
             raise ValueError("NEON_DATABASE_URL no configurada en .env")
 
-        _conn = psycopg2.connect(url)
-        _conn.autocommit = False
+        _conn = psycopg2.connect(url, connect_timeout=10)
+        _conn.autocommit = True
         logger.info("✅ PostgreSQL Neon conectado")
-        _ensure_observaciones_table(_conn)
-        _ensure_consistencia_tables(_conn)
-        _ensure_articulos_normativos_table(_conn)
+        
+        if not _tables_ensured:
+            _tables_ensured = True
+            try:
+                _ensure_observaciones_table(_conn)
+                _ensure_consistencia_tables(_conn)
+                _ensure_articulos_normativos_table(_conn)
+            except Exception as em:
+                logger.warning(f"Aviso durante ensure_tables Neon: {em}")
         return _conn
     except Exception as e:
         logger.error(f"❌ No se pudo conectar a PostgreSQL Neon: {e}")
@@ -68,12 +78,12 @@ def ping_neon() -> bool:
     """Retorna True si Neon PostgreSQL responde correctamente."""
     try:
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT 1")
-        cur.close()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
         return True
     except Exception:
         return False
+
 
 
 # ── Creación y migración automática de tablas ─────────────────────────────────
