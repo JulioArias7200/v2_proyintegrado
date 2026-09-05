@@ -205,6 +205,7 @@ tarea_atencion_ciudadana:
     {"prioridad": "Alta|Media|Baja", "categoria": "...", "area_responsable": "...", "resumen": "...", "respuesta_borrador": "..."}
 
 
+<<<<<<< Updated upstream
 tarea_gestion_correspondencia:
   description: >
     Eres el Gestor de Trámites del Senado de Bolivia. Se ha recibido el siguiente documento
@@ -261,3 +262,147 @@ tarea_notificacion_oficial:
 
   expected_output: >
     JSON con el mensaje oficial, asunto y lista de destinatarios.
+=======
+  Analizar_Consistencia:
+    descripcion: >
+      Auditoría semántica pgvector contra el corpus de leyes vigentes.
+    agente: "Consistencia_Normativa"
+    expected_output: "JSON con analisis, nivel_riesgo_global y hallazgos"
+
+  tarea_concentrar_observaciones:
+    descripcion: >
+      1. Recibe y analiza los informes procedentes de:
+         - Intervención Ciudadana (demandas y percepciones).
+         - Verificación de Constitucionalidad (riesgos de inconstitucionalidad).
+         - Consistencia Normativa (antinomias con leyes vigentes).
+         - Comisión de Presupuesto y Especialistas Técnicos (coste y viabilidad empírica).
+      2. Cruza los hallazgos con la directriz del Agente de Presidencia de Comisión.
+      3. Formula un documento unificado con observaciones claras, señalando artículos 
+         observados, justificación jurídica/técnica y propuestas de redacción alternativa.
+      
+      Proyecto bajo análisis:
+      {texto_proyecto_ley}
+    expected_output: >
+      Un documento formal titulado 'Dictamen Consolidado de Observaciones', estructurado en:
+      - Resumen Ejecutivo.
+      - Matriz de Observaciones (Constitucional, Social, Presupuestaria y Técnica).
+      - Conclusiones y Recomendaciones para el Pleno de la Cámara.
+    agente: "agente_concentrador_observaciones"
+
+  tarea_evaluar_veto_promulgacion:
+    descripcion: >
+      1. Recibe el texto sancionado definitivo proveniente de la Comunicación Bicameral.
+      2. Evalúa el impacto de su promulgación frente al plan de gobierno, sostenibilidad 
+         fiscal e institucionalidad.
+      3. Dictamina explícitamente una de las dos opciones:
+         a) PROMULGACIÓN: Habilita el texto para envío a Publicación Oficial, Difusión Ciudadana, 
+            Control Posterior y Alertas de Auditoría.
+         b) VETO (Total o Parcial): Redacta la fundamentación jurídica y política del reparo para 
+            su devolución al Parlamento.
+      
+      Texto final sancionado:
+      {texto_ley_sancionada}
+    expected_output: >
+      Un documento resolutivo titulado 'Resolución del Poder Ejecutivo sobre Proyecto Sancionado':
+      - Decisión adoptada: [PROMULGACIÓN | VETO PARCIAL | VETO TOTAL].
+      - Fundamentación legal y de mérito.
+      - Disposición de distribución a los canales de salida o mensaje de devolución parlamentaria.
+    agente: "agente_veto_promulgacion"
+
+# Aliases a nivel raíz para compatibilidad directa
+tarea_concentrar_observaciones:
+  descripcion: >
+    1. Recibe y analiza los informes procedentes de:
+       - Intervención Ciudadana (demandas y percepciones).
+       - Verificación de Constitucionalidad (riesgos de inconstitucionalidad).
+       - Consistencia Normativa (antinomias con leyes vigentes).
+       - Comisión de Presupuesto y Especialistas Técnicos (coste y viabilidad empírica).
+    2. Cruza los hallazgos con la directriz del Agente de Presidencia de Comisión.
+    3. Formula un documento unificado con observaciones claras, señalando artículos 
+       observados, justificación jurídica/técnica y propuestas de redacción alternativa.
+    
+    Proyecto bajo análisis:
+    {texto_proyecto_ley}
+  expected_output: >
+    Un documento formal titulado 'Dictamen Consolidado de Observaciones', estructurado en:
+    - Resumen Ejecutivo.
+    - Matriz de Observaciones (Constitucional, Social, Presupuestaria y Técnica).
+    - Conclusiones y Recomendaciones para el Pleno de la Cámara.
+  agente: "agente_concentrador_observaciones"
+
+tarea_evaluar_veto_promulgacion:
+  descripcion: >
+    1. Recibe el texto sancionado definitivo proveniente de la Comunicación Bicameral.
+    2. Evalúa el impacto de su promulgación frente al plan de gobierno, sostenibilidad 
+       fiscal e institucionalidad.
+    3. Dictamina explícitamente una de las dos opciones:
+       a) PROMULGACIÓN: Habilita el texto para envío a Publicación Oficial, Difusión Ciudadana, 
+          Control Posterior y Alertas de Auditoría.
+       b) VETO (Total o Parcial): Redacta la fundamentación jurídica y política del reparo para 
+          su devolución al Parlamento.
+    
+    Texto final sancionado:
+    {texto_ley_sancionada}
+  expected_output: >
+    Un documento resolutivo titulado 'Resolución del Poder Ejecutivo sobre Proyecto Sancionado':
+    - Decisión adoptada: [PROMULGACIÓN | VETO PARCIAL | VETO TOTAL].
+    - Fundamentación legal y de mérito.
+    - Disposición de distribución a los canales de salida o mensaje de devolución parlamentaria.
+  agente: "agente_veto_promulgacion"
+
+tarea_clasificacion_enrutador:
+  descripcion: >
+    Analiza el texto del documento para determinar la categoría institucional:
+    AGENTE_REGISTRO_LEGISLATIVO, AGENTE_ATENCION_CIUDADANA o AGENTE_GESTION_CORRESPONDENCIA.
+    Texto a clasificar:
+    {texto_documento}
+
+  expected_output: "AGENTE_REGISTRO_LEGISLATIVO | AGENTE_ATENCION_CIUDADANA | AGENTE_GESTION_CORRESPONDENCIA"
+  agente: "agente_enrutador"
+
+tarea_clasificacion_comision:
+  descripcion: >
+    Analiza el proyecto de ley y asigna la comisión competente de las 10 comisiones disponibles:
+    {comisiones_info}
+
+    Texto del proyecto:
+    {texto_documento}
+
+  expected_output: >
+    JSON con: {"comision_principal": "...", "prioridad": "Normal", "resumen": "...", "complejidad": "Media"}
+  agente: "agente_comision_legislativa"
+
+tarea_verificacion_constitucional:
+  descripcion: >
+    Audita la constitucionalidad del proyecto de ley frente a la CPE 2009:
+    Artículos CPE consultados:
+    {articulos_constitucion_info}
+
+    Texto del proyecto:
+    {texto_documento}
+
+  expected_output: >
+    JSON: {"valido": true/false, "confianza": 85, "severidad_maxima": "ninguna", "contradicciones": []}
+  agente: "agente_fiscal_constitucional"
+
+tarea_atencion_ciudadana:
+  descripcion: >
+    Procesa la solicitud ciudadana:
+    {texto_documento}
+
+  expected_output: >
+    JSON: {"prioridad": "Alta/Media/Baja", "categoria": "...", "resumen": "..."}
+  agente: "agente_atencion_ciudadana"
+
+tarea_gestion_correspondencia:
+  descripcion: >
+    Analiza la correspondencia oficial e inicia trámite:
+    {texto_documento}
+
+  expected_output: >
+    JSON: {"remitente": "...", "tipo_tramite": "...", "unidad_receptora": "...", "instruccion_inicio_tramite": "..."}
+  agente: "agente_gestion_correspondencia"
+
+
+
+>>>>>>> Stashed changes
