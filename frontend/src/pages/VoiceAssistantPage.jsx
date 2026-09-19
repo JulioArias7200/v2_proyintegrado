@@ -3,15 +3,14 @@
  * ==============================================================================
  * Sistema Multi-Agente (SMA) Congreso de Bolivia.
  *
- * Características principales:
- *  - Reconocimiento de voz nativo (Speech-to-Text) en Español Latino / Neutro ('es-419').
- *  - Síntesis de voz (Text-to-Speech) con filtrado estricto anti-acento peninsular (excluye 'es-ES').
- *  - Selector de variantes latinoamericanas priorizadas (México, Colombia, Argentina, etc.).
- *  - Control de velocidad (0.8x a 1.4x) y tono (pitch).
- *  - Operadores robóticos intercambiables (Distribuidor, Constitucionalista, Consistencia, etc.).
- *  - Transcripción editable en tiempo real con soporte de interim results.
- *  - Consultas parlamentarias predefinidas de un solo clic.
- *  - Barra de acciones flotante con animaciones reactivas y pulsaciones dinámicas.
+ * Características:
+ *  - 14 Operadores Robóticos Parlamentarios totalmente interactivos e integrados.
+ *  - Reconocimiento de Voz Multicapa con Auto-Recuperación de Errores de Red.
+ *  - Grabador WAV PCM 16kHz nativo directo al servidor FastAPI (/api/voz/transcribir).
+ *  - Síntesis de voz (Text-to-Speech) en español latinoamericano neutral.
+ *  - Visualizador en cuadrícula y carrusel de todos los agentes.
+ *  - Comandos interactivos de 1 clic por agente con respuestas vocales inmediatas.
+ *  - Historial de comandos en tiempo real con reproducción de audio.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -40,81 +39,220 @@ import {
   Scale,
   ShieldCheck,
   Zap,
-  Info
+  Info,
+  Layers,
+  ChevronRight,
+  Activity,
+  Award
 } from 'lucide-react';
 import { useLatinSpeech } from '../hooks/useLatinSpeech';
+import VoiceAgentPanel from '../components/VoiceAgentPanel';
 
-// Catálogo de operadores robóticos parlamentarios seleccionables
-const VOICE_OPERATORS = [
+// Catálogo completo de los 14 operadores robóticos parlamentarios
+export const VOICE_OPERATORS = [
   {
     id: 'distribuidor',
+    agente: 'Distribuidor',
     name: 'Operador Distribuidor',
+    shortName: 'Distribuidor',
     role: 'Mesa de Partes & Admisión',
     image: '/robots/robot_distribuidor_hi.jpg',
     theme: 'cyan',
     primaryColor: '#00f0ff',
-    badge: 'Nivel 1 • Admisión',
+    badge: 'Fase 1 • Admisión',
+    model: 'Nemotron-3 30B',
     greeting: 'Saludos parlamentarios. Soy el Operador de Admisión de la Mesa de Partes. Dicta o escribe el resumen o título del documento que deseas canalizar al sistema legislativo.',
+    suggestedQuery: 'Registrar nuevo proyecto de ley sobre soberanía alimentaria y riego tecnificado.',
+  },
+  {
+    id: 'comision',
+    agente: 'Comision',
+    name: 'Comisión Legislativa',
+    shortName: 'Comisión',
+    role: 'Asignación Temática CPE Art. 158',
+    image: '/robots/robot_constitucional_hi.jpg',
+    theme: 'blue',
+    primaryColor: '#38bdf8',
+    badge: 'Fase 2 • Asignación',
+    model: 'Nemotron-3 30B',
+    greeting: 'Comisión parlamentaria conectada. Clasifico y asigno proyectos de ley a las comisiones camarales competentes según materia.',
+    suggestedQuery: 'Asignar comisión competente para el proyecto de ley minera y ambiental.',
   },
   {
     id: 'constitucional',
-    name: 'Operador Constitucionalista',
-    role: 'Auditor de la CPE 2009',
+    agente: 'VerificadorConstitucional',
+    name: 'Verificador Constitucional',
+    shortName: 'Constitucional',
+    role: 'Auditoría Supremacía CPE 2009',
     image: '/robots/robot_constitucional_hi.jpg',
     theme: 'green',
     primaryColor: '#10b981',
-    badge: 'Nivel 2 • CPE 2009',
+    badge: 'Fase 2 • CPE 2009',
+    model: 'Nemotron-3 30B',
     greeting: 'Atención legislativa. Me encargo del control de constitucionalidad. ¿Deseas consultar la conformidad de algún artículo o principio fundamental de la CPE?',
+    suggestedQuery: 'Verificar constitucionalidad del artículo 12 sobre régimen penitenciario frente al artículo 15 de la CPE.',
   },
   {
     id: 'consistencia',
-    name: 'Operador de Consistencia',
-    role: 'Vectores pgvector & Leyes Vigentes',
+    agente: 'ConsistenciaNormativa',
+    name: 'Consistencia Normativa',
+    shortName: 'Consistencia',
+    role: 'Vectores pgvector 2048d & Antinomias',
     image: '/robots/robot_consistencia_hi.jpg',
     theme: 'gold',
     primaryColor: '#f59e0b',
-    badge: 'Nivel 2 • pgvector',
-    greeting: 'Base normativa conectada con embeddings de 2048 dimensiones. Pregúntame sobre posibles colisiones normativas con el Código Penal o Leyes Sectoriales.',
+    badge: 'Fase 2 • pgvector',
+    model: 'pgvector 2048d',
+    greeting: 'Base normativa conectada con embeddings de 2048 dimensiones. Pregúntame sobre posibles colisiones normativas con códigos o leyes sectoriales vigentes.',
+    suggestedQuery: 'Verificar consistencia normativa frente al Código Penal y Ley del Medio Ambiente.',
+  },
+  {
+    id: 'emisor',
+    agente: 'EmisorResultados',
+    name: 'Concentrador y Emisor',
+    shortName: 'Emisor PDF',
+    role: 'Síntesis Oficial & Dictamen PDF',
+    image: '/robots/robot_emisor_hi.jpg',
+    theme: 'orange',
+    primaryColor: '#f97316',
+    badge: 'Fase 3 • Dictamen',
+    model: 'ReportLab + IA',
+    greeting: 'Módulo de emisión de dictámenes constitucionales y normativos. Genero el PDF tricolor con el resultado completo del análisis legislativo.',
+    suggestedQuery: 'Generar dictamen PDF oficial con sello digital institucional.',
+  },
+  {
+    id: 'notificador',
+    agente: 'NotificadorComision',
+    name: 'Notificador de Comisión',
+    shortName: 'Notificador',
+    role: 'Correos Institucionales HTML',
+    image: '/robots/robot_notificador_hi.jpg',
+    theme: 'teal',
+    primaryColor: '#14b8a6',
+    badge: 'Fase 3 • Notificación',
+    model: 'SMTP / HTML SMA',
+    greeting: 'Canal de notificación parlamentaria activo. Envío correos HTML a comisiones, senadores y al autor del proyecto con el dictamen adjunto.',
+    suggestedQuery: 'Enviar notificación a la comisión con dictamen y observaciones adjuntas.',
+  },
+  {
+    id: 'constitucion_fondo',
+    agente: 'ConstitucionFondo',
+    name: 'Constitución Fondo',
+    shortName: 'CPE Fondo',
+    role: 'Hermenéutica & Precedentes TC',
+    image: '/robots/robot_constitucional_hi.jpg',
+    theme: 'purple',
+    primaryColor: '#8b5cf6',
+    badge: 'Fase 4 • Fondo',
+    model: 'Nemotron-70B',
+    greeting: 'Análisis hermenéutico de fondo. Evalúo precedentes del Tribunal Constitucional Plurinacional y ponderación de derechos fundamentales.',
+    suggestedQuery: 'Evaluar fondo constitucional y precedentes vinculantes del Tribunal Constitucional.',
+  },
+  {
+    id: 'concentrador_crew',
+    agente: 'ConcentradorCrew',
+    name: 'Concentrador Multi-Agente',
+    shortName: 'Concentrador',
+    role: 'Síntesis Integral de Expediente',
+    image: '/robots/robot_emisor_hi.jpg',
+    theme: 'emerald',
+    primaryColor: '#10b981',
+    badge: 'Fase 4 • Síntesis',
+    model: 'Nemotron-70B',
+    greeting: 'Módulo de consolidación integral. Unifico las observaciones de todos los agentes en un único expediente estructurado.',
+    suggestedQuery: 'Sintetizar observaciones multi-agente en el expediente integral.',
+  },
+  {
+    id: 'secretario',
+    agente: 'SecretarioCamara',
+    name: 'Secretario de Cámara',
+    shortName: 'Secretario',
+    role: 'Actas de Debate & Votaciones',
+    image: '/robots/robot_secretario_hi.jpg',
+    theme: 'blue',
+    primaryColor: '#3b82f6',
+    badge: 'Fase 4 • Plenario',
+    model: 'Nemotron-70B',
+    greeting: 'Sistema de registro parlamentario activo. Puedo registrar debates, votos nominales y emitir actas formales de sesión plenaria.',
+    suggestedQuery: 'Registrar debate y votación plenaria: 85 a favor, 12 en contra.',
+  },
+  {
+    id: 'bicameral',
+    agente: 'Bicameral',
+    name: 'Coordinador Bicameral',
+    shortName: 'Bicameral',
+    role: 'Trámite entre Cámaras Art. 163',
+    image: '/robots/robot_bicameral_hi.jpg',
+    theme: 'purple',
+    primaryColor: '#a855f7',
+    badge: 'Fase 5 • Bicameral',
+    model: 'Nemotron-70B',
+    greeting: 'Procedimiento bicameral en curso. Gestiono el intercambio entre la Cámara de Diputados y el Senado, incluyendo la conciliación del texto aprobado.',
+    suggestedQuery: 'Iniciar procedimiento bicameral y remitir a la Cámara Revisora.',
+  },
+  {
+    id: 'veto_promulgacion',
+    agente: 'VetoPromulgacion',
+    name: 'Veto y Promulgación',
+    shortName: 'Veto/Promulg.',
+    role: 'Decisión Ejecutiva Final Art. 163-167',
+    image: '/robots/robot_presidencia_hi.jpg',
+    theme: 'rose',
+    primaryColor: '#f43f5e',
+    badge: 'Fase 5 • Veto/Promulg.',
+    model: 'Nemotron-70B',
+    greeting: 'Módulo de evaluación ejecutiva. Analizo los criterios de promulgación o veto presidencial conforme a la CPE.',
+    suggestedQuery: 'Evaluar veto o promulgación ejecutiva del proyecto sancionado.',
+  },
+  {
+    id: 'publicacion',
+    agente: 'Publicacion',
+    name: 'Agente de Publicación',
+    shortName: 'Gaceta Oficial',
+    role: 'Gaceta Oficial & Promulgación',
+    image: '/robots/robot_publicacion_hi.jpg',
+    theme: 'lime',
+    primaryColor: '#84cc16',
+    badge: 'Fase 5 • Gaceta',
+    model: 'Nemotron-70B',
+    greeting: 'Módulo de promulgación y publicación oficial. Registro la ley en la Gaceta Oficial del Estado Plurinacional y asigno su número oficial.',
+    suggestedQuery: 'Publicar en Gaceta Oficial y asignar número oficial de Ley.',
   },
   {
     id: 'ciudadano',
-    name: 'Operador de Interacción Ciudadana',
+    agente: 'AtencionCiudadana',
+    name: 'Atención Ciudadana',
+    shortName: 'Ciudadano',
     role: 'Ventanilla Social & Peticiones',
     image: '/robots/robot_ciudadano_hi.jpg',
     theme: 'violet',
-    primaryColor: '#a855f7',
-    badge: 'Nivel 1 • Ciudadanía',
+    primaryColor: '#8b5cf6',
+    badge: 'Fase Social • Peticiones',
+    model: 'Nemotron-3 30B',
     greeting: 'Bienvenido. Estoy listo para escuchar y transcribir solicitudes, peticiones o reclamos de la ciudadanía para derivarlos a la unidad competente.',
-  },
-];
-
-// Prompts sugeridos parlamentarios para prueba rápida
-const SAMPLE_QUERIES = [
-  {
-    label: 'Energía Renovable',
-    icon: Zap,
-    text: 'Proyecto de ley que establece incentivos arancelarios y fiscales para la generación comunitaria de energía solar en el altiplano y valles de Bolivia.',
+    suggestedQuery: 'Registrar solicitud ciudadana de la Federación de Productores Agrícolas.',
   },
   {
-    label: 'Consulta CPE',
-    icon: ShieldCheck,
-    text: '¿El artículo 15 del proyecto sobre seguridad ciudadana colisiona con las garantías constitucionales del debido proceso y la libertad de locomoción?',
-  },
-  {
-    label: 'Consistencia Penal',
-    icon: Scale,
-    text: 'Evaluar consistencia normativa del artículo de sanciones ambientales frente al Código Penal vigente y la Ley Marco de la Madre Tierra.',
-  },
-  {
-    label: 'Petición Ciudadana',
-    icon: MessageSquare,
-    text: 'Solicitud formal de la Federación de Productores Agrícolas para solicitar una audiencia pública ante la Comisión de Economía Plural.',
+    id: 'presupuesto',
+    agente: 'Presupuesto',
+    name: 'Analista de Presupuesto',
+    shortName: 'Presupuesto',
+    role: 'Impacto Fiscal & Ley 1178 SAFCO',
+    image: '/robots/robot_presupuesto_hi.jpg',
+    theme: 'emerald',
+    primaryColor: '#059669',
+    badge: 'Nivel 2 • Fiscal',
+    model: 'Nemotron-3 30B',
+    greeting: 'Módulo de evaluación presupuestaria. Analizo el impacto fiscal de la ley propuesta contra el TGN y el marco regulatorio de la Ley 1178 SAFCO.',
+    suggestedQuery: 'Evaluar impacto presupuestario y sostenibilidad fiscal SAFCO.',
   },
 ];
 
 export default function VoiceAssistantPage({ onNavigateTab }) {
-  // Hook de voz en español latinoamericano
+  // Hook de voz en español latinoamericano con autorecuperación
   const {
+    sttMode,
+    setSttMode,
     isListening,
     transcript,
     setTranscript,
@@ -123,6 +261,12 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
     startListening,
     stopListening,
     clearTranscript,
+    sttEngineUsed,
+    isRecording,
+    whisperStatus,
+    startRecordingWAV,
+    stopRecordingWAV,
+    isWhisperAvailable,
     voices,
     selectedVoice,
     setSelectedVoice,
@@ -133,11 +277,20 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
     pitch,
     setPitch,
     speak,
+    speakWithFallback,
     pauseSpeaking,
     resumeSpeaking,
     stopSpeaking,
+    ttsEngineUsed,
+    sendVoiceCommand,
+    fetchAgentCommands,
+    commandHistory,
+    handleVoiceAction,
     isSTTSupported,
     isTTSSupported,
+    serverVoiceStatus,
+    networkWarning,
+    setNetworkWarning,
     error,
     setError,
   } = useLatinSpeech();
@@ -147,8 +300,10 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
   const [showSettings, setShowSettings] = useState(false);
   const [copied, setCopied] = useState(false);
   const [assistantResponse, setAssistantResponse] = useState(VOICE_OPERATORS[0].greeting);
+  const [agentCommands, setAgentCommands] = useState([]);
+  const [isExecutingCommand, setIsExecutingCommand] = useState(false);
 
-  // Al cambiar de operador, actualizar el saludo inicial
+  // Al cambiar de operador, cargar sus comandos y su saludo inicial
   const handleSelectOperator = (op) => {
     setActiveOperator(op);
     setAssistantResponse(op.greeting);
@@ -156,6 +311,14 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
       stopSpeaking();
     }
   };
+
+  useEffect(() => {
+    if (fetchAgentCommands && activeOperator) {
+      fetchAgentCommands(activeOperator.agente || activeOperator.id).then((cmds) => {
+        if (cmds) setAgentCommands(cmds);
+      });
+    }
+  }, [activeOperator, fetchAgentCommands]);
 
   // Copiar transcripción al portapapeles
   const handleCopy = async () => {
@@ -177,49 +340,58 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
     setError(null);
   };
 
-  // Reproducir el saludo del operador o la transcripción
+  // Reproducir el saludo del operador o la transcripción con TTS
   const handleSpeakText = (textToRead) => {
     const targetText = textToRead || transcript || assistantResponse;
     if (!targetText) return;
-    speak(targetText);
+    speakWithFallback(targetText, activeOperator.agente || activeOperator.id);
   };
+
+  // Ejecutar un comando de voz rápidamente
+  const handleExecuteVoiceCommand = async (commandText) => {
+    const text = (commandText || transcript).trim();
+    if (!text || !sendVoiceCommand) return;
+
+    setIsExecutingCommand(true);
+    try {
+      const res = await sendVoiceCommand(text, activeOperator.agente || activeOperator.id);
+      if (res) {
+        if (res.texto_respuesta_tts) {
+          setAssistantResponse(res.texto_respuesta_tts);
+          await speakWithFallback(res.texto_respuesta_tts, activeOperator.agente || activeOperator.id);
+        }
+      }
+    } finally {
+      setIsExecutingCommand(false);
+    }
+  };
+
+  const isActiveAudio = isListening || isRecording;
 
   return (
     <div
       style={{
-        maxWidth: '1440px',
+        maxWidth: '1720px',
+        width: '96%',
         margin: '0 auto',
-        padding: '28px 24px 80px 24px',
+        padding: '24px 20px 80px 20px',
         color: '#f8fafc',
         fontFamily: "'Inter', sans-serif",
       }}
     >
-      {/* ── 1. HEADER / HERO DE LA CONSOLA MULTIMODAL ── */}
+      {/* ── 1. HEADER HERO MULTIMODAL CON SELECTOR DE MODO ── */}
       <div
         style={{
           background: 'linear-gradient(145deg, #091322 0%, #0d1b2e 100%)',
           border: '1px solid rgba(56, 189, 248, 0.25)',
           borderRadius: '24px',
-          padding: '24px 28px',
-          marginBottom: '24px',
+          padding: '22px 28px',
+          marginBottom: '20px',
           boxShadow: '0 12px 35px rgba(0, 0, 0, 0.35)',
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        {/* Glow de fondo decorativo */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '-50px',
-            right: '-50px',
-            width: '240px',
-            height: '240px',
-            background: 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%)',
-            pointerEvents: 'none',
-          }}
-        />
-
         <div
           style={{
             display: 'flex',
@@ -229,12 +401,12 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
             gap: '16px',
           }}
         >
-          {/* Título & Badge de Módulo */}
+          {/* Título & Badges */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div
               style={{
-                width: '54px',
-                height: '54px',
+                width: '52px',
+                height: '52px',
                 borderRadius: '16px',
                 background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
                 display: 'flex',
@@ -245,15 +417,15 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                 flexShrink: 0,
               }}
             >
-              <Radio size={28} color="#ffffff" className={isListening ? 'animate-pulse' : ''} />
+              <Radio size={26} color="#ffffff" className={isActiveAudio ? 'animate-pulse' : ''} />
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <h1
                   style={{
                     fontFamily: "'Outfit', sans-serif",
                     fontWeight: 800,
-                    fontSize: '1.65rem',
+                    fontSize: '1.55rem',
                     color: '#ffffff',
                     margin: 0,
                     letterSpacing: '-0.02em',
@@ -263,117 +435,137 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                 </h1>
                 <span
                   className="badge badge-blue"
-                  style={{ fontSize: '0.72rem', padding: '3px 10px', fontWeight: 700 }}
+                  style={{ fontSize: '0.7rem', padding: '2px 8px', fontWeight: 700 }}
+                >
+                  14 Agentes
+                </span>
+                <span
+                  className="badge badge-green"
+                  style={{ fontSize: '0.7rem', padding: '2px 8px', fontWeight: 700 }}
                 >
                   STT + TTS Latino Neutro
                 </span>
-                <span
-                  className="badge badge-gold"
-                  style={{ fontSize: '0.72rem', padding: '3px 10px', fontWeight: 700 }}
-                >
-                  Web Speech API
-                </span>
               </div>
-              <p style={{ margin: '4px 0 0 0', fontSize: '0.86rem', color: '#94a3b8' }}>
-                Dictado y síntesis vocal en español latinoamericano (excluye modismos peninsulares). Conectado con la directiva robótica del SMA.
+              <p style={{ margin: '3px 0 0 0', fontSize: '0.84rem', color: '#94a3b8' }}>
+                Interacción multimodal por voz con cada uno de los 14 operadores del SMA Congreso de Bolivia.
               </p>
             </div>
           </div>
 
-          {/* Badges de Soporte y Diagnóstico del Navegador */}
+          {/* Selector de Modo STT y Ajustes */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            {/* Soporte Micrófono (STT) */}
+            {/* Selector de Modo */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                borderRadius: '9999px',
-                background: isSTTSupported ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                border: `1px solid ${isSTTSupported ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                color: isSTTSupported ? '#34d399' : '#f87171',
+                background: 'rgba(15, 23, 42, 0.8)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: '12px',
+                padding: '3px',
+                gap: '4px',
               }}
             >
-              {isSTTSupported ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-              <span>STT: {isSTTSupported ? 'Micrófono Activo (es-419)' : 'No Soportado'}</span>
+              <button
+                onClick={() => setSttMode('auto')}
+                title="Modo Inteligente: Web Speech con fallback automático a Servidor WAV ante cortes de red"
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: sttMode === 'auto' ? 'linear-gradient(135deg, #0ea5e9, #0284c7)' : 'transparent',
+                  color: sttMode === 'auto' ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Sparkles size={12} /> Auto Híbrido
+              </button>
+
+              <button
+                onClick={() => setSttMode('native')}
+                title="Forzar Web Speech API del navegador"
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: sttMode === 'native' ? 'rgba(16, 185, 129, 0.25)' : 'transparent',
+                  color: sttMode === 'native' ? '#34d399' : '#94a3b8',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                🌐 Web Speech
+              </button>
+
+              <button
+                onClick={() => setSttMode('backend')}
+                title="Forzar grabación directa WAV PCM al servidor (100% compatible y sin error de red de Google)"
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: sttMode === 'backend' ? 'rgba(168, 85, 247, 0.25)' : 'transparent',
+                  color: sttMode === 'backend' ? '#c084fc' : '#94a3b8',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Mic size={12} /> Servidor WAV
+              </button>
             </div>
 
-            {/* Soporte Síntesis (TTS) */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                borderRadius: '9999px',
-                background: isTTSSupported ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                border: `1px solid ${isTTSSupported ? 'rgba(56, 189, 248, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                color: isTTSSupported ? '#38bdf8' : '#f87171',
-              }}
-            >
-              {isTTSSupported ? <Volume2 size={14} /> : <VolumeX size={14} />}
-              <span>TTS: {voices.length} Voces Latinas</span>
-            </div>
-
-            {/* Botón Configuración de Audio */}
+            {/* Botón Ajustes de Audio */}
             <button
               onClick={() => setShowSettings(!showSettings)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '7px 14px',
-                borderRadius: '12px',
+                gap: '5px',
+                padding: '6px 12px',
+                borderRadius: '10px',
                 background: showSettings ? 'rgba(14, 165, 233, 0.3)' : 'rgba(255, 255, 255, 0.06)',
                 border: `1px solid ${showSettings ? '#0ea5e9' : 'rgba(255, 255, 255, 0.15)'}`,
                 color: '#f8fafc',
                 cursor: 'pointer',
-                fontFamily: "'Outfit', sans-serif",
                 fontWeight: 600,
-                fontSize: '0.82rem',
-                transition: 'all 0.2s ease',
+                fontSize: '0.78rem',
               }}
             >
-              <Settings size={15} color={showSettings ? '#38bdf8' : '#cbd5e1'} />
-              <span>Ajustes de Voz</span>
+              <Settings size={14} color={showSettings ? '#38bdf8' : '#cbd5e1'} />
+              <span>Ajustes</span>
             </button>
           </div>
         </div>
 
-        {/* ── PANEL DESPLEGABLE: AJUSTES DE VOZ LATINA Y PARÁMETROS ── */}
+        {/* ── PANEL DESPLEGABLE: AJUSTES DE VOZ LATINA ── */}
         {showSettings && (
           <div
             style={{
-              marginTop: '20px',
-              padding: '18px 20px',
-              borderRadius: '16px',
+              marginTop: '16px',
+              padding: '16px 18px',
+              borderRadius: '14px',
               background: 'rgba(15, 23, 42, 0.85)',
               border: '1px solid rgba(56, 189, 248, 0.35)',
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '18px',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: '16px',
               alignItems: 'center',
             }}
           >
-            {/* Selector de Voz Latina */}
+            {/* Selector de Voz */}
             <div>
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '0.8rem',
-                  fontWeight: 700,
-                  color: '#38bdf8',
-                  marginBottom: '8px',
-                }}
-              >
-                <Sliders size={14} /> Voz en Español Latinoamericano:
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', fontWeight: 700, color: '#38bdf8', marginBottom: '6px' }}>
+                <Sliders size={13} /> Voz en Español Latinoamericano:
               </label>
               <select
                 value={selectedVoice?.id || ''}
@@ -383,15 +575,13 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                 }}
                 style={{
                   width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '10px',
+                  padding: '8px 10px',
+                  borderRadius: '8px',
                   background: '#0a101d',
                   border: '1px solid rgba(56, 189, 248, 0.4)',
                   color: '#ffffff',
-                  fontSize: '0.84rem',
-                  fontWeight: 500,
+                  fontSize: '0.8rem',
                   outline: 'none',
-                  cursor: 'pointer',
                 }}
               >
                 {voices.length === 0 ? (
@@ -404,20 +594,13 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                   ))
                 )}
               </select>
-              <span style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
-                ✓ Filtro activo: Se excluyen expresamente voces peninsulares ('es-ES').
-              </span>
             </div>
 
-            {/* Slider de Velocidad (Rate: 0.8x a 1.4x) */}
+            {/* Slider de Velocidad */}
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#e2e8f0' }}>
-                  Velocidad de Lectura:
-                </span>
-                <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 700 }}>
-                  {rate.toFixed(2)}x
-                </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>Velocidad (Rate):</span>
+                <span style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: 700 }}>{rate.toFixed(2)}x</span>
               </div>
               <input
                 type="range"
@@ -426,28 +609,15 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                 step="0.05"
                 value={rate}
                 onChange={(e) => setRate(parseFloat(e.target.value))}
-                style={{
-                  width: '100%',
-                  accentColor: '#10b981',
-                  cursor: 'pointer',
-                }}
+                style={{ width: '100%', accentColor: '#10b981', cursor: 'pointer' }}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: '#64748b' }}>
-                <span>0.8x (Pausado)</span>
-                <span>1.0x (Normal)</span>
-                <span>1.4x (Rápido)</span>
-              </div>
             </div>
 
-            {/* Slider de Tono (Pitch: 0.8 a 1.2) */}
+            {/* Slider de Tono */}
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#e2e8f0' }}>
-                  Tono / Frecuencia (Pitch):
-                </span>
-                <span style={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 700 }}>
-                  {pitch.toFixed(2)}
-                </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>Tono (Pitch):</span>
+                <span style={{ fontSize: '0.78rem', color: '#f59e0b', fontWeight: 700 }}>{pitch.toFixed(2)}</span>
               </div>
               <input
                 type="range"
@@ -456,128 +626,200 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                 step="0.05"
                 value={pitch}
                 onChange={(e) => setPitch(parseFloat(e.target.value))}
-                style={{
-                  width: '100%',
-                  accentColor: '#f59e0b',
-                  cursor: 'pointer',
-                }}
+                style={{ width: '100%', accentColor: '#f59e0b', cursor: 'pointer' }}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: '#64748b' }}>
-                <span>0.8 (Grave)</span>
-                <span>1.0 (Neutro)</span>
-                <span>1.2 (Agudo)</span>
-              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── BANNER DE ALERTA DE ERROR SI EXISTE ── */}
-      {error && (
+      {/* ── BANNER DE AVISO DE CONMUTACIÓN DE RED ── */}
+      {networkWarning && (
         <div
           style={{
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid #ef4444',
-            borderRadius: '14px',
-            padding: '12px 18px',
-            marginBottom: '20px',
+            background: 'rgba(14, 165, 233, 0.15)',
+            border: '1px solid #0ea5e9',
+            borderRadius: '12px',
+            padding: '10px 16px',
+            marginBottom: '16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: '12px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <AlertCircle size={20} color="#f87171" />
-            <span style={{ fontSize: '0.86rem', color: '#fca5a5' }}>{error}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Sparkles size={16} color="#38bdf8" />
+            <span style={{ fontSize: '0.82rem', color: '#bae6fd' }}>{networkWarning}</span>
           </div>
           <button
-            onClick={() => setError(null)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#f87171',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '0.8rem',
-            }}
+            onClick={() => setNetworkWarning(null)}
+            style={{ background: 'transparent', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '0.76rem', fontWeight: 700 }}
           >
-            Entendido
+            OK
           </button>
         </div>
       )}
 
-      {/* ── 2. SECCIÓN PRINCIPAL: OPERADOR ROBÓTICO + PANEL MULTIMODAL ── */}
+      {/* ── BANNER DE ERROR ── */}
+      {error && (
+        <div
+          style={{
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid #ef4444',
+            borderRadius: '12px',
+            padding: '10px 16px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={16} color="#f87171" />
+            <span style={{ fontSize: '0.82rem', color: '#fca5a5' }}>{error}</span>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.76rem', fontWeight: 700 }}
+          >
+            Descartar
+          </button>
+        </div>
+      )}
+
+      {/* ── 2. SELECTOR VISUAL DE LOS 14 AGENTES PARLAMENTARIOS ── */}
+      <div style={{ marginBottom: '22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Layers size={16} color="#00f0ff" />
+            <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.01em', fontFamily: "'Outfit', sans-serif" }}>
+              Panel de los 14 Agentes Legislativos — Selecciona un agente para interactuar por voz:
+            </span>
+          </div>
+          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+            {VOICE_OPERATORS.length} operadores disponibles
+          </span>
+        </div>
+
+        {/* Carrusel / Grid de Agentes */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+            gap: '10px',
+          }}
+        >
+          {VOICE_OPERATORS.map((op) => {
+            const isSelected = op.id === activeOperator.id;
+            return (
+              <div
+                key={op.id}
+                onClick={() => handleSelectOperator(op)}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '14px',
+                  background: isSelected
+                    ? `linear-gradient(145deg, ${op.primaryColor}25, ${op.primaryColor}10)`
+                    : 'rgba(15, 23, 42, 0.6)',
+                  border: isSelected ? `2px solid ${op.primaryColor}` : '1px solid rgba(255, 255, 255, 0.08)',
+                  boxShadow: isSelected ? `0 0 15px ${op.primaryColor}35` : 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <img
+                    src={op.image}
+                    alt={op.name}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      objectFit: 'cover',
+                      border: `1px solid ${isSelected ? op.primaryColor : 'rgba(255,255,255,0.2)'}`,
+                    }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                        color: isSelected ? '#ffffff' : '#e2e8f0',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {op.shortName}
+                    </div>
+                    <div style={{ fontSize: '0.64rem', color: op.primaryColor, fontWeight: 600 }}>
+                      {op.badge.split('•')[0].trim()}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: '0.66rem',
+                    color: '#94a3b8',
+                    lineHeight: 1.25,
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                  }}
+                >
+                  {op.role}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── 3. WORKBENCH PRINCIPAL: OPERADOR SELECCIONADO + CONSOLA DE VOZ ── */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '340px 1fr',
-          gap: '24px',
+          gridTemplateColumns: '360px 1fr',
+          gap: '20px',
           alignItems: 'start',
         }}
       >
-        {/* COLUMNA IZQUIERDA: TARJETA DEL OPERADOR ROBÓTICO ACTIVO */}
+        {/* COLUMNA IZQUIERDA: AVATAR ROBOT + CONTROLES DEL AGENTE */}
         <div
           style={{
             background: 'linear-gradient(160deg, #0a1727 0%, #060e1a 100%)',
-            border: `2px solid ${isListening ? '#00f0ff' : isSpeaking ? '#10b981' : 'rgba(56, 189, 248, 0.4)'}`,
+            border: `2px solid ${isActiveAudio ? activeOperator.primaryColor : 'rgba(56, 189, 248, 0.35)'}`,
             borderRadius: '24px',
-            padding: '22px',
-            boxShadow: isListening
-              ? '0 0 35px rgba(0, 240, 255, 0.35)'
-              : isSpeaking
-              ? '0 0 35px rgba(16, 185, 129, 0.35)'
+            padding: '20px',
+            boxShadow: isActiveAudio
+              ? `0 0 35px ${activeOperator.primaryColor}35`
               : '0 10px 30px rgba(0, 0, 0, 0.4)',
             transition: 'all 0.3s ease',
             position: 'relative',
             overflow: 'hidden',
           }}
         >
-          {/* Selector de Operador */}
-          <div style={{ marginBottom: '14px' }}>
-            <span style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
-              Operador de Voz Parlamentario:
-            </span>
-            <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
-              {VOICE_OPERATORS.map((op) => {
-                const isCurrent = op.id === activeOperator.id;
-                return (
-                  <button
-                    key={op.id}
-                    onClick={() => handleSelectOperator(op)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: '8px',
-                      border: `1px solid ${isCurrent ? op.primaryColor : 'rgba(255, 255, 255, 0.1)'}`,
-                      background: isCurrent ? `${op.primaryColor}22` : 'rgba(255, 255, 255, 0.04)',
-                      color: isCurrent ? '#ffffff' : '#94a3b8',
-                      fontSize: '0.72rem',
-                      fontWeight: isCurrent ? 700 : 500,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                    }}
-                  >
-                    {op.name.replace('Operador ', '')}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Imagen del Robot con Efecto Holográfico y Escáner */}
+          {/* Avatar del Robot con animación */}
           <div
             style={{
               width: '100%',
-              height: '240px',
-              borderRadius: '18px',
+              height: '220px',
+              borderRadius: '16px',
               overflow: 'hidden',
               position: 'relative',
               background: 'radial-gradient(circle at center, #1e293b 0%, #070c16 100%)',
-              border: `1.5px solid ${isListening ? '#00f0ff' : 'rgba(255, 255, 255, 0.12)'}`,
+              border: `1.5px solid ${isActiveAudio ? activeOperator.primaryColor : 'rgba(255, 255, 255, 0.12)'}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: '16px',
+              marginBottom: '14px',
             }}
           >
             <img
@@ -588,8 +830,8 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                 height: '100%',
                 objectFit: 'contain',
                 padding: '6px',
-                filter: isListening
-                  ? 'brightness(1.2) drop-shadow(0 0 12px rgba(0, 240, 255, 0.5))'
+                filter: isActiveAudio
+                  ? `brightness(1.2) drop-shadow(0 0 12px ${activeOperator.primaryColor}80)`
                   : isSpeaking
                   ? 'brightness(1.15) drop-shadow(0 0 12px rgba(16, 185, 129, 0.5))'
                   : 'none',
@@ -597,8 +839,8 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
               }}
             />
 
-            {/* Efecto de escaneo láser en vivo cuando está escuchando */}
-            {isListening && (
+            {/* Láser de escaneo al escuchar */}
+            {isActiveAudio && (
               <div
                 style={{
                   position: 'absolute',
@@ -606,85 +848,94 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                   left: 0,
                   right: 0,
                   height: '3px',
-                  background: 'linear-gradient(90deg, transparent, #00f0ff, transparent)',
-                  boxShadow: '0 0 15px #00f0ff',
+                  background: `linear-gradient(90deg, transparent, ${activeOperator.primaryColor}, transparent)`,
+                  boxShadow: `0 0 15px ${activeOperator.primaryColor}`,
                   animation: 'scan-laser 2s linear infinite',
                 }}
               />
             )}
 
-            {/* Badge de Estado en el avatar */}
+            {/* Badge de Estado del Robot */}
             <div
               style={{
                 position: 'absolute',
-                bottom: '10px',
-                left: '10px',
-                right: '10px',
+                bottom: '8px',
+                left: '8px',
+                right: '8px',
                 background: 'rgba(15, 23, 42, 0.88)',
                 backdropFilter: 'blur(8px)',
-                borderRadius: '10px',
-                padding: '6px 10px',
+                borderRadius: '8px',
+                padding: '5px 10px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 border: '1px solid rgba(255, 255, 255, 0.1)',
               }}
             >
-              <span style={{ fontSize: '0.74rem', color: '#cbd5e1', fontWeight: 600 }}>
-                {isListening ? '🎙️ Capturando audio...' : isSpeaking ? '🔊 Reproduciendo voz...' : 'En Espera'}
+              <span style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 600 }}>
+                {isListening
+                  ? '🎙️ Web Speech activo...'
+                  : isRecording
+                  ? '🎙️ Grabando WAV (Servidor)...'
+                  : isSpeaking
+                  ? '🔊 Leyendo respuesta...'
+                  : 'En Espera'}
               </span>
               <span
                 style={{
                   width: '8px',
                   height: '8px',
                   borderRadius: '50%',
-                  background: isListening ? '#00f0ff' : isSpeaking ? '#10b981' : '#64748b',
-                  boxShadow: isListening ? '0 0 8px #00f0ff' : isSpeaking ? '0 0 8px #10b981' : 'none',
+                  background: isActiveAudio ? activeOperator.primaryColor : isSpeaking ? '#10b981' : '#64748b',
+                  boxShadow: isActiveAudio ? `0 0 8px ${activeOperator.primaryColor}` : 'none',
                 }}
               />
             </div>
           </div>
 
           {/* Información del Operador Activo */}
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '1.15rem', color: '#ffffff', margin: 0 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '1.1rem', color: '#ffffff', margin: 0 }}>
                 {activeOperator.name}
               </h3>
-              <span className="badge badge-green" style={{ fontSize: '0.68rem' }}>
+              <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>
                 {activeOperator.badge}
               </span>
             </div>
-            <p style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 600, margin: '0 0 10px 0' }}>
+
+            <p style={{ fontSize: '0.78rem', color: activeOperator.primaryColor, fontWeight: 600, margin: '0 0 8px 0' }}>
               {activeOperator.role}
             </p>
+
+            {/* Saludo / Respuesta activa */}
             <div
               style={{
                 background: 'rgba(0, 0, 0, 0.4)',
-                borderRadius: '12px',
+                borderRadius: '10px',
                 padding: '10px 12px',
-                fontSize: '0.78rem',
+                fontSize: '0.76rem',
                 color: '#e2e8f0',
-                lineHeight: 1.45,
+                lineHeight: 1.4,
                 borderLeft: `3px solid ${activeOperator.primaryColor}`,
+                marginBottom: '10px',
               }}
             >
               {assistantResponse}
             </div>
 
-            {/* Botón para escuchar el saludo del robot */}
+            {/* Botón para escuchar el saludo con TTS */}
             <button
               onClick={() => handleSpeakText(assistantResponse)}
               disabled={isSpeaking}
               style={{
                 width: '100%',
-                marginTop: '12px',
                 padding: '8px 12px',
                 borderRadius: '10px',
                 background: isSpeaking ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.06)',
                 border: `1px solid ${isSpeaking ? '#10b981' : 'rgba(255, 255, 255, 0.15)'}`,
                 color: '#ffffff',
-                fontSize: '0.78rem',
+                fontSize: '0.75rem',
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
@@ -692,167 +943,191 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                 gap: '6px',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
+                marginBottom: '12px',
               }}
             >
-              <Volume2 size={15} color="#34d399" />
-              <span>{isSpeaking ? 'Hablando...' : 'Escuchar Saludo del Operador'}</span>
+              <Volume2 size={14} color="#34d399" />
+              <span>{isSpeaking ? 'Hablando...' : 'Escuchar Voz del Agente'}</span>
             </button>
+
+            {/* Panel de Comandos de Voz Embebido */}
+            <VoiceAgentPanel
+              agente={activeOperator.agente || activeOperator.id}
+              agenteLabel={activeOperator.name}
+              primaryColor={activeOperator.primaryColor}
+              sesionId={null}
+              compact={false}
+              isSTTSupported={isSTTSupported}
+              isListening={isListening}
+              isRecording={isRecording}
+              recognitionStatus={recognitionStatus}
+              whisperStatus={whisperStatus}
+              sttEngineUsed={sttEngineUsed}
+              transcript={transcript}
+              interimTranscript={interimTranscript}
+              isSpeaking={isSpeaking}
+              error={error}
+              startListening={startListening}
+              stopListening={stopListening}
+              startRecordingFallback={startRecordingWAV}
+              stopRecordingFallback={stopRecordingWAV}
+              clearTranscript={clearTranscript}
+              sendVoiceCommand={sendVoiceCommand}
+              speakWithFallback={speakWithFallback}
+              fetchAgentCommands={fetchAgentCommands}
+              commandHistory={commandHistory}
+            />
           </div>
         </div>
 
-        {/* COLUMNA DERECHA: CONSOLA DE DIÁLOGO Y TRANSCRIPCIÓN */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Panel Principal de Transcripción / Entrada de Texto */}
+        {/* COLUMNA DERECHA: CONSOLA DE DIÁLOGO, DICTADO Y COMANDOS */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* 1. Transcripción y Dictado */}
           <div
             style={{
               background: 'linear-gradient(145deg, #0f1c2e 0%, #0a1320 100%)',
               border: '1px solid rgba(56, 189, 248, 0.3)',
-              borderRadius: '24px',
-              padding: '24px',
+              borderRadius: '20px',
+              padding: '20px',
               boxShadow: '0 8px 30px rgba(0, 0, 0, 0.3)',
               display: 'flex',
               flexDirection: 'column',
-              gap: '14px',
+              gap: '12px',
             }}
           >
-            {/* Barra superior de la consola de transcripción */}
+            {/* Header del Textarea */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MessageSquare size={18} color="#38bdf8" />
-                <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '1rem', color: '#ffffff' }}>
-                  Transcripción y Dictado en Tiempo Real
+                <MessageSquare size={17} color="#38bdf8" />
+                <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.95rem', color: '#ffffff' }}>
+                  Transcripción y Dictado en Vivo ({activeOperator.shortName})
                 </span>
-                {isListening && (
-                  <span
-                    className="badge badge-gold animate-pulse"
-                    style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    <Mic size={12} /> Escuchando...
+                {isActiveAudio && (
+                  <span className="badge badge-gold animate-pulse" style={{ fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Mic size={11} /> Grabando...
                   </span>
                 )}
               </div>
 
-              {/* Acciones rápidas: Copiar y Limpiar */}
-              <div style={{ display: 'flex', gap: '8px' }}>
+              {/* Botones rápidos */}
+              <div style={{ display: 'flex', gap: '6px' }}>
                 <button
                   onClick={handleCopy}
-                  title="Copiar texto al portapapeles"
                   style={{
-                    padding: '6px 12px',
+                    padding: '5px 10px',
                     borderRadius: '8px',
                     background: 'rgba(255, 255, 255, 0.05)',
                     border: '1px solid rgba(255, 255, 255, 0.15)',
                     color: '#e2e8f0',
-                    fontSize: '0.76rem',
+                    fontSize: '0.72rem',
                     fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '5px',
+                    gap: '4px',
                     cursor: 'pointer',
                   }}
                 >
-                  {copied ? <Check size={14} color="#34d399" /> : <Copy size={14} />}
-                  <span>{copied ? '¡Copiado!' : 'Copiar'}</span>
+                  {copied ? <Check size={12} color="#34d399" /> : <Copy size={12} />}
+                  <span>{copied ? 'Copiado' : 'Copiar'}</span>
                 </button>
 
                 <button
                   onClick={clearTranscript}
-                  title="Limpiar transcripción"
                   style={{
-                    padding: '6px 12px',
+                    padding: '5px 10px',
                     borderRadius: '8px',
                     background: 'rgba(239, 68, 68, 0.08)',
                     border: '1px solid rgba(239, 68, 68, 0.25)',
                     color: '#f87171',
-                    fontSize: '0.76rem',
+                    fontSize: '0.72rem',
                     fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '5px',
+                    gap: '4px',
                     cursor: 'pointer',
                   }}
                 >
-                  <RotateCcw size={14} />
+                  <RotateCcw size={12} />
                   <span>Limpiar</span>
                 </button>
               </div>
             </div>
 
-            {/* Textarea de transcripción editable con texto intermedio */}
+            {/* Textarea */}
             <div style={{ position: 'relative' }}>
               <textarea
                 value={transcript}
                 onChange={(e) => setTranscript(e.target.value)}
-                placeholder="Presiona el micrófono para comenzar a dictar o escribe directamente aquí en lenguaje parlamentario..."
-                rows={6}
+                placeholder={`Dicta presionando el micrófono o escribe una instrucción para ${activeOperator.name}...`}
+                rows={5}
                 style={{
                   width: '100%',
-                  padding: '16px',
-                  borderRadius: '16px',
+                  padding: '14px',
+                  borderRadius: '14px',
                   background: '#070d17',
-                  border: isListening ? '2px solid #00f0ff' : '1px solid rgba(56, 189, 248, 0.25)',
-                  boxShadow: isListening ? '0 0 20px rgba(0, 240, 255, 0.25) inset' : 'none',
+                  border: isActiveAudio ? `2px solid ${activeOperator.primaryColor}` : '1px solid rgba(56, 189, 248, 0.25)',
+                  boxShadow: isActiveAudio ? `0 0 15px ${activeOperator.primaryColor}30 inset` : 'none',
                   color: '#ffffff',
-                  fontSize: '0.95rem',
-                  lineHeight: 1.6,
-                  fontFamily: "'Inter', sans-serif",
+                  fontSize: '0.9rem',
+                  lineHeight: 1.5,
                   resize: 'vertical',
                   outline: 'none',
                   boxSizing: 'border-box',
                 }}
               />
 
-              {/* Indicador de texto en proceso (interim transcript) */}
               {interimTranscript && (
                 <div
                   style={{
                     position: 'absolute',
-                    bottom: '12px',
-                    left: '16px',
-                    right: '16px',
+                    bottom: '10px',
+                    left: '12px',
+                    right: '12px',
                     background: 'rgba(14, 165, 233, 0.15)',
                     border: '1px dashed #0ea5e9',
                     borderRadius: '8px',
-                    padding: '6px 12px',
-                    fontSize: '0.82rem',
+                    padding: '4px 10px',
+                    fontSize: '0.78rem',
                     color: '#67e8f9',
                     fontStyle: 'italic',
                   }}
                 >
-                  Capturando: {interimTranscript}
+                  Detectando: {interimTranscript}
                 </div>
               )}
             </div>
 
-            {/* Consultas Parlamentarias Rápidas de Prueba */}
-            <div>
-              <span style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>
-                💡 Consultas Parlamentarias de Ejemplo (Clic para Cargar):
-              </span>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
-                {SAMPLE_QUERIES.map((sq, idx) => {
-                  const Icon = sq.icon;
-                  return (
+            {/* Comandos Sugeridos para este Agente */}
+            {agentCommands && agentCommands.length > 0 && (
+              <div>
+                <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>
+                  ⚡ Comandos Rápidos para {activeOperator.shortName} (Clic para ejecutar):
+                </span>
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                  {agentCommands.map((cmd, idx) => (
                     <button
                       key={idx}
-                      onClick={() => handleLoadSample(sq.text)}
+                      onClick={() => {
+                        setTranscript(cmd.frase_ejemplo);
+                        handleExecuteVoiceCommand(cmd.frase_ejemplo);
+                      }}
                       style={{
-                        padding: '6px 12px',
-                        borderRadius: '10px',
+                        padding: '5px 10px',
+                        borderRadius: '8px',
                         background: 'rgba(255, 255, 255, 0.04)',
                         border: '1px solid rgba(255, 255, 255, 0.12)',
                         color: '#cbd5e1',
-                        fontSize: '0.76rem',
+                        fontSize: '0.72rem',
                         fontWeight: 500,
+                        cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
+                        gap: '4px',
+                        transition: 'all 0.15s ease',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(56, 189, 248, 0.15)';
-                        e.currentTarget.style.borderColor = '#38bdf8';
+                        e.currentTarget.style.background = `${activeOperator.primaryColor}20`;
+                        e.currentTarget.style.borderColor = activeOperator.primaryColor;
                         e.currentTarget.style.color = '#ffffff';
                       }}
                       onMouseLeave={(e) => {
@@ -861,89 +1136,126 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                         e.currentTarget.style.color = '#cbd5e1';
                       }}
                     >
-                      <Icon size={14} color="#38bdf8" />
-                      <span>{sq.label}</span>
+                      <Zap size={11} color={activeOperator.primaryColor} />
+                      "{cmd.frase_ejemplo}"
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* ── 3. BARRA DE ACCIONES FLOTANTE / INFERIOR ── */}
+          {/* 2. Barra de Control de Micrófono y TTS */}
           <div
             style={{
               background: 'linear-gradient(145deg, #091322 0%, #0d1b2e 100%)',
               border: '1px solid rgba(56, 189, 248, 0.25)',
-              borderRadius: '20px',
-              padding: '16px 24px',
+              borderRadius: '18px',
+              padding: '14px 20px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               flexWrap: 'wrap',
-              gap: '16px',
-              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.4)',
+              gap: '12px',
+              boxShadow: '0 8px 25px rgba(0, 0, 0, 0.35)',
             }}
           >
-            {/* Control Principal del Micrófono con Halo Pulsante */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            {/* Botón de Micrófono Principal */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ position: 'relative' }}>
-                {isListening && (
+                {isActiveAudio && (
                   <div
                     style={{
                       position: 'absolute',
-                      inset: '-6px',
+                      inset: '-5px',
                       borderRadius: '50%',
-                      background: 'radial-gradient(circle, rgba(0, 240, 255, 0.6) 0%, transparent 70%)',
+                      background: `radial-gradient(circle, ${activeOperator.primaryColor} 0%, transparent 70%)`,
                       animation: 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite',
                     }}
                   />
                 )}
                 <button
-                  onClick={isListening ? stopListening : startListening}
+                  onClick={
+                    isActiveAudio
+                      ? stopListening
+                      : () => {
+                          if (sttMode === 'backend' || !isSTTSupported) {
+                            startRecordingWAV(activeOperator.agente || activeOperator.id);
+                          } else {
+                            startListening();
+                          }
+                        }
+                  }
                   style={{
                     position: 'relative',
-                    width: '56px',
-                    height: '56px',
+                    width: '50px',
+                    height: '50px',
                     borderRadius: '50%',
-                    background: isListening
+                    background: isActiveAudio
                       ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)'
-                      : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      : `linear-gradient(135deg, ${activeOperator.primaryColor}dd, ${activeOperator.primaryColor}77)`,
                     border: '2px solid rgba(255, 255, 255, 0.3)',
                     color: '#ffffff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    boxShadow: isListening
-                      ? '0 0 25px rgba(239, 68, 68, 0.65)'
-                      : '0 0 25px rgba(16, 185, 129, 0.45)',
-                    transition: 'all 0.25s ease',
+                    boxShadow: isActiveAudio
+                      ? '0 0 20px rgba(239, 68, 68, 0.65)'
+                      : `0 0 20px ${activeOperator.primaryColor}55`,
+                    transition: 'all 0.2s ease',
                   }}
                 >
-                  {isListening ? <MicOff size={26} /> : <Mic size={26} />}
+                  {isActiveAudio ? <MicOff size={22} /> : <Mic size={22} />}
                 </button>
               </div>
 
               <div>
-                <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '1rem', color: '#ffffff' }}>
-                  {isListening ? 'Grabando Audio...' : 'Dictar por Micrófono'}
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.92rem', color: '#ffffff' }}>
+                  {isListening
+                    ? 'Capturando audio (Web Speech)...'
+                    : isRecording
+                    ? 'Grabando WAV directo...'
+                    : 'Hablar con ' + activeOperator.shortName}
                 </div>
-                <div style={{ fontSize: '0.78rem', color: isListening ? '#34d399' : '#94a3b8' }}>
-                  {isListening ? 'Habla claramente en español latinoamericano' : 'Presiona el botón para iniciar STT nativo'}
+                <div style={{ fontSize: '0.74rem', color: isActiveAudio ? '#34d399' : '#94a3b8' }}>
+                  {isActiveAudio ? 'Habla claramente en español latino' : 'Presiona para dictar tu comando'}
                 </div>
               </div>
             </div>
 
-            {/* Controles de Síntesis de Voz (Reproducir / Pausa / Detener) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {/* Botón Principal Speak */}
+            {/* Botones de Acción: Enviar Comando y Leer TTS */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {transcript && (
+                <button
+                  onClick={() => handleExecuteVoiceCommand(transcript)}
+                  disabled={isExecutingCommand}
+                  style={{
+                    padding: '10px 16px',
+                    borderRadius: '10px',
+                    background: `linear-gradient(135deg, ${activeOperator.primaryColor}dd, ${activeOperator.primaryColor}88)`,
+                    border: 'none',
+                    color: '#000000',
+                    fontFamily: "'Outfit', sans-serif",
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: isExecutingCommand ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <Send size={14} />
+                  <span>{isExecutingCommand ? 'Procesando...' : 'Enviar Comando'}</span>
+                </button>
+              )}
+
               <button
                 onClick={() => (isSpeaking ? stopSpeaking() : handleSpeakText(transcript))}
                 disabled={!transcript && !assistantResponse}
                 style={{
-                  padding: '11px 20px',
-                  borderRadius: '12px',
+                  padding: '10px 16px',
+                  borderRadius: '10px',
                   background: isSpeaking
                     ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
                     : 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
@@ -951,67 +1263,136 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                   color: '#ffffff',
                   fontFamily: "'Outfit', sans-serif",
                   fontWeight: 700,
-                  fontSize: '0.88rem',
+                  fontSize: '0.82rem',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
+                  gap: '6px',
                   cursor: !transcript && !assistantResponse ? 'not-allowed' : 'pointer',
                   opacity: !transcript && !assistantResponse ? 0.5 : 1,
-                  boxShadow: '0 4px 15px rgba(14, 165, 233, 0.35)',
-                  transition: 'all 0.2s ease',
                 }}
               >
-                {isSpeaking ? <Square size={17} /> : <Volume2 size={17} />}
-                <span>{isSpeaking ? 'Detener Voz' : 'Leer Texto (TTS)'}</span>
+                {isSpeaking ? <Square size={14} /> : <Volume2 size={14} />}
+                <span>{isSpeaking ? 'Detener' : 'Leer Texto'}</span>
               </button>
 
-              {/* Botón Pausar / Reanudar si está hablando */}
-              {isSpeaking && (
-                <button
-                  onClick={isPaused ? resumeSpeaking : pauseSpeaking}
-                  style={{
-                    padding: '11px 14px',
-                    borderRadius: '12px',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    color: '#ffffff',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {isPaused ? <Play size={16} /> : <Pause size={16} />}
-                </button>
-              )}
-
-              {/* Enlace o Derivación a Mesa de Partes si hay navegación disponible */}
-              {onNavigateTab && transcript && (
+              {onNavigateTab && (
                 <button
                   onClick={() => onNavigateTab('mesa')}
                   style={{
-                    padding: '11px 18px',
-                    borderRadius: '12px',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
                     background: 'rgba(16, 185, 129, 0.15)',
                     border: '1px solid #10b981',
                     color: '#34d399',
-                    fontFamily: "'Outfit', sans-serif",
                     fontWeight: 700,
-                    fontSize: '0.85rem',
+                    fontSize: '0.8rem',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
+                    gap: '5px',
                     cursor: 'pointer',
-                    transition: 'all 0.2s ease',
                   }}
                 >
-                  <Send size={15} />
-                  <span>Mesa de Partes</span>
+                  <ChevronRight size={14} />
+                  <span>Mesa</span>
                 </button>
               )}
             </div>
           </div>
+
+          {/* 3. Historial de Comandos de Voz Ejecutados */}
+          {commandHistory && commandHistory.length > 0 && (
+            <div
+              style={{
+                background: 'linear-gradient(145deg, #091322 0%, #0d1b2e 100%)',
+                border: '1px solid rgba(56, 189, 248, 0.25)',
+                borderRadius: '18px',
+                padding: '16px 20px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Bot size={16} color="#00f0ff" />
+                  <h3 style={{ margin: 0, fontSize: '0.92rem', fontFamily: "'Outfit', sans-serif", color: '#ffffff' }}>
+                    Historial de Comandos Ejecutados ({commandHistory.length})
+                  </h3>
+                </div>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
+                  Sesión activa • Respuestas con TTS
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
+                {commandHistory.slice().reverse().map((cmd, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: `1px solid ${cmd.reconocido ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#00f0ff', fontWeight: 700 }}>
+                          [{cmd.agente}]
+                        </span>
+                        <span style={{ fontSize: '0.66rem', color: '#64748b' }}>{cmd.timestamp}</span>
+                        <span
+                          style={{
+                            fontSize: '0.62rem',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            background: cmd.reconocido ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            color: cmd.reconocido ? '#34d399' : '#f87171',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {cmd.reconocido ? `Acción: ${cmd.accion}` : 'Consulta'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 500 }}>
+                        "{cmd.texto || cmd.comando}"
+                      </div>
+                      {cmd.respuesta && (
+                        <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px', fontStyle: 'italic' }}>
+                          ↳ {cmd.respuesta}
+                        </div>
+                      )}
+                    </div>
+                    {cmd.respuesta && (
+                      <button
+                        onClick={() => speakWithFallback(cmd.respuesta, cmd.agente)}
+                        title="Reproducir respuesta con voz"
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          background: 'rgba(56, 189, 248, 0.1)',
+                          border: '1px solid rgba(56, 189, 248, 0.3)',
+                          color: '#38bdf8',
+                          fontSize: '0.7rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                        }}
+                      >
+                        <Volume2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── CSS KEYFRAMES LOCALES PARA ANIMACIONES DE ESCÁNER Y PING ── */}
+      {/* ── CSS KEYFRAMES LOCALES ── */}
       <style>{`
         @keyframes scan-laser {
           0% { top: 0%; opacity: 0.8; }

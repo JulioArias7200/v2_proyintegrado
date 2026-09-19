@@ -1,213 +1,375 @@
 # ============================================================================
 # DEFINICIÓN DE TAREAS — SMA CONGRESO (CrewAI & YAML Architecture)
+# 14 Tareas Especializadas del Proceso Legislativo Boliviano
 # ============================================================================
 
 tareas:
-  # ========== TAREA 1: CONCENTRAR OBSERVACIONES ==========
+  # ==========================================================================
+  # FASE 1: INGRESO, CLASIFICACIÓN Y ATENCIÓN
+  # ==========================================================================
+
+  Clasificar_Documento:
+    descripcion: >
+      Analizar el documento ingresado (texto, PDF o transcripción de voz).
+      1. Verificar requisitos formales según Ley 1630 y Art. 156 CPE (iniciativa, exposición de motivos, articulado).
+      2. Clasificar unívocamente en: AGENTE_REGISTRO_LEGISLATIVO, AGENTE_ATENCION_CIUDADANA o AGENTE_GESTION_CORRESPONDENCIA.
+      3. Asignar materia temática (Constitucional, Económica, Social, Ambiental, Penal, etc.).
+      4. Generar propuesta de número de expediente correlativo.
+    agente: "Distribuidor"
+    expected_output: >
+      JSON con:
+      {
+        "categoria": "AGENTE_REGISTRO_LEGISLATIVO | AGENTE_ATENCION_CIUDADANA | AGENTE_GESTION_CORRESPONDENCIA",
+        "confianza": 0.95,
+        "materia": "string",
+        "resumen_ejecutivo": "string",
+        "cumple_requisitos_forma": true,
+        "observaciones_forma": [],
+        "prioridad_sugerida": "ALTA | MEDIA | BAJA"
+      }
+    herramientas: []
+
+  Atender_Consulta_Ciudadana:
+    descripcion: >
+      Procesar consulta ciudadana recibida por texto o voz (STT).
+      1. Detectar intención ciudadana (información sobre leyes, estado de un trámite o nueva petición).
+      2. Formular respuesta clara, respetuosa e institucional.
+      3. Derivar al agente respectivo si se trata de un trámite parlamentario formal.
+    agente: "Interaccion_Ciudadana"
+    expected_output: >
+      JSON con:
+      {
+        "intencion_detectada": "CONSULTA_INFORMACION | ESTADO_TRAMITE | PRESENTACION_INICIATIVA | RECLAMO_QUEJA",
+        "confianza_intencion": 0.92,
+        "respuesta_ciudadana": "string",
+        "requiere_derivacion": false,
+        "agente_destino": null,
+        "puntos_clave": ["string"]
+      }
+    herramientas: []
+
+  # ==========================================================================
+  # FASE 2: AUDITORÍA NORMATIVA Y TRABAJO EN COMISIÓN
+  # ==========================================================================
+
+  Auditar_Constitucionalidad:
+    descripcion: >
+      Auditoría formal y textual estricta contra la CPE 2009 (Arts. 1 al 410).
+      1. Extraer cada artículo del proyecto de ley.
+      2. Cotejar de manera literal contra derechos fundamentales (Arts. 13-144) y régimen competencial autonómico (Arts. 297-304).
+      3. Emitir semáforo de severidad: CRÍTICA (incompatibilidad insalvable), GRAVE o LEVE.
+    agente: "Verificador_Constitucional"
+    expected_output: >
+      JSON con:
+      {
+        "valido": true,
+        "confianza": 0.98,
+        "severidad_maxima": "ninguna | leve | grave | bloqueante",
+        "num_contradicciones": 0,
+        "contradicciones": [],
+        "fundamentacion_general": "string"
+      }
+    herramientas: []
+
+  Analizar_Consistencia:
+    descripcion: >
+      Auditoría semántica con pgvector sobre el corpus de leyes vigentes de Bolivia.
+      1. Generar embeddings 2048d del articulado propuesto.
+      2. Buscar antinomias, vacíos legales y derogaciones tácitas contra códigos y leyes orgánicas vigentes.
+      3. Presentar cuadro comparativo de colisiones normativas detectadas.
+    agente: "Consistencia_Normativa"
+    expected_output: >
+      JSON con:
+      {
+        "nivel_riesgo_global": "BAJO | MEDIO | ALTO | CRITICO",
+        "hallazgos": [
+          {
+            "articulo_proyecto": "Art. X",
+            "norma_vigente": "Ley N° XXXX",
+            "articulo_vigente": "Art. Y",
+            "tipo_relacion": "COLISION | DEROGACION_TACITA | REDUNDANCIA",
+            "similitud_semantica": 0.85,
+            "justificacion": "string",
+            "sugerencia_redaccion": "string"
+          }
+        ],
+        "resumen_consistencia": "string"
+      }
+    herramientas: []
+
+  Evaluar_Viabilidad_Tecnica:
+    descripcion: >
+      Análisis técnico pericial y fáctico de la materia parlamentaria.
+      1. Evaluar si la infraestructura y capacidad operativa existen en el país para aplicar la ley.
+      2. Verificar compatibilidad con estándares técnicos internacionales (ISO, OIT, OMS).
+      3. Cuantificar matriz de riesgos operacionales (probabilidad e impacto).
+    agente: "Especialista_Tecnico"
+    expected_output: >
+      JSON con:
+      {
+        "materia_tecnica": "TECNOLOGIA | MEDIO_AMBIENTE | SALUD | INFRAESTRUCTURA",
+        "viabilidad_tecnica": "VIABLE | VIABLE_CON_CONDICIONES | NO_VIABLE",
+        "puntuacion_viabilidad": 8.5,
+        "infraestructura_requerida": ["string"],
+        "estandares_aplicables": ["ISO 27001"],
+        "matriz_riesgos": [],
+        "dictamen_tecnico_resumen": "string"
+      }
+    herramientas: []
+
+  Planificar_Debate_Comision:
+    descripcion: >
+      Orquestar el trabajo legislativo en la Comisión especializada.
+      1. Generar Orden del Día con asignación de tiempos de debate por punto.
+      2. Determinar la lista de especialistas técnicos y autoridades a convocar a audiencias públicas.
+      3. Estimar cronograma de tratamiento (plazo reglamentario de 15 a 30 días hábiles).
+    agente: "Presidencia_Comision"
+    expected_output: >
+      JSON con:
+      {
+        "comision_nombre": "string",
+        "orden_del_dia": [
+          {"numero": 1, "punto": "string", "tiempo_estimado_minutos": 30, "responsable": "string"}
+        ],
+        "especialistas_convocados": ["string"],
+        "cronograma_estimado_dias": 15,
+        "plan_de_audiencias": "string",
+        "instrucciones_a_secretaria": "string"
+      }
+    herramientas: []
+
+  Analizar_Fondo_Constitucional:
+    descripcion: >
+      Análisis hermenéutico y de fondo jurídico constitucional.
+      1. Ponderar valores supremos del Estado Plurinacional (Vivir Bien, descolonización, igualdad).
+      2. Analizar sentencias y autos constitucionales vinculantes del Tribunal Constitucional Plurinacional (TCP).
+      3. Aplicar test de proporcionalidad (idoneidad, necesidad y proporcionalidad en sentido estricto).
+    agente: "Constitucion_Fondo"
+    expected_output: >
+      JSON con:
+      {
+        "viabilidad_fondo": "CONSTITUCIONAL | CONSTITUCIONAL_CON_CONDICION | INCONSTITUCIONAL_FONDO",
+        "principios_fundamentales_analizados": ["string"],
+        "precedentes_tcp_aplicables": ["SCP 0812/2012-R"],
+        "test_proporcionalidad": {
+          "fin_legitimo": true,
+          "idoneidad": true,
+          "necesidad": true,
+          "proporcionalidad_estricta": "string"
+        },
+        "dictamen_fondo_detallado": "string",
+        "enmiendas_de_fondo_sugeridas": ["string"]
+      }
+    herramientas: []
+
+  Evaluar_Impacto_Presupuestario:
+    descripcion: >
+      Evaluación de sostenibilidad fiscal y cumplimiento de la Ley 1178 (SAFCO).
+      1. Cuantificar el costo de implementación inicial y costo operativo anual en Bolivianos (Bs).
+      2. Verificar si la iniciativa cuenta con fuente de financiamiento identificada en el TGN o créditos.
+      3. Simular escenarios macroeconómicos: Optimista, Conservador y Estresado/Pesimista.
+    agente: "Planificacion_Presupuesto"
+    expected_output: >
+      JSON con:
+      {
+        "viabilidad_fiscal": "SOSTENIBLE | CONDICIONADA_A_RECURSOS | INSOSTENIBLE_DEFICIT",
+        "costo_implementacion_inicial_bs": 15000000.0,
+        "costo_operativo_anual_bs": 2500000.0,
+        "fuente_financiamiento_identificada": true,
+        "escenarios": {
+          "optimista": {"costo_neto": "string"},
+          "conservador": {"costo_neto": "string"},
+          "pesimista": {"costo_neto": "string"}
+        },
+        "alerta_presupuesto_tgn": "VERDE | AMARILLA | ROJA",
+        "recomendacion_fiscal": "string"
+      }
+    herramientas: []
+
   Concentrar_Observaciones:
     descripcion: >
-      Integrar observaciones de múltiples agentes (Constitucional,
-      Consistencia, Comisión Legislativa) en un expediente consolidado.
-      Cada observación debe mantener trazabilidad de origen.
+      Integrar observaciones de múltiples agentes (Constitucional Formal, Consistencia,
+      Especialista Técnico, Constitución Fondo y Presupuesto) en un expediente consolidado.
+      Eliminar redundancias manteniendo la trazabilidad estricta de la fuente.
     agente: "Concentrador"
     expected_output: >
-      JSON con expediente consolidado y trazabilidad de origen.
-      Estructura:
+      JSON con expediente consolidado y trazabilidad de origen:
       {
         "expediente_consolidado": {
           "resumen_ejecutivo": "string",
           "observaciones_integradas": [
             {
-              "tipo": "CONSTITUCIONAL|CONSISTENCIA|COMISION",
+              "tipo": "CONSTITUCIONAL | CONSISTENCIA | TECNICO | FONDO | PRESUPUESTO",
               "agente_origen": "string",
               "contenido": "string",
-              "riesgo": "BAJO|MEDIO|ALTO|CRÍTICO",
+              "riesgo": "BAJO | MEDIO | ALTO | CRITICO",
               "articulos_afectados": ["string"]
             }
           ],
-          "estado_siguiente": "LISTO_PARA_DEBATE"
+          "estado_siguiente": "LISTO_PARA_PLENARIA"
         }
       }
     herramientas: []
-    depends_on:
-      - "Auditar_Constitucionalidad"
-      - "Analizar_Consistencia"
-      - "Asignar_Comision"
 
-  # ========== TAREA 2: REGISTRAR DEBATE ==========
+  # ==========================================================================
+  # FASE 3: PLENARIA Y PROCEDIMIENTO BICAMERAL
+  # ==========================================================================
+
   Registrar_Debate:
     descripcion: >
-      Capturar estructura del debate legislativo en secuencia temporal.
-      Registrar intervenciones de legisladores, votaciones nominales,
-      acuerdos y mociones. Verificar cruzadamente cada evento.
+      Capturar la estructura del debate en el Pleno camaral en secuencia cronológica.
+      1. Registrar intervenciones de parlamentarios con posturas a favor y en contra.
+      2. Documentar la votación en grande y artículo por artículo (en detalle).
+      3. Computar votos afirmativos, negativos y abstenciones verificando quórum de dos tercios o mayoría absoluta (Art. 160 CPE).
+      4. Generar Acta Oficial suscrita por Secretaría.
     agente: "Secretario_Camara"
     expected_output: >
-      JSON con acta estructurada.
-      Estructura:
+      JSON con:
       {
-        "acta_debate": {
-          "fecha": "YYYY-MM-DD",
-          "sesion_numero": 12,
-          "intervenciones": [
-            {
-              "orden": 1,
-              "legislador": "string",
-              "partido": "string",
-              "contenido": "string",
-              "timestamp": "HH:MM"
-            }
-          ],
-          "votaciones": [
-            {
-              "articulo": 5,
-              "votacion": "APROBADO|RECHAZADO|ABSTENIDO",
-              "favor": 65,
-              "contra": 30,
-              "abstenciones": 5
-            }
-          ],
-          "acuerdos": ["string"]
-        }
+        "numero_acta": "ACTA-2026-042",
+        "camara": "DIPUTADOS | SENADORES",
+        "fecha_sesion": "2026-03-20",
+        "resumen_debate": "string",
+        "votacion_general": {
+          "total_presentes": 125,
+          "votos_favor": 85,
+          "votos_contra": 35,
+          "abstenciones": 5,
+          "resultado": "APROBADO_EN_GRANDE"
+        },
+        "enmiendas_aprobadas_en_detalle": [],
+        "texto_aprobado_integro": "string"
       }
     herramientas: []
 
-  # ========== TAREA 3: GESTIONAR TRÁMITE BICAMERAL ==========
   Gestionar_Bicameral:
     descripcion: >
-      Gestionar trámite bicameral: comparar versiones original y retornada,
-      clasificar cambios como MAYORES o MENORES, decidir ruta:
-      SANCION_DIRECTA o CONFERENCIA_BICAMERAL.
+      Gestionar el procedimiento bicameral conforme al Art. 163 de la CPE:
+      1. Cotejar la versión aprobada en Cámara de Origen contra las modificaciones de la Cámara Revisora.
+      2. Clasificar enmiendas en sustanciales vs. de forma.
+      3. Determinar la ruta constitucional: Sanción Definitiva, Aceptación de Modificaciones o Convocatoria a Comisión Mixta de Conferencia Bicameral.
     agente: "Bicameral"
     expected_output: >
-      JSON con decisión bicameral.
-      Estructura:
+      JSON con:
       {
-        "ciclo_bicameral": {
-          "proyecto_id": "string",
-          "version_original": {"articulos": []},
-          "version_retornada": {"articulos": []},
-          "cambios_detectados": [
-            {
-              "tipo": "MODIFICACION|ELIMINACION|ADICION",
-              "articulo": 5,
-              "descripcion": "string"
-            }
-          ],
-          "clasificacion_cambios": "MAYORES|MENORES",
-          "ruta_siguiente": "SANCION_DIRECTA|CONFERENCIA_BICAMERAL"
-        }
+        "camara_origen": "DIPUTADOS",
+        "camara_revisora": "SENADORES",
+        "estado_bicameral": "SANCION_DEFINITIVA | MODIFICADO_REQUIERE_CONSENSO | RECHAZADO_EN_REVISORA",
+        "articulos_con_diferencias": [],
+        "requiere_comision_mixta": false,
+        "texto_armonizado_propuesto": "string"
       }
     herramientas: []
 
-  # ========== TAREA 4: EVALUAR VETO/PROMULGACIÓN ==========
+  # ==========================================================================
+  # FASE 4: EJECUTIVO Y PUBLICACIÓN OFICIAL
+  # ==========================================================================
+
   Evaluar_Veto_Promulgacion:
     descripcion: >
-      Evaluación estratégica multicriterio del proyecto sancionado.
-      Analizar viabilidad política, legalidad constitucional,
-      factibilidad técnica y sostenibilidad fiscal.
-      Decidir: PROMULGAR, VETAR_TOTAL, VETAR_PARCIAL.
+      Evaluación estratégica multicriterio del Presidente del Estado antes de promulgar la Ley (Art. 163 CPE).
+      1. Evaluar legalidad constitucional (25%), sostenibilidad fiscal (25%), factibilidad técnica (20%), alineamiento político (15%) y urgencia (15%).
+      2. Decidir dentro del plazo constitucional de 10 días hábiles: PROMULGAR, VETAR_TOTAL o VETAR_PARCIAL con observaciones.
+      3. Redactar el Mensaje a la Asamblea o el Decreto de Promulgación.
     agente: "Veto_Promulgacion"
     expected_output: >
-      JSON con decisión ejecutiva.
-      Estructura:
+      JSON con:
       {
-        "evaluacion_veto": {
-          "proyecto_id": "string",
-          "decision": "PROMULGAR|VETAR_TOTAL|VETAR_PARCIAL",
-          "criterios": {
-            "viabilidad_politica": {"score": 8, "razon": "string"},
-            "legalidad_constitucional": {"score": 9, "razon": "string"},
-            "factibilidad_tecnica": {"score": 7, "razon": "string"},
-            "sostenibilidad_fiscal": {"score": 6, "razon": "string"}
-          },
-          "score_final": 7.5,
-          "observaciones_parciales": ["string"],
-          "justificacion": "string"
-        }
+        "decision": "PROMULGAR | VETO_PARCIAL | VETO_TOTAL",
+        "puntuacion_multicriterio": {
+          "legalidad": 9,
+          "impacto_fiscal": 8,
+          "viabilidad_tecnica": 8,
+          "alineamiento_politico": 8,
+          "urgencia_social": 9,
+          "promedio_ponderado": 8.4
+        },
+        "articulos_observados": [],
+        "fundamentacion_decision": "string",
+        "mensaje_a_la_asamblea": "string"
       }
     herramientas: []
-    depends_on:
-      - "Gestionar_Bicameral"
 
-  # ========== TAREA 5: PUBLICAR LEY OFICIAL ==========
   Publicar_Ley_Oficial:
     descripcion: >
-      Asignar número de ley secuencial, establecer fecha de vigencia,
-      formatear para Boletín Oficial, integrar a base normativa.
+      Publicación oficial en la Gaceta Oficial del Estado Plurinacional de Bolivia.
+      1. Asignar de manera atómica el número correlativo de Ley del Estado Plurinacional (Ley N° XXXX).
+      2. Redactar el Decreto Supremo de Promulgación firmado por el Ejecutivo.
+      3. Calcular la fecha de entrada en vigencia considerando la vacatio legis de 15 días hábiles.
     agente: "Publicacion_Oficial"
     expected_output: >
-      JSON con publicación oficial.
-      Estructura:
+      JSON con:
       {
-        "publicacion_oficial": {
-          "proyecto_id": "string",
-          "numero_ley": "Ley No. 1472",
-          "titulo": "string",
-          "fecha_promulgacion": "2025-03-20",
-          "fecha_vigencia": "2025-03-21",
-          "boletin_oficial": "BOL-2025-03-20-001",
-          "estado": "PUBLICADA"
-        }
+        "numero_ley": "Ley N° 1589",
+        "titulo_oficial": "string",
+        "decreto_promulgacion_numero": "Decreto Supremo N° 5120",
+        "edicion_gaceta": "GAC-2026-085",
+        "fecha_promulgacion": "2026-04-05",
+        "fecha_publicacion": "2026-04-06",
+        "fecha_entrada_vigencia": "2026-04-27",
+        "estado_norma": "VIGENTE",
+        "url_publicacion_oficial": "string"
       }
     herramientas: []
-    depends_on:
-      - "Evaluar_Veto_Promulgacion"
 
-  # ========== TAREA 6: ANALIZAR CONSTITUCIONALIDAD DE FONDO ==========
-  Analizar_Fondo_Constitucional:
+  # ==========================================================================
+  # FASE 5: DIFUSIÓN CIUDADANA Y FISCALIZACIÓN
+  # ==========================================================================
+
+  Generar_Difusion_Ciudadana:
     descripcion: >
-      Análisis hermenéutico de constitucionalidad sustantiva.
-      Aplicar interpretación constitucional, buscar precedentes,
-      ponderar derechos en conflicto. Generar dictamen formal.
-    agente: "Constitucion_Fondo"
+      Traducir el contenido de la Ley promulgada a lenguaje claro y pedagógico para el ciudadano.
+      1. Sintetizar el propósito de la norma sin jerga técnica.
+      2. Desglosar claramente: nuevos derechos, nuevas obligaciones, sectores alcanzados y fecha de vigencia.
+      3. Elaborar sección de preguntas y respuestas frecuentes (FAQ).
+    agente: "Difusion_Ciudadana"
     expected_output: >
-      JSON con dictamen de fondo.
-      Estructura:
+      JSON con:
       {
-        "dictamen_fondo": {
-          "proyecto_id": "string",
-          "viabilidad_fondo": "VIABLE|VIABLE_CON_OBSERVACIONES|NO_VIABLE",
-          "analisis_hermeneutico": {
-            "principios_aplicables": ["string"],
-            "precedentes_relevantes": ["Sentencia TC 1234/2022"],
-            "conflictos_derechos": [
-              {
-                "derecho_1": "string",
-                "derecho_2": "string",
-                "ponderacion": "string"
-              }
-            ]
-          },
-          "recomendaciones": "string",
-          "riesgo_constitucional": "BAJO|MEDIO|ALTO"
-        }
+        "titulo_ciudadano": "Lo que debes saber sobre la Ley N° 1589",
+        "proposito_en_palabras_simples": "string",
+        "tus_nuevos_derechos": ["string"],
+        "tus_nuevas_obligaciones": ["string"],
+        "a_quienes_aplica": "string",
+        "desde_cuando_rige": "string",
+        "preguntas_frecuentes": [
+          {"pregunta": "string", "respuesta": "string"}
+        ]
       }
-    herramientas:
-      - "retrieve_jurisprudencia_tc"
-      - "search_constitucion_precedentes"
+    herramientas: []
 
-  # ========== TAREAS FUNDACIONALES ==========
-  Clasificar_Documento:
+  Monitorear_Fiscalizacion:
     descripcion: >
-      Analizar el texto del documento para determinar la categoría institucional:
-      AGENTE_REGISTRO_LEGISLATIVO, AGENTE_ATENCION_CIUDADANA o AGENTE_GESTION_CORRESPONDENCIA.
-    agente: "Distribuidor"
-    expected_output: "JSON con categoria y resumen"
+      Control posterior y fiscalización parlamentaria post-promulgación (Art. 158 CPE).
+      1. Monitorear los plazos del Ejecutivo para emitir decretos reglamentarios.
+      2. Auditar la ejecución presupuestaria real vs. presupuesto autorizado en la Ley.
+      3. Emitir alertas automáticas de anomalías a la Contraloría General del Estado.
+    agente: "Fiscalizacion"
+    expected_output: >
+      JSON con:
+      {
+        "id_ley": "Ley N° 1589",
+        "estado_implementacion": "EN_PLAZO | RETRASO_REGLAMENTACION | DESVIO_PRESUPUESTARIO | CRITICO",
+        "indicadores_evaluados": [
+          {"indicador": "Reglamentación", "plazo_dias": 90, "estado": "CUMPLIDO"}
+        ],
+        "alertas_auditoria": [],
+        "recomendacion_parlamentaria": "string"
+      }
+    herramientas: []
 
-  Asignar_Comision:
+  Notificar_Comision:
     descripcion: >
-      Determinar la comisión y comité competente, prioridad y legisladores asignados.
-    agente: "Comision_Legislativa"
-    expected_output: "JSON con comision_principal y miembros"
-
-  Auditar_Constitucionalidad:
-    descripcion: >
-      Control textual formal contra los artículos de la CPE 2009.
-    agente: "Verificador_Constitucional"
-    expected_output: "JSON con valido, contradicciones y articulos_consultados"
-
-  Analizar_Consistencia:
-    descripcion: >
-      Auditoría semántica pgvector contra el corpus de leyes vigentes.
-    agente: "Consistencia_Normativa"
-    expected_output: "JSON con analisis, nivel_riesgo_global y hallazgos"
+      Redactar y despachar formalmente la notificación oficial en HTML institucional
+      a legisladores, autoridades del Ejecutivo y proponentes ciudadanos.
+    agente: "Notificador_Comision"
+    expected_output: >
+      JSON con:
+      {
+        "notificacion_enviada": true,
+        "destinatarios": ["string"],
+        "asunto": "string",
+        "contenido_html": "string",
+        "fecha_despacho": "2026-04-06T10:00:00Z"
+      }
+    herramientas: []

@@ -29,3 +29,10 @@ requests>=2.31.0
 # ── API REST Backend ────────────────────────────────────────────────────────
 fastapi>=0.110.0
 uvicorn>=0.28.0
+
+# ── Voz / PDF / Correo (importados opcionalmente por el código) ─────────────
+gTTS>=2.5.0
+pyttsx3>=2.90
+SpeechRecognition>=3.10.0
+fpdf2>=2.7.0
+sendgrid>=6.11.0

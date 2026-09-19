@@ -55,7 +55,7 @@ export default function Monitoreo() {
   ];
 
   return (
-    <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '32px 24px' }}>
+    <div style={{ maxWidth: '1720px', width: '96%', margin: '0 auto', padding: '32px 24px' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
         <div>

@@ -36,6 +36,8 @@ from sma_unified.db.mongo_atlas import publicar_mensaje, marcar_en_proceso, marc
 from sma_unified.db.neon_postgres import (
     obtener_articulos_constitucion,
     guardar_observacion_constitucional,
+    guardar_correccion_proyecto,
+    obtener_email_autor_proyecto,
 )
 
 # ── Constantes ────────────────────────────────────────────────────────────────
@@ -338,6 +340,41 @@ def verificar_constitucionalidad(
                 duracion_ms=int((time.time() - t0) * 1000),
                 articulos_consultados=resultado.get("articulos_consultados"),
             )
+
+            # ── Persistir correcciones automáticas por cada contradicción CPE ──────────
+            contradicciones_detectadas = resultado.get("contradicciones", [])
+            if contradicciones_detectadas:
+                email_autor = obtener_email_autor_proyecto(id_proyecto)
+                for contra in contradicciones_detectadas:
+                    art_cpe = contra.get("articulo_constitucional", "")
+                    # Correción destinada a la Mesa de Senadores de Normativa
+                    guardar_correccion_proyecto(
+                        id_proyecto=id_proyecto,
+                        tipo_corrector="SENADO_NORMATIVA",
+                        agente_origen="AGENTE_VERIFICADOR_CONSTITUCIONAL",
+                        articulo_afectado=contra.get("articulo_proyecto", ""),
+                        texto_original=contra.get("cita_proyecto", ""),
+                        motivo=contra.get("fundamento", ""),
+                        referencia_cpe=art_cpe,
+                        sesion_id=sesion_id,
+                    )
+                    # Correción destinada al autor del proyecto (si tiene email registrado)
+                    if email_autor:
+                        guardar_correccion_proyecto(
+                            id_proyecto=id_proyecto,
+                            tipo_corrector="AUTOR_PROYECTO",
+                            agente_origen="AGENTE_VERIFICADOR_CONSTITUCIONAL",
+                            corrector_email=email_autor,
+                            articulo_afectado=contra.get("articulo_proyecto", ""),
+                            texto_original=contra.get("cita_proyecto", ""),
+                            motivo=contra.get("fundamento", ""),
+                            referencia_cpe=art_cpe,
+                            sesion_id=sesion_id,
+                        )
+                logger.info(
+                    f"[VerificadorCPE] {len(contradicciones_detectadas)} corrección(es) "
+                    f"guardadas en sistema.correcciones_proyecto para proyecto {id_proyecto}"
+                )
 
         duracion_ms = int((time.time() - t0) * 1000)
         marcar_completado(task_id, resultado={"valido": resultado["valido"]}, duracion_ms=duracion_ms)

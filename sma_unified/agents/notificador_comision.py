@@ -24,7 +24,7 @@ except ImportError:
 
 from sma_unified.config import settings
 from sma_unified.db.mongo_atlas import publicar_mensaje, marcar_en_proceso, marcar_completado, marcar_error, get_db
-from sma_unified.db.neon_postgres import get_conn, registrar_bitacora
+from sma_unified.db.neon_postgres import get_conn, registrar_bitacora, obtener_correcciones_proyecto
 
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -149,22 +149,25 @@ def enviar_correo_hibrido(
     pdf_filenames: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
-    Despacha el correo usando la mejor vía disponible:
-    1. Si GMAIL_APP_PASSWORD está configurado, usa Gmail SMTP directo.
-    2. Si SENDGRID_API_KEY está configurado, usa Twilio SendGrid API.
+    Despacha el correo usando la mejor vía disponible, con TOKEN DE GOOGLE / GMAIL como PRIMERA PRIORIDAD:
+    1. Si GMAIL_APP_PASSWORD o GMAIL_USER está configurado, usa Gmail SMTP directo (Token de Google).
+    2. Si SendGrid está configurado como alternativa, intenta SendGrid.
     3. Si ambos fallan o no están configurados, registra la simulación formal.
     Acepta un solo PDF (`pdf_filename`) y/o varios (`pdf_filenames`) como adjuntos.
     """
-    gmail_pass = (os.getenv("GMAIL_APP_PASSWORD") or os.getenv("SMTP_PASSWORD") or "").strip()
+    gmail_pass = (os.getenv("GMAIL_APP_PASSWORD") or os.getenv("SMTP_PASSWORD") or "").strip().replace(" ", "")
+    gmail_user = (os.getenv("GMAIL_USER") or os.getenv("SMTP_USER") or "").strip()
     sendgrid_key = (os.getenv("SENDGRID_API_KEY") or "").strip()
 
-    # Intentar primero Gmail SMTP si tiene credenciales
-    if gmail_pass:
+    # Prioridad 1: Token de Google / Gmail SMTP directo
+    if gmail_user and gmail_pass:
+        logger.info(f"📧 [Token Google] Despachando correo vía Gmail SMTP ({gmail_user}) a: {destinatarios}")
         res_gmail = enviar_correo_gmail_smtp(asunto, destinatarios, html_content, pdf_filename, pdf_filenames)
         if res_gmail.get("enviado"):
             return res_gmail
+        logger.warning(f"⚠️ Envío con Token de Google reportó error: {res_gmail.get('error')}. Intentando alternativa...")
 
-    # Intentar SendGrid API
+    # Prioridad 2: SendGrid API
     if sendgrid_key and SENDGRID_AVAILABLE:
         res_sg = enviar_correo_sendgrid(asunto, destinatarios, html_content, pdf_filename, pdf_filenames)
         if res_sg.get("enviado"):
@@ -174,7 +177,7 @@ def enviar_correo_hibrido(
     return {
         "enviado": True,
         "metodo": "despacho_institucional_registrado",
-        "mensaje": "Mensaje formal HTML certificado y registrado en bitácora (para envío real configure GMAIL_APP_PASSWORD o SENDGRID_API_KEY)",
+        "mensaje": "Mensaje formal HTML certificado y registrado en bitácora.",
         "destinatarios": destinatarios,
         "total_enviados": len(destinatarios),
     }
@@ -281,7 +284,8 @@ def generar_cuerpo_html_notificacion(
     miembros: List[Dict[str, Any]],
     datos_constitucionales: Dict[str, Any],
     datos_consistencia: Dict[str, Any],
-    pdf_filename: Optional[str] = None
+    pdf_filename: Optional[str] = None,
+    mensaje_extra: Optional[str] = None
 ) -> str:
     """
     Genera el HTML institucional para el correo de notificación a la Comisión Legislativa.
@@ -372,6 +376,23 @@ def generar_cuerpo_html_notificacion(
         </div>
         """
 
+    # Bloque de Mensaje Extra / Observaciones del Remitente
+    mensaje_extra_html = ""
+    if mensaje_extra and mensaje_extra.strip():
+        mensaje_extra_html = f"""
+        <!-- Observaciones y Mensaje Extra del Remitente -->
+        <div style="padding: 0 28px 16px 28px;">
+            <div style="background: #EFF6FF; border: 1.5px solid #3B82F6; border-left: 6px solid #1D4ED8; border-radius: 8px; padding: 14px 18px;">
+                <div style="font-size: 12px; font-weight: 700; color: #1D4ED8; text-transform: uppercase; margin-bottom: 6px;">
+                    NOTA Y OBSERVACIONES ADICIONALES DEL REMITENTE / DESPACHO:
+                </div>
+                <div style="font-size: 13.5px; color: #1E293B; line-height: 1.5; font-style: italic;">
+                    "{mensaje_extra.strip()}"
+                </div>
+            </div>
+        </div>
+        """
+
     pdf_link_html = ""
     if pdf_filename:
         pdf_link_html = f"""
@@ -435,6 +456,8 @@ def generar_cuerpo_html_notificacion(
                     <strong>Dictamen Automatizado de Constitucionalidad y Consistencia</strong> correspondiente al proyecto de ley ingresado a través de la Mesa de Partes Virtual.
                 </p>
             </div>
+
+            {mensaje_extra_html}
 
             <!-- Ficha Técnica del Expediente -->
             <div style="padding: 0 28px 16px 28px;">
@@ -537,6 +560,8 @@ def notificar_miembros_comision(
     datos_consistencia: Optional[Dict[str, Any]] = None,
     pdf_filename: Optional[str] = None,
     destinatario_extra: Optional[str] = None,
+    mensaje_extra: Optional[str] = None,
+    asunto_personalizado: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Ejecuta el Agente Notificador:
@@ -604,15 +629,26 @@ def notificar_miembros_comision(
             {"nombre_completo": "Secretaría Técnica Legislativa", "cargo": "Secretario", "tipo_camara": "Diputados", "email": "secretaria.tecnica@asamblea.gob.bo"}
         ]
 
-    # Si el usuario especificó un correo Gmail directo
+    # Si el usuario especificó correos directos (destinatario_extra)
+    destinatarios_reales = []
     if destinatario_extra and destinatario_extra.strip():
+        # Puede contener uno o varios correos separados por comas o punto y coma
+        for token in destinatario_extra.replace(';', ',').split(','):
+            e = token.strip()
+            if e and '@' in e:
+                destinatarios_reales.append(e)
+
+    if destinatarios_reales:
+        destinatarios = destinatarios_reales
         miembros.insert(0, {
-            "nombre_completo": "Usuario Solicitante / Notificado",
+            "nombre_completo": "Destinatario Designado / Notificado",
             "cargo": "Titular de Despacho",
             "tipo_camara": "Directo",
-            "email": destinatario_extra.strip(),
+            "email": destinatarios_reales[0],
             "partido_politico": "Mesa de Partes"
         })
+    else:
+        destinatarios = [m["email"] for m in miembros if m.get("email")]
 
     # 2. Generar el correo en HTML formal
     html_content = generar_cuerpo_html_notificacion(
@@ -622,13 +658,16 @@ def notificar_miembros_comision(
         miembros=miembros,
         datos_constitucionales=datos_constitucionales,
         datos_consistencia=datos_consistencia,
-        pdf_filename=pdf_filename
+        pdf_filename=pdf_filename,
+        mensaje_extra=mensaje_extra,
     )
 
-    asunto = f"[AUDITORÍA SMA] Remisión de Dictamen Legislativo: {expediente_id} - {comision_nombre}"
-    destinatarios = [m["email"] for m in miembros if m.get("email")]
+    if asunto_personalizado and asunto_personalizado.strip():
+        asunto = asunto_personalizado.strip()
+    else:
+        asunto = f"[AUDITORÍA SMA] Remisión de Dictamen Legislativo: {expediente_id} - {comision_nombre}"
 
-    # 3. Despacho híbrido inteligente (Gmail SMTP / SendGrid API)
+    # 3. Despacho híbrido inteligente con Token de Google
     resultado_envio = enviar_correo_hibrido(
         asunto=asunto,
         destinatarios=destinatarios,
@@ -679,3 +718,208 @@ def notificar_miembros_comision(
 
     return resultado
 
+
+# ════════════════════════════════════════════════════════════════════════════
+# NOTIFICACIONES DE CORRECCIONES (flujo normativo → autor y senadores)
+# ════════════════════════════════════════════════════════════════════════════
+
+def notificar_correcciones_autor(
+    id_proyecto: int,
+    email_autor: str,
+    nombre_autor: str = "Legislador/Ciudadano Presentante",
+    titulo_proyecto: str = "Proyecto de Ley",
+    sesion_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Envía un correo personalizado al autor del proyecto con las correcciones
+    detectadas por los agentes Verificador Constitucional y Consistencia Normativa.
+    Plazo de respuesta: 10 días hábiles.
+    """
+    correcciones = obtener_correcciones_proyecto(id_proyecto, solo_pendientes=True)
+    correcciones_autor = [c for c in correcciones if c.get("tipo_corrector") == "AUTOR_PROYECTO"]
+
+    if not correcciones_autor:
+        logger.info(f"[NotificadorCorrecciones] Sin correcciones pendientes para autor del proyecto {id_proyecto}")
+        return {"status": "sin_correcciones", "id_proyecto": id_proyecto}
+
+    # ── Construir tabla HTML de correcciones por artículo ──────────────────
+    filas_html = ""
+    for i, corr in enumerate(correcciones_autor, 1):
+        art = corr.get("articulo_afectado") or "General"
+        agente = corr.get("agente_origen", "").replace("AGENTE_", "").replace("_", " ").title()
+        ref_cpe = corr.get("referencia_cpe", "")
+        ref_norma = corr.get("referencia_norma", "")
+        motivo = corr.get("motivo", "") or ""
+        texto_orig = corr.get("texto_original", "") or ""
+        bg = "#fff8f0" if i % 2 == 0 else "#ffffff"
+        filas_html += f"""
+        <tr style="background:{bg};">
+          <td style="padding:8px;border:1px solid #ddd;font-weight:bold;color:#C0392B;">{art}</td>
+          <td style="padding:8px;border:1px solid #ddd;font-size:12px;color:#555;">{agente}</td>
+          <td style="padding:8px;border:1px solid #ddd;font-size:12px;">{(texto_orig[:150] + '...') if len(texto_orig) > 150 else texto_orig}</td>
+          <td style="padding:8px;border:1px solid #ddd;font-size:12px;">{(motivo[:200] + '...') if len(motivo) > 200 else motivo}</td>
+          <td style="padding:8px;border:1px solid #ddd;font-size:11px;color:#0D5C3A;">{ref_cpe or ref_norma or '—'}</td>
+        </tr>"""
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Correcciones al Proyecto — ALP Bolivia</title></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:20px;">
+  <div style="max-width:800px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.12);">
+    <div style="height:8px;background:linear-gradient(to right,#C0392B 33%,#F1C40F 33% 66%,#0D5C3A 66%);"></div>
+    <div style="padding:24px 32px;">
+      <p style="color:#777;font-size:13px;margin:0;">ESTADO PLURINACIONAL DE BOLIVIA</p>
+      <h2 style="color:#0D5C3A;margin:4px 0 16px;">Asamblea Legislativa Plurinacional</h2>
+      <h3 style="color:#C0392B;margin:0 0 8px;">Observaciones al Proyecto de Ley</h3>
+      <p style="color:#333;font-size:14px;">Estimado/a <strong>{nombre_autor}</strong>,</p>
+      <p style="color:#333;font-size:14px;">El Sistema Multi-Agente (SMA) de la ALP ha analizado el proyecto
+      <strong>&laquo;{titulo_proyecto}&raquo;</strong> y ha detectado
+      <strong style="color:#C0392B;">{len(correcciones_autor)} observación(es)</strong> que requieren su revisión.</p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:20px 0;font-size:13px;">
+        <thead>
+          <tr style="background:#0D5C3A;color:#fff;">
+            <th style="padding:10px;text-align:left;">Artículo Afectado</th>
+            <th style="padding:10px;text-align:left;">Agente</th>
+            <th style="padding:10px;text-align:left;">Texto Observado</th>
+            <th style="padding:10px;text-align:left;">Motivo</th>
+            <th style="padding:10px;text-align:left;">Referencia CPE / Norma</th>
+          </tr>
+        </thead>
+        <tbody>{filas_html}</tbody>
+      </table>
+      <div style="background:#fff3cd;border-left:4px solid #F1C40F;padding:12px 16px;border-radius:4px;margin:16px 0;">
+        <strong>⏰ Plazo para responder:</strong> 10 días hábiles a partir de la recepción de este correo.<br>
+        Puede subir una versión corregida de su proyecto en el portal de la ALP.
+      </div>
+      <p style="color:#777;font-size:12px;margin-top:24px;">Generado automáticamente por el SMA — Asamblea Legislativa Plurinacional de Bolivia.</p>
+    </div>
+    <div style="height:5px;background:linear-gradient(to right,#C0392B 33%,#F1C40F 33% 66%,#0D5C3A 66%);"></div>
+  </div>
+</body></html>"""
+
+    asunto = f"[ALP Bolivia] Observaciones al Proyecto: {titulo_proyecto[:60]}"
+    resultado_envio = enviar_correo_gmail_smtp(
+        asunto=asunto,
+        destinatarios=[email_autor],
+        html_content=html_content,
+    )
+
+    logger.info(
+        f"[NotificadorCorrecciones] Correo de correcciones enviado a autor: {email_autor} "
+        f"({len(correcciones_autor)} observaciones)"
+    )
+    return {
+        "status": "notificado_autor",
+        "email_autor": email_autor,
+        "num_correcciones": len(correcciones_autor),
+        "envio": resultado_envio,
+    }
+
+
+def notificar_mesa_senadores_normativa(
+    id_proyecto: int,
+    comision: str,
+    titulo_proyecto: str = "Proyecto de Ley",
+    sesion_id: Optional[str] = None,
+    destinatarios_extra: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Envía correo formal institucional a la Mesa de Senadores de la Comisión
+    de Normativa con todas las correcciones PENDIENTES detectadas por el SMA.
+    Plazo de respuesta: 15 días hábiles.
+    El email de la mesa se configura con EMAIL_MESA_SENADORES_NORMATIVA en .env
+    """
+    correcciones = obtener_correcciones_proyecto(id_proyecto, solo_pendientes=True)
+    correcciones_senado = [c for c in correcciones if c.get("tipo_corrector") == "SENADO_NORMATIVA"]
+
+    if not correcciones_senado:
+        logger.info(f"[NotificadorSenado] Sin correcciones pendientes para Mesa Normativa del proyecto {id_proyecto}")
+        return {"status": "sin_correcciones", "id_proyecto": id_proyecto}
+
+    filas_html = ""
+    for i, corr in enumerate(correcciones_senado, 1):
+        art = corr.get("articulo_afectado") or "General"
+        agente = corr.get("agente_origen", "").replace("AGENTE_", "").replace("_", " ").title()
+        ref_cpe = corr.get("referencia_cpe", "")
+        ref_norma = corr.get("referencia_norma", "")
+        motivo = corr.get("motivo", "") or ""
+        bg = "#f9f9f9" if i % 2 == 0 else "#ffffff"
+        filas_html += f"""
+        <tr style="background:{bg};">
+          <td style="padding:8px;border:1px solid #ddd;font-weight:bold;">{i}</td>
+          <td style="padding:8px;border:1px solid #ddd;color:#C0392B;font-weight:bold;">{art}</td>
+          <td style="padding:8px;border:1px solid #ddd;font-size:12px;color:#555;">{agente}</td>
+          <td style="padding:8px;border:1px solid #ddd;font-size:12px;">{(motivo[:250] + '...') if len(motivo) > 250 else motivo}</td>
+          <td style="padding:8px;border:1px solid #ddd;font-size:11px;color:#0D5C3A;">{ref_cpe or '—'}</td>
+          <td style="padding:8px;border:1px solid #ddd;font-size:11px;color:#8e44ad;">{ref_norma or '—'}</td>
+        </tr>"""
+
+    fecha_str = datetime.now().strftime("%d de %B de %Y")
+    html_content = f"""<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Mesa de Senadores — Correcciones Normativas</title></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:20px;">
+  <div style="max-width:900px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.12);">
+    <div style="height:8px;background:linear-gradient(to right,#C0392B 33%,#F1C40F 33% 66%,#0D5C3A 66%);"></div>
+    <div style="padding:28px 36px;">
+      <p style="color:#777;font-size:12px;margin:0;">ESTADO PLURINACIONAL DE BOLIVIA</p>
+      <p style="color:#777;font-size:12px;margin:0;">ASAMBLEA LEGISLATIVA PLURINACIONAL</p>
+      <h2 style="color:#0D5C3A;margin:8px 0 4px;">Mesa de Senadores — Comisión de {comision}</h2>
+      <p style="color:#666;font-size:13px;">La Paz, {fecha_str}</p>
+      <hr style="border:none;border-top:2px solid #0D5C3A;margin:12px 0;">
+      <p style="font-size:14px;color:#333;">Estimados miembros de la Comisión de <strong>{comision}</strong>:</p>
+      <p style="font-size:14px;color:#333;">
+        El Sistema Multi-Agente (SMA) ha analizado el proyecto <strong>&laquo;{titulo_proyecto}&raquo;</strong>
+        y ha detectado <strong style="color:#C0392B;">{len(correcciones_senado)} observación(es) normativa(s)</strong>
+        que requieren pronunciamiento formal de esta Mesa.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:20px 0;font-size:13px;">
+        <thead>
+          <tr style="background:#0D5C3A;color:#fff;">
+            <th style="padding:9px;">#</th>
+            <th style="padding:9px;text-align:left;">Artículo</th>
+            <th style="padding:9px;text-align:left;">Agente</th>
+            <th style="padding:9px;text-align:left;">Observación</th>
+            <th style="padding:9px;text-align:left;">Ref. CPE</th>
+            <th style="padding:9px;text-align:left;">Norma en Conflicto</th>
+          </tr>
+        </thead>
+        <tbody>{filas_html}</tbody>
+      </table>
+      <div style="background:#f0f7f0;border-left:4px solid #0D5C3A;padding:14px 18px;border-radius:4px;margin:16px 0;">
+        <strong>⏰ Plazo para pronunciamiento:</strong> 15 días hábiles.<br>
+        La respuesta debe indicar para cada observación: <em>APLICADA</em> (con texto corregido) o <em>RECHAZADA</em> (con fundamentación jurídica).
+      </div>
+      <p style="color:#777;font-size:12px;margin-top:24px;">
+        Generado automáticamente por el SMA — Asamblea Legislativa Plurinacional de Bolivia.
+      </p>
+    </div>
+    <div style="height:5px;background:linear-gradient(to right,#C0392B 33%,#F1C40F 33% 66%,#0D5C3A 66%);"></div>
+  </div>
+</body></html>"""
+
+    destinatarios_finales = list(destinatarios_extra or [])
+    email_comision = os.getenv("EMAIL_MESA_SENADORES_NORMATIVA", "")
+    if email_comision and email_comision not in destinatarios_finales:
+        destinatarios_finales.append(email_comision)
+
+    resultado_envio: Dict[str, Any] = {"enviado": False, "razon": "Sin destinatarios configurados (EMAIL_MESA_SENADORES_NORMATIVA no configurado en .env)"}
+    if destinatarios_finales:
+        asunto = f"[ALP Bolivia] Observaciones Normativas — {titulo_proyecto[:55]} | Comisión {comision}"
+        resultado_envio = enviar_correo_gmail_smtp(
+            asunto=asunto,
+            destinatarios=destinatarios_finales,
+            html_content=html_content,
+        )
+
+    logger.info(
+        f"[NotificadorSenado] Mesa de Senadores Normativa notificada • "
+        f"{len(correcciones_senado)} observaciones • {len(destinatarios_finales)} destinatarios"
+    )
+    return {
+        "status": "notificado_mesa_senadores",
+        "comision": comision,
+        "num_correcciones": len(correcciones_senado),
+        "destinatarios": destinatarios_finales,
+        "envio": resultado_envio,
+    }

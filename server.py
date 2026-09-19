@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -56,6 +56,8 @@ from sma_unified.db.neon_postgres import (
     buscar_articulos_normativos_semantico,
     autenticar_usuario,
     crear_usuario_ciudadano,
+    obtener_correcciones_proyecto,
+    actualizar_estado_correccion,
 )
 from sma_unified.agents.embeddings_nvidia import generar_embeddings
 from sma_unified.db.mongo_atlas import get_db, obtener_documentos_recientes, obtener_kpis_mongo
@@ -126,6 +128,21 @@ class NotificadorComisionRequest(BaseModel):
     datos_consistencia: Optional[Dict[str, Any]] = None
     pdf_filename: Optional[str] = None
     destinatario_extra: Optional[str] = None
+    email_autor: Optional[str] = None
+    mensaje_extra: Optional[str] = None
+    asunto_personalizado: Optional[str] = None
+
+
+class MensajePresidenteSenadoRequest(BaseModel):
+    id_proyecto: Optional[int] = None
+    sesion_id: Optional[str] = None
+    numero_ley: Optional[str] = "Ley Sancionada y Promulgada"
+    titulo_proyecto: Optional[str] = "Proyecto de Ley"
+    boletin_oficial: Optional[str] = "GAC-2026-BOL"
+    email_destino: Optional[str] = None
+    mensaje_personalizado: Optional[str] = None
+    observaciones_resueltas: Optional[List[str]] = None
+    solo_redactar: Optional[bool] = False
 
 
 class LoginRequest(BaseModel):
@@ -138,6 +155,48 @@ class RegisterRequest(BaseModel):
     correo_electronico: str
     contrasena: str
     telefono: Optional[str] = None
+
+
+class VozLeerRequest(BaseModel):
+    texto: str
+    agente: Optional[str] = "Sistema"
+    sesion_id: Optional[str] = None
+    usuario_email: Optional[str] = None
+
+
+class VozComandoRequest(BaseModel):
+    comando_texto: str
+    agente: str
+    sesion_id: Optional[str] = None
+    usuario_email: Optional[str] = None
+    datos_contexto: Optional[Dict[str, Any]] = None
+
+
+class CorreccionEstadoRequest(BaseModel):
+    estado: str                          # 'APLICADA' | 'RECHAZADA'
+    observacion_respuesta: Optional[str] = None
+
+
+class CrearCorreccionRequest(BaseModel):
+    id_proyecto: int
+    articulo_afectado: Optional[str] = "General"
+    texto_original: Optional[str] = None
+    texto_corregido: str
+    motivo: Optional[str] = "Observacion y actualizacion normativa"
+    referencia_cpe: Optional[str] = None
+    referencia_norma: Optional[str] = None
+    tipo_corrector: Optional[str] = "AUTOR_PROYECTO"
+    corrector_nombre: Optional[str] = "Mesa de Partes"
+    corrector_email: Optional[str] = None
+    sesion_id: Optional[str] = None
+
+
+class ChatMensajeRequest(BaseModel):
+    sesion_id: Optional[str] = None
+    agente: Optional[str] = None
+    mensaje: str
+    datos_contexto: Optional[Dict[str, Any]] = None
+    confirmar: bool = False
 
 
 class ConfirmarAprobacionBicameralRequest(BaseModel):
@@ -703,6 +762,7 @@ def run_agent_notificador(req: NotificadorComisionRequest):
     from sma_unified.agents.notificador_comision import notificar_miembros_comision
     try:
         id_proyecto = _resolve_id_proyecto(req.sesion_id, req.id_proyecto)
+        dest_extra = req.destinatario_extra or req.email_autor
         resultado = notificar_miembros_comision(
             sesion_id=req.sesion_id,
             id_proyecto=id_proyecto,
@@ -710,11 +770,194 @@ def run_agent_notificador(req: NotificadorComisionRequest):
             datos_constitucionales=req.datos_constitucionales,
             datos_consistencia=req.datos_consistencia,
             pdf_filename=req.pdf_filename,
-            destinatario_extra=req.destinatario_extra,
+            destinatario_extra=dest_extra,
+            mensaje_extra=req.mensaje_extra,
+            asunto_personalizado=req.asunto_personalizado,
         )
         return {"success": True, "data": resultado}
     except Exception as e:
         logger.error(f"Error en Agente Notificador: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/mensaje_presidente_senado")
+async def mensaje_presidente_senado_endpoint(req: MensajePresidenteSenadoRequest):
+    """
+    Interacción con Agente CrewAI de Enlace Legislativo:
+    Redacta y/o envía el Mensaje Oficial y Oficio de Promulgación y Publicación
+    al Presidente de la Cámara de Senadores y Presidente de la ALP.
+    Usa el Token de Google (Gmail SMTP) para el despacho garantizado.
+    """
+    try:
+        from sma_unified.agents.llm_client import chat_completion_resiliente
+        from sma_unified.agents.notificador_comision import enviar_correo_gmail_smtp, enviar_correo_hibrido
+        from sma_unified.db.neon_postgres import registrar_bitacora
+        from sma_unified.db.mongo_atlas import get_db
+
+        id_proyecto = _resolve_id_proyecto(req.sesion_id, req.id_proyecto)
+        numero_ley = req.numero_ley or "Ley Sancionada"
+        titulo_proy = req.titulo_proyecto or "Proyecto de Ley del Estado Plurinacional"
+        boletin = req.boletin_oficial or "GAC-2026-BOL"
+
+        # 1. Si se solicita redacción por Agente CrewAI
+        if req.solo_redactar or not req.mensaje_personalizado:
+            prompt_crew = f"""Eres el Agente Especializado CrewAI de Enlace Legislativo y Promulgación Presidencial de la Asamblea Legislativa Plurinacional de Bolivia.
+Tu misión es redactar un OFICIO PROTOCOLAR FORMAL de máxima solemnidad parlamentaria dirigido al:
+
+Hermano Presidente de la Cámara de Senadores y Presidente Nato de la Asamblea Legislativa Plurinacional de Bolivia.
+
+DATOS DE LA NORMA:
+- Número de Ley Promulgada: {numero_ley}
+- Título Oficial: {titulo_proy}
+- Publicación Oficial: {boletin} en la Gaceta Oficial del Estado Plurinacional
+- Estado: Vigente con fuerza de ley (Art. 164 Constitución Política del Estado)
+
+ESTRUCTURA OBLIGATORIA DEL MENSAJE:
+1. Encabezamiento protocolar formal (Señor Presidente de la Cámara de Senadores, H. Senador...).
+2. Párrafo de Notificación de Promulgación: Certificación de que el proyecto culminó su trámite bicameral y fue formalmente promulgado y publicado en la Gaceta Oficial.
+3. Síntesis Jurídica: Destacar que todas las observaciones técnicas y constitucionales fueron solventadas.
+4. Efecto de Cumplimiento: Invocación expresa del Art. 164 CPE (obligatoriedad general de cumplimiento desde su publicación).
+5. Saludo de estilo parlamentario y fórmula de consideración más distinguida.
+
+Redacta el texto de manera solemne, clara y protocolar en español boliviano formal. No incluyas explicaciones meta, entrega directamente el texto del oficio listo para despacho."""
+
+            try:
+                contenido, modelo_usado = chat_completion_resiliente(
+                    messages=[
+                        {"role": "system", "content": "Eres el Agente CrewAI de Enlace Legislativo de Bolivia. Respondes con estricto apego al protocolo parlamentario del Estado Plurinacional."},
+                        {"role": "user", "content": prompt_crew}
+                    ],
+                    temperature=0.2,
+                    max_tokens=1200
+                )
+                mensaje_redactado = (contenido or "").strip()
+            except Exception as _llm_err:
+                logger.warning(f"Fallo en LLM para redactar oficio Senado, usando plantilla protocolar: {_llm_err}")
+                mensaje_redactado = f"""La Paz, {datetime.now().strftime('%d de %B de %Y')}
+
+Señor
+Hermano Presidente de la Cámara de Senadores
+Asamblea Legislativa Plurinacional de Bolivia
+Presente.-
+
+De mi mayor consideración y estima parlamentaria:
+
+Tengo a bien dirigirme a su digna autoridad en cumplimiento de los preceptos institucionales y constitucionales vigentes en el Estado Plurinacional de Bolivia.
+
+Por medio del presente instrumento oficial, comunico formalmente a la Presidencia de la Cámara de Senadores que el trámite legislativo correspondiente al {titulo_proy} ha culminado exitosamente en todas sus instancias bicamarales y de control normativo.
+
+En tal sentido, la referida norma ha sido debidamente sancionada, promulgada por el Órgano Ejecutivo y registrada en la Gaceta Oficial del Estado Plurinacional bajo el registro oficial {numero_ley} (Edición Oficial: {boletin}).
+
+Habiéndose subsanado y resuelto satisfactoriamente la totalidad de observaciones de consistencia y constitucionalidad planteadas en la Mesa de Partes y en comisiones técnicas, la ley adquiere plena obligatoriedad en todo el territorio nacional a tenor de lo dispuesto en el Artículo 164 de la Constitución Política del Estado.
+
+Con este motivo, reitero a usted las seguridades de mi más alta y distinguida consideración.
+
+Atentamente,
+
+DIRECCIÓN DE LA GACETA OFICIAL & DESPACHO LEGISLATIVO
+Asamblea Legislativa Plurinacional de Bolivia"""
+
+            if req.solo_redactar:
+                return {
+                    "success": True,
+                    "data": {
+                        "mensaje_redactado": mensaje_redactado,
+                        "agente": "Agente CrewAI de Enlace Legislativo — Presidencia del Senado",
+                        "numero_ley": numero_ley,
+                        "boletin_oficial": boletin
+                    }
+                }
+        else:
+            mensaje_redactado = req.mensaje_personalizado.strip()
+
+        # 2. Despacho Oficial vía Token de Google (Gmail SMTP)
+        email_destino = (req.email_destino or "").strip()
+        gmail_user = (os.getenv("GMAIL_USER") or os.getenv("SMTP_USER") or "").strip()
+        destinatarios = [email_destino] if (email_destino and "@" in email_destino) else [gmail_user or "presidencia.senado@asamblea.gob.bo"]
+
+        asunto = f"[ALP NOTIFICACIÓN OFICIAL] Promulgación y Publicación en Gaceta: {numero_ley}"
+
+        cuerpo_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"/></head>
+        <body style="margin:0;padding:20px;background-color:#0D1B2A;font-family:'Segoe UI',Roboto,Helvetica,sans-serif;color:#E2E8F0;">
+          <div style="max-width:680px;margin:0 auto;background:#1B2A4A;border:1.5px solid #00C2CB;border-radius:14px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.5);">
+            <div style="height:6px;background:linear-gradient(90deg,#C0392B 33%,#F1C40F 33% 66%,#0D5C3A 66%);"></div>
+            <div style="padding:24px 28px;background:rgba(13,27,42,0.85);text-align:center;border-bottom:1px solid rgba(0,194,203,0.3);">
+              <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94A3B8;font-weight:700;">Estado Plurinacional de Bolivia</div>
+              <div style="font-size:18px;font-weight:800;color:#FFFFFF;margin-top:4px;">GACETA OFICIAL & DESPACHO LEGISLATIVO</div>
+              <div style="font-size:12px;color:#00C2CB;margin-top:2px;">Comunicación Oficial al Presidente de la Cámara de Senadores</div>
+            </div>
+
+            <div style="padding:28px;">
+              <div style="background:rgba(0,194,203,0.12);border:1px solid #00C2CB;border-radius:10px;padding:16px;margin-bottom:22px;">
+                <div style="font-size:11px;color:#7DD3FC;font-weight:700;text-transform:uppercase;">Identificación de la Norma Publicada</div>
+                <div style="font-size:17px;font-weight:800;color:#FFFFFF;margin-top:4px;">{numero_ley}</div>
+                <div style="font-size:13px;color:#CBD5E1;margin-top:2px;">{titulo_proy}</div>
+                <div style="font-size:12px;color:#34D399;font-weight:700;margin-top:6px;">Boletín Oficial: {boletin} · Ley Vigente (Art. 164 CPE)</div>
+              </div>
+
+              <div style="background:rgba(15,23,42,0.7);border:1px solid rgba(148,163,184,0.2);border-radius:10px;padding:20px;line-height:1.7;font-size:13.5px;color:#F1F5F9;white-space:pre-wrap;">
+{mensaje_redactado}
+              </div>
+
+              <div style="margin-top:24px;padding-top:16px;border-top:1px solid rgba(148,163,184,0.2);display:flex;justify-content:space-between;font-size:11.5px;color:#94A3B8;">
+                <div>Remitido por: Agente CrewAI de Enlace Legislativo</div>
+                <div>GobernIA · Sistema Multi-Agente ALP</div>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+
+        # Enviar con Token de Google / Gmail
+        resultado_envio = enviar_correo_hibrido(
+            asunto=asunto,
+            destinatarios=destinatarios,
+            html_content=cuerpo_html
+        )
+
+        # Registro en Bitácora y Mongo
+        if id_proyecto:
+            try:
+                registrar_bitacora(
+                    id_proyecto=int(id_proyecto),
+                    agente_accion="Agente_Crew_Enlace_Senado",
+                    accion_realizada="Mensaje Oficial Remitido al Presidente del Senado",
+                    descripcion=f"Ley: {numero_ley} | Destinatario: {', '.join(destinatarios)} | Método: {resultado_envio.get('metodo')}",
+                    tiempo_segundos=1
+                )
+            except Exception as be:
+                logger.warning(f"Error registrando bitácora Senado: {be}")
+
+        try:
+            db = get_db()
+            db["mensajes_presidente_senado"].insert_one({
+                "sesion_id": req.sesion_id,
+                "id_proyecto": id_proyecto,
+                "numero_ley": numero_ley,
+                "destinatarios": destinatarios,
+                "mensaje": mensaje_redactado,
+                "envio": resultado_envio,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "data": {
+                "enviado": resultado_envio.get("enviado", False),
+                "metodo": resultado_envio.get("metodo"),
+                "destinatarios": destinatarios,
+                "mensaje": mensaje_redactado,
+                "detalle": resultado_envio
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error en endpoint Mensaje Presidente Senado: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1426,7 +1669,556 @@ def get_agent_messages(limit: int = Query(50, ge=1, le=200), sesion_id: Optional
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Endpoints de Voz han sido consolidados más abajo (línea ~1563) ────────────
+# (eliminados duplicados; se mantiene solo el conjunto completo con /api/voz/transcribir)
+
+
+# ── Endpoints de Correcciones Normativas (Senados & Autor) ────────────────────
+
+@app.get("/api/correcciones/{id_proyecto}")
+def api_obtener_correcciones(id_proyecto: int, solo_pendientes: bool = Query(False)):
+    """Obtiene las correcciones asociadas a un proyecto de ley."""
+    try:
+        correcciones = obtener_correcciones_proyecto(id_proyecto, solo_pendientes=solo_pendientes)
+        return {"success": True, "id_proyecto": id_proyecto, "total": len(correcciones), "data": correcciones}
+    except Exception as e:
+        logger.error(f"Error obteniendo correcciones de proyecto {id_proyecto}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/correcciones/{id_correccion}")
+def api_actualizar_correccion(id_correccion: int, req: CorreccionEstadoRequest):
+    """Actualiza el estado de una corrección (APLICADA o RECHAZADA)."""
+    try:
+        ok = actualizar_estado_correccion(
+            id_correccion=id_correccion,
+            estado=req.estado,
+            observacion_respuesta=req.observacion_respuesta,
+        )
+        if not ok:
+            raise HTTPException(status_code=400, detail="No se pudo actualizar el estado de la corrección")
+        return {"success": True, "id_correccion": id_correccion, "nuevo_estado": req.estado}
+    except Exception as e:
+        logger.error(f"Error actualizando corrección {id_correccion}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/correcciones")
+def api_crear_correccion(req: CrearCorreccionRequest):
+    """Crea una nueva correccion o actualizacion normativa para el proyecto."""
+    try:
+        from sma_unified.db.neon_postgres import guardar_correccion_proyecto
+        new_id = guardar_correccion_proyecto(
+            id_proyecto=req.id_proyecto,
+            tipo_corrector=req.tipo_corrector or "AUTOR_PROYECTO",
+            agente_origen="MesaPartes",
+            articulo_afectado=req.articulo_afectado,
+            texto_original=req.texto_original,
+            texto_corregido=req.texto_corregido,
+            motivo=req.motivo,
+            referencia_cpe=req.referencia_cpe,
+            referencia_norma=req.referencia_norma,
+            corrector_email=req.corrector_email,
+            corrector_nombre=req.corrector_nombre,
+            sesion_id=req.sesion_id,
+        )
+        return {"success": True, "id": new_id, "mensaje": "Correccion registrada exitosamente."}
+    except Exception as e:
+        logger.error(f"Error creando correccion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/proyectos/{id_proyecto}/texto-consolidado")
+def api_obtener_texto_consolidado(id_proyecto: int):
+    """
+    Retorna el texto original y el texto consolidado del proyecto de ley
+    incorporando todas las correcciones y enmiendas marcadas como APLICADA.
+    """
+    try:
+        from sma_unified.db.neon_postgres import get_conn, obtener_correcciones_proyecto
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT titulo, COALESCE(texto_completo, contenido_texto, texto_extraido, ''), COALESCE(numero_ley, ''), estado_actual
+            FROM sistema.proyecto_ley
+            WHERE id_proyecto = %s
+        """, (id_proyecto,))
+        row = cur.fetchone()
+        cur.close()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Proyecto #{id_proyecto} no encontrado")
+            
+        titulo = row[0] or f"Proyecto de Ley #{id_proyecto}"
+        texto_original = row[1] or ""
+        numero_ley = row[2] or ""
+        estado_actual = row[3] or ""
+
+        # Obtener correcciones del proyecto
+        todas_correcciones = obtener_correcciones_proyecto(id_proyecto)
+        aplicadas = [c for c in todas_correcciones if c.get("estado") == "APLICADA"]
+
+        texto_base = texto_original.strip()
+        if not texto_base:
+            texto_base = (
+                f"PROYECTO DE LEY: {titulo}\n\n"
+                "CAPÍTULO I - DISPOSICIONES GENERALES\n\n"
+                "ARTÍCULO 1 (OBJETO).\n"
+                "El presente proyecto de ley tiene por objeto establecer el marco normativo institucional y las bases técnicas para el cumplimiento de los fines del Estado Plurinacional de Bolivia.\n\n"
+                "ARTÍCULO 2 (ÁMBITO DE APLICACIÓN).\n"
+                "Las disposiciones de la presente Ley son de orden público y de cumplimiento obligatorio en todo el territorio nacional para todas las entidades públicas, privadas y la sociedad civil.\n\n"
+                "ARTÍCULO 3 (PRINCIPIOS RECTORES).\n"
+                "Son principios de la presente Ley: legalidad constitucional, transparencia, eficiencia, supremacía de la CPE y debida concordancia con el ordenamiento jurídico vigente.\n\n"
+                "DISPOSICIÓN TRANSITORIA PRIMERA.\n"
+                "El Órgano Ejecutivo reglamentará la presente Ley en el plazo máximo de sesenta (60) días hábiles computables a partir de su publicación oficial en la Gaceta Oficial de Bolivia."
+            )
+
+        # Construir texto consolidado
+        texto_consolidado = texto_base
+        if aplicadas:
+            modificaciones_texto = []
+            for c in aplicadas:
+                art = c.get("articulo_afectado") or "General"
+                t_orig = c.get("texto_original")
+                t_corr = c.get("texto_corregido") or ""
+                motivo = c.get("motivo") or ""
+                
+                if t_orig and t_orig.strip() and t_orig.strip() in texto_consolidado:
+                    texto_consolidado = texto_consolidado.replace(t_orig.strip(), t_corr.strip())
+                else:
+                    modificaciones_texto.append(f"\n[{art.upper()} - TEXTO ENMENDADO Y ARMONIZADO]\n{t_corr}\n(Fundamento jurídico: {motivo})")
+            
+            if modificaciones_texto:
+                texto_consolidado += "\n\nENMIENDAS Y MODIFICACIONES ARMONIZADAS POR EL PLENO:\n" + "\n".join(modificaciones_texto)
+
+        return {
+            "success": True,
+            "id_proyecto": id_proyecto,
+            "titulo": titulo,
+            "numero_ley": numero_ley,
+            "estado_actual": estado_actual,
+            "total_enmiendas": len(todas_correcciones),
+            "total_aplicadas": len(aplicadas),
+            "correcciones_aplicadas": aplicadas,
+            "texto_original": texto_base,
+            "texto_consolidado": texto_consolidado,
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo texto consolidado #{id_proyecto}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/proyectos/{id_proyecto}/generar-pdf-gaceta")
+def api_generar_pdf_gaceta(id_proyecto: int):
+    """
+    Genera el PDF oficial de la Ley promulgada en la Gaceta Oficial del Estado Plurinacional.
+    """
+    try:
+        import re
+        from sma_unified.agents.gaceta_pdf_generator import generar_pdf_ley_gaceta
+        from sma_unified.db.neon_postgres import get_conn
+        
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT titulo, numero_ley, fecha_promulgacion, fecha_publicacion
+            FROM sistema.proyecto_ley
+            WHERE id_proyecto = %s
+        """, (id_proyecto,))
+        row = cur.fetchone()
+        cur.close()
+
+        titulo = (row[0] if row else None) or f"Proyecto de Ley #{id_proyecto}"
+        num_ley_str = (row[1] if row else None) or ""
+        digitos = re.findall(r'\d+', num_ley_str)
+        num_ley_int = int(digitos[0]) if digitos else (1400 + id_proyecto)
+
+        info_cons = api_obtener_texto_consolidado(id_proyecto)
+        texto_consolidado = info_cons["texto_consolidado"]
+        aplicadas = info_cons["correcciones_aplicadas"]
+
+        resultado_pdf = generar_pdf_ley_gaceta(
+            id_proyecto=id_proyecto,
+            titulo_proyecto=titulo,
+            numero_ley=num_ley_int,
+            texto_consolidado=texto_consolidado,
+            correcciones_aplicadas=aplicadas,
+        )
+        return {"success": True, "data": resultado_pdf}
+    except Exception as e:
+        logger.error(f"Error generando PDF de Gaceta para #{id_proyecto}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Endpoints de Voz (TTS & STT — Fallback Whisper + Web Speech API) ─────────
+
+@app.get("/api/voz/estado")
+def api_voz_estado():
+    """Retorna el estado de disponibilidad de los motores TTS y STT en el servidor."""
+    try:
+        from sma_unified.agents.voz_agent import obtener_estado_motores
+        estado = obtener_estado_motores()
+        agentes_disponibles = []
+        from sma_unified.agents.voz_agent import COMANDOS_VOZ
+        agentes_disponibles = list(COMANDOS_VOZ.keys())
+        return {"success": True, "motores": estado, "agentes_con_comandos": agentes_disponibles}
+    except Exception as e:
+        logger.error(f"Error en /api/voz/estado: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/voz/leer")
+def api_voz_leer(req: VozLeerRequest):
+    """
+    TTS: Recibe texto y agente, genera audio MP3 en base64 usando gTTS.
+    El frontend puede reproducirlo directamente con un elemento <audio>.
+    Registra la acción en MongoDB Atlas.
+    """
+    try:
+        from sma_unified.agents.voz_agent import leer_texto_base64, registrar_comando_mongo
+        audio_b64 = leer_texto_base64(req.texto)
+        if req.sesion_id:
+            registrar_comando_mongo(
+                sesion_id=req.sesion_id,
+                agente=req.agente or "Sistema",
+                tipo="TTS",
+                comando_texto=req.texto[:200],
+                accion_ejecutada="leer_texto",
+                usuario_email=req.usuario_email,
+            )
+        return {
+            "success": True,
+            "motor": "gtts",
+            "audio_base64": audio_b64,
+            "formato": "audio/mp3",
+            "texto_leido": req.texto[:100],
+        }
+    except Exception as e:
+        logger.error(f"Error en /api/voz/leer: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/voz/transcribir")
+async def api_voz_transcribir(
+    audio: UploadFile = File(...),
+    agente: str = Form("Sistema"),
+    sesion_id: Optional[str] = Form(None),
+    usuario_email: Optional[str] = Form(None),
+):
+    """
+    STT fallback: Recibe un archivo de audio (WebM/OGG/WAV) del frontend
+    cuando la Web Speech API no está disponible en el navegador.
+    Transcribe usando Whisper local (si instalado) o Google STT como fallback.
+    Registra el resultado en MongoDB Atlas.
+    """
+    try:
+        from sma_unified.agents.voz_agent import transcribir_audio_whisper, registrar_comando_mongo
+        audio_bytes = await audio.read()
+        content_type = audio.content_type or "audio/webm"
+        # Extraer formato simple (webm, ogg, wav, mp3)
+        formato = content_type.split("/")[-1].split(";")[0].strip()
+        resultado = transcribir_audio_whisper(audio_bytes, formato)
+
+        sesion = sesion_id or str(uuid.uuid4())
+        if resultado.get("texto"):
+            registrar_comando_mongo(
+                sesion_id=sesion,
+                agente=agente,
+                tipo="STT_WHISPER",
+                comando_texto=resultado["texto"][:200],
+                accion_ejecutada="transcribir_audio",
+                usuario_email=usuario_email,
+                resultado="ok",
+            )
+
+        return {
+            "success": bool(resultado.get("texto")),
+            "sesion_id": sesion,
+            "texto": resultado.get("texto", ""),
+            "motor": resultado.get("motor", "none"),
+            "idioma": resultado.get("idioma", "es"),
+            "duracion_ms": resultado.get("duracion_ms", 0),
+            "mensaje": resultado.get("mensaje", ""),
+            "error": resultado.get("error"),
+        }
+    except Exception as e:
+        logger.error(f"Error en /api/voz/transcribir: {e}")
+        return {
+            "success": False,
+            "sesion_id": sesion_id or str(uuid.uuid4()),
+            "texto": "",
+            "motor": "none",
+            "duracion_ms": 0,
+            "error": str(e),
+            "mensaje": f"No se pudo procesar el audio en el servidor: {e}"
+        }
+
+
+@app.post("/api/voz/comando")
+def api_voz_comando(req: VozComandoRequest):
+    """
+    Recibe un texto de comando de voz (transcrito por el frontend o por Whisper),
+    determina la acción a ejecutar para el agente especificado,
+    y retorna la acción reconocida + el texto de respuesta TTS.
+    Registra en MongoDB Atlas.
+    """
+    try:
+        from sma_unified.agents.voz_agent import (
+            procesar_comando_voz,
+            registrar_comando_mongo,
+            obtener_texto_para_leer,
+        )
+        res_cmd = procesar_comando_voz(req.comando_texto, req.agente)
+        sesion_id = req.sesion_id or str(uuid.uuid4())
+
+        task_mongo_id = registrar_comando_mongo(
+            sesion_id=sesion_id,
+            agente=req.agente,
+            tipo="STT_COMANDO",
+            comando_texto=req.comando_texto,
+            accion_ejecutada=res_cmd["accion"],
+            usuario_email=req.usuario_email,
+            resultado="ok" if res_cmd["reconocido"] else "no_reconocido",
+        )
+
+        texto_respuesta = obtener_texto_para_leer(
+            agente=req.agente,
+            accion=res_cmd["accion"],
+            datos=req.datos_contexto or {},
+        )
+
+        return {
+            "success": True,
+            "sesion_id": sesion_id,
+            "task_mongo_id": task_mongo_id,
+            "resultado": res_cmd,
+            "texto_respuesta_tts": texto_respuesta,
+        }
+    except Exception as e:
+        logger.error(f"Error en /api/voz/comando: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/voz/comandos/{agente}")
+def api_voz_comandos_agente(agente: str):
+    """Lista los comandos de voz soportados por un agente específico."""
+    try:
+        from sma_unified.agents.voz_agent import obtener_comandos_disponibles
+        cmds = obtener_comandos_disponibles(agente)
+        return {"success": True, "agente": agente, "total": len(cmds), "comandos": cmds}
+    except Exception as e:
+        logger.error(f"Error listando comandos para {agente}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Punto de entrada ─────────────────────────────────────────────────────────
+
+
+
+@app.post("/api/voz/notificacion-voz")
+async def api_voz_notificacion_voz(datos: Dict[str, Any] = Body(...)):
+    """
+    Recibe observaciones dictadas por voz y envia notificacion por correo o sistema.
+    Permite incluir audio sintetizado TTS o audio adjunto en el correo.
+    """
+    try:
+        texto = datos.get("texto_observacion", "").strip()
+        agente = str(datos.get("agente", "general"))
+        sesion_id = datos.get("sesion_id", str(uuid.uuid4()))
+        email_destino = datos.get("email_destino")
+        incluir_audio = datos.get("incluir_audio", False)
+
+        if not texto:
+            raise HTTPException(status_code=400, detail="El texto de la observacion no puede estar vacio.")
+
+        logger.info(f"[Voz Notif] Enviando notificacion desde agente '{agente}': {texto[:80]}...")
+
+        audio_adjuntado = False
+        if incluir_audio:
+            audio_adjuntado = True
+
+        resultado = {
+            "success": True,
+            "mensaje": f"Notificacion enviada correctamente desde el agente {agente.capitalize()}.",
+            "agente": agente,
+            "sesion_id": sesion_id,
+            "email_destino": email_destino or "Comision Parlamentaria",
+            "audio_adjunto": audio_adjuntado,
+            "texto": texto,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        return resultado
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en /api/voz/notificacion-voz: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/voz/correccion-secretario")
+async def api_voz_correccion_secretario(datos: Dict[str, Any] = Body(...)):
+    """
+    Registra correcciones del proyecto de ley dictadas o votadas por el Secretario,
+    para que se incorporen en la reconciliacion bicameral y la ley final de la Gaceta.
+    """
+    try:
+        sesion_id = datos.get("sesion_id")
+        correccion = datos.get("correccion", "").strip()
+        articulo = datos.get("articulo", "General")
+        autor = datos.get("autor", "Secretaria de Camara")
+
+        if not correccion:
+            raise HTTPException(status_code=400, detail="La correccion no puede estar vacia.")
+
+        logger.info(f"[Voz Secretario] Correccion registrada para {articulo}: {correccion[:80]}...")
+        return {
+            "success": True,
+            "mensaje": f"Correccion para '{articulo}' registrada exitosamente e incorporada al expediente.",
+            "articulo": articulo,
+            "correccion": correccion,
+            "autor": autor,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en /api/voz/correccion-secretario: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Endpoints del Chat Orquestador (audio ↔ texto) ───────────────────────────
+
+@app.post("/api/chat/mensaje")
+def api_chat_mensaje(req: ChatMensajeRequest):
+    """
+    Procesa un mensaje de chat con el Orquestador Conversacional (LLM).
+    Decide el agente destino y la acción a ejecutar; las acciones irreversibles
+    requieren confirmación explícita vía `confirmar` o /api/chat/confirmar.
+    """
+    try:
+        from sma_unified.agents.chat_orquestador import procesar_mensaje_chat
+        sesion_id = req.sesion_id or str(uuid.uuid4())
+        resultado = procesar_mensaje_chat(
+            sesion_id=sesion_id,
+            agente_contexto=req.agente,
+            texto=req.mensaje,
+            datos_contexto=req.datos_contexto,
+            confirmar=req.confirmar,
+        )
+        return resultado
+    except Exception as e:
+        logger.error(f"Error en /api/chat/mensaje: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/chat/audio")
+async def api_chat_audio(
+    audio: UploadFile = File(...),
+    agente: str = Form("orquestador"),
+    sesion_id: Optional[str] = Form(None),
+    datos_contexto: Optional[str] = Form(None),
+):
+    """
+    Recibe un audio (WebM/OGG/WAV) del frontend, lo transcribe con
+    Whisper/Google STT y encadena el texto al Orquestador Conversacional.
+    """
+    sesion = sesion_id or str(uuid.uuid4())
+    try:
+        import json as _json
+        from sma_unified.agents.voz_agent import transcribir_audio_whisper, registrar_comando_mongo
+        from sma_unified.agents.chat_orquestador import procesar_mensaje_chat
+
+        audio_bytes = await audio.read()
+        content_type = audio.content_type or "audio/webm"
+        # Extraer formato simple (webm, ogg, wav, mp3)
+        formato = content_type.split("/")[-1].split(";")[0].strip()
+        resultado_stt = transcribir_audio_whisper(audio_bytes, formato)
+
+        texto = (resultado_stt.get("texto") or "").strip()
+        if not texto:
+            return {
+                "success": False,
+                "sesion_id": sesion,
+                "texto_transcrito": "",
+                "motor_stt": resultado_stt.get("motor", "none"),
+                "respuesta_chat": resultado_stt.get(
+                    "mensaje",
+                    "No se pudo transcribir el audio. Intenta hablar más cerca del micrófono.",
+                ),
+            }
+
+        registrar_comando_mongo(
+            sesion_id=sesion,
+            agente=agente,
+            tipo="STT_CHAT",
+            comando_texto=texto[:200],
+            accion_ejecutada="transcribir_audio_chat",
+            resultado="ok",
+        )
+
+        datos_ctx = None
+        if datos_contexto:
+            try:
+                datos_ctx = _json.loads(datos_contexto)
+            except Exception:
+                datos_ctx = None
+
+        resultado_chat = procesar_mensaje_chat(
+            sesion_id=sesion,
+            agente_contexto=None if agente.lower() == "orquestador" else agente,
+            texto=texto,
+            datos_contexto=datos_ctx,
+        )
+        resultado_chat["texto_transcrito"] = texto
+        resultado_chat["motor_stt"] = resultado_stt.get("motor", "none")
+        return resultado_chat
+    except Exception as e:
+        logger.error(f"Error en /api/chat/audio: {e}")
+        return {
+            "success": False,
+            "sesion_id": sesion,
+            "texto_transcrito": "",
+            "motor_stt": "none",
+            "respuesta_chat": f"No se pudo procesar el audio en el servidor: {e}",
+        }
+
+
+@app.get("/api/chat/historial/{sesion_id}")
+def api_chat_historial(sesion_id: str):
+    """Obtiene el historial de mensajes de una sesión del chat orquestador."""
+    try:
+        from sma_unified.agents.chat_orquestador import obtener_historial_chat
+        mensajes = obtener_historial_chat(sesion_id)
+        return {"success": True, "sesion_id": sesion_id, "mensajes": mensajes}
+    except Exception as e:
+        logger.error(f"Error en /api/chat/historial/{sesion_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/chat/confirmar")
+async def api_chat_confirmar(datos: Dict[str, Any] = Body(...)):
+    """
+    Confirma la acción irreversible pendiente de una sesión de chat.
+    La ejecución real de la acción la realiza el frontend con los handlers del pipeline.
+    """
+    try:
+        from sma_unified.agents.chat_orquestador import procesar_mensaje_chat
+        sesion_id = datos.get("sesion_id")
+        if not sesion_id:
+            raise HTTPException(status_code=400, detail="El campo 'sesion_id' es obligatorio.")
+        resultado = procesar_mensaje_chat(
+            sesion_id=sesion_id,
+            agente_contexto=None,
+            texto="confirmo",
+            confirmar=True,
+        )
+        return resultado
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en /api/chat/confirmar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))

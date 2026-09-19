@@ -2,9 +2,9 @@
 
 :root {
   /* ── Paleta Institucional Principal (Gobernanza / GobernIA) ── */
-  --inst-deep:     #0B2545;   /* Azul Institucional — fondos oscuros, estructura */
-  --inst-mid:      #134074;   /* Azul Tecnológico — tarjetas, contenedores */
-  --inst-cyan:     #00B4D8;   /* Celeste Operativo — conectores, enlaces activos */
+  --inst-deep:     #0D1B2A;   /* Azul Institucional — fondos oscuros, estructura */
+  --inst-mid:      #1B2A4A;   /* Azul Tecnológico — tarjetas, contenedores */
+  --inst-cyan:     #0284C7;   /* Celeste Operativo — conectores, enlaces activos */
   --inst-green:    #8AC926;   /* Verde Éxito — validación, aprobado */
   --inst-amber:    #F4A261;   /* Ámbar Alerta — advertencias, revisión */
   --inst-red:      #E76F51;   /* Rojo Error — rechazo, discrepancia */
@@ -19,14 +19,14 @@
   --exec-cyan:     #38BDF8;
 
   /* ── Fondos de interfaz ── */
-  --bg-main:       #0B2545;
+  --bg-main:       #0D1B2A;
   --bg-surface:    #0F172A;
   --bg-card:       #1E293B;
   --bg-card-hover: #334155;
 
   /* ── Bordes ── */
-  --border-subtle: rgba(0, 180, 216, 0.18);
-  --border-glow:   rgba(0, 180, 216, 0.45);
+  --border-subtle: rgba(2, 132, 199, 0.16);
+  --border-glow:   rgba(2, 132, 199, 0.35);
   --border-solid:  rgba(56, 189, 248, 0.3);
 
   /* ── Acentos funcionales ── */
@@ -40,12 +40,23 @@
   --text-primary:   #F1F5F9;
   --text-secondary: #94A3B8;
   --text-muted:     #64748B;
-  --text-accent:    #00B4D8;
+  --text-accent:    #38BDF8;
 }
 
 @keyframes flowDash {
   to {
     stroke-dashoffset: -20;
+  }
+}
+
+@keyframes chatPopIn {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -629,3 +640,221 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(30, 41, 59, 0.7);
   color: #94A3B8;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE LAYOUT — GobernIA Mesa de Partes
+   ══════════════════════════════════════════════════════════════ */
+
+/* Fluid design tokens */
+:root {
+  --page-px:      clamp(12px, 3vw, 28px);
+  --card-radius:  clamp(12px, 2vw, 20px);
+  --section-gap:  clamp(14px, 2.5vw, 26px);
+}
+
+/* ── Mesa layout: agent banner (left) + content (right) ── */
+.mesa-layout-grid {
+  display: grid;
+  grid-template-columns: clamp(260px, 28%, 360px) 1fr;
+  gap: var(--section-gap);
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .mesa-layout-grid {
+    grid-template-columns: 1fr;
+  }
+  .mesa-layout-grid > .mesa-banner-col {
+    max-height: 200px;
+    overflow: hidden;
+    position: static !important;
+  }
+}
+
+/* ── Meta grid for data badges (Boletín, Fecha, etc.) ── */
+.meta-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(clamp(140px, 22%, 220px), 1fr));
+  gap: 12px;
+}
+
+/* ── Email fields grid (2–3 columns responsive) ── */
+.email-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(clamp(180px, 28%, 240px), 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+/* ── Action row (buttons at bottom of steps) ── */
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Session tabs strip ── */
+.session-tabs-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(0,180,216,0.2);
+}
+.session-tabs-strip::-webkit-scrollbar { display: none; }
+
+/* ── Agent horizontal flow scroll ── */
+.agent-flow-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+.agent-flow-scroll::-webkit-scrollbar { display: none; }
+
+/* ── Heading scale ── */
+@media (max-width: 680px) {
+  h1 { font-size: clamp(1.25rem, 4.5vw, 1.9rem) !important; }
+  h2 { font-size: clamp(1.1rem, 3.8vw, 1.6rem) !important; }
+  h3 { font-size: clamp(0.95rem, 3.2vw, 1.2rem) !important; }
+}
+
+/* ── Glass card adjustments on small screens ── */
+@media (max-width: 580px) {
+  .glass-card {
+    padding: 16px !important;
+    border-radius: 14px !important;
+  }
+}
+
+/* ── Floating FAB buttons ── */
+@media (max-width: 600px) {
+  .fab-right { right: 10px !important; }
+  .fab-left  { left: 10px !important; }
+}
+
+/* ── Drawers / modals full-width on mobile ── */
+@media (max-width: 520px) {
+  .drawer-panel {
+    width: calc(100vw - 20px) !important;
+    right: 10px !important;
+    left: 10px !important;
+    border-radius: 14px !important;
+  }
+}
+
+/* ── Input font-size prevents iOS zoom ── */
+@media (max-width: 480px) {
+  input, textarea, select { font-size: 16px !important; }
+  .btn-primary, .btn-secondary {
+    font-size: 0.82rem !important;
+    padding: 9px 16px !important;
+  }
+}
+
+/* ── Gaceta publication card ── */
+.gaceta-send-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #0284C7 0%, #38bdf8 100%);
+  border: 1px solid rgba(56,189,248,0.5);
+  border-radius: 12px;
+  color: #fff;
+  padding: 13px 24px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(56,189,248,0.4);
+  transition: all 0.25s ease;
+  font-family: 'Outfit', sans-serif;
+}
+.gaceta-send-btn:disabled {
+  background: rgba(59,130,246,0.3);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.gaceta-send-btn:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 32px rgba(56,189,248,0.55);
+}
+
+/* ── Fade-in animation utility ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up { animation: fadeInUp 0.3s ease both; }
+
+
+/* ── Contenedor de ancho fluido adaptativo ── */
+.mesa-layout-grid > * {
+  min-width: 0;
+}
+
+.mesa-layout-grid {
+  display: grid;
+  grid-template-columns: clamp(280px, 24%, 350px) 1fr;
+  gap: var(--section-gap);
+  align-items: start;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .mesa-layout-grid {
+    grid-template-columns: 1fr;
+  }
+  .mesa-layout-grid > .mesa-banner-col {
+    position: static !important;
+    max-height: 220px;
+    overflow: hidden;
+  }
+}
+
+/* ── Tarjetas y paneles sin distorsión ── */
+.glass-card, .agent-card {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Contenedores de inputs y textareas fluidos ── */
+input, textarea, select {
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+/* ── Utilidades de Botones de Gaceta ── */
+.btn-gaceta-oficial {
+  background: linear-gradient(135deg, #0d9488 0%, #0284C7 50%, #00B4D8 100%);
+  border: 1px solid rgba(0, 194, 203, 0.6);
+  color: #FFFFFF;
+  font-weight: 800;
+  border-radius: 12px;
+  padding: 14px 28px;
+  cursor: pointer;
+  box-shadow: 0 4px 24px rgba(0, 194, 203, 0.4);
+  transition: all 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+}
+.btn-gaceta-oficial:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 194, 203, 0.6);
+  border-color: #38bdf8;
+}
+.btn-gaceta-oficial:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+

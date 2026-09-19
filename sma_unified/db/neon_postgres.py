@@ -14,7 +14,8 @@ Gestiona todas las operaciones con la BD PostgreSQL en Neon:
     - sistema.bitacora_proceso          (auditoría de cada etapa del pipeline)
     - sistema.enrutamiento_documento    (tracking de mensajes inter-agente)
     - sistema.comision                  (catálogo de comisiones — solo lectura)
-    - sistema.observaciones_constitucionales  ← NUEVA TABLA
+    - sistema.observaciones_constitucionales  (dictámenes CPE por proyecto)
+    - sistema.correcciones_proyecto           (correcciones normativas → senadores / autor)
 """
 
 import os
@@ -67,6 +68,8 @@ def get_conn():
                 _ensure_consistencia_tables(_conn)
                 _ensure_articulos_normativos_table(_conn)
                 _ensure_usuarios_table(_conn)
+                _ensure_correcciones_table(_conn)
+                _ensure_legislativo_14_agentes_tables(_conn)
             except Exception as em:
                 logger.warning(f"Aviso durante ensure_tables Neon: {em}")
         return _conn
@@ -129,6 +132,9 @@ def _ensure_proyecto_ley_columns(conn) -> None:
     ALTER TABLE sistema.proyecto_ley ADD COLUMN IF NOT EXISTS observaciones_generales TEXT;
     ALTER TABLE sistema.proyecto_ley ADD COLUMN IF NOT EXISTS drive_file_id VARCHAR(255);
     ALTER TABLE sistema.proyecto_ley ADD COLUMN IF NOT EXISTS drive_link TEXT;
+    ALTER TABLE sistema.proyecto_ley ADD COLUMN IF NOT EXISTS email_autor VARCHAR(255);
+    ALTER TABLE sistema.proyecto_ley ADD COLUMN IF NOT EXISTS nombre_autor VARCHAR(255);
+    ALTER TABLE sistema.proyecto_ley ADD COLUMN IF NOT EXISTS tipo_iniciativa VARCHAR(50);
     """
     try:
         cur = conn.cursor()
@@ -313,6 +319,204 @@ def _ensure_observaciones_table(conn) -> None:
     except Exception as e:
         conn.rollback()
         logger.warning(f"No se pudo crear tabla observaciones_constitucionales: {e}")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# CORRECCIONES DE PROYECTO (tabla nueva — flujo senadores / autor)
+# ════════════════════════════════════════════════════════════════════════════
+
+def _ensure_correcciones_table(conn) -> None:
+    """Crea sistema.correcciones_proyecto si no existe y migra columnas necesarias."""
+    ddl = """
+    CREATE TABLE IF NOT EXISTS sistema.correcciones_proyecto (
+        id                      SERIAL PRIMARY KEY,
+        id_proyecto             INTEGER
+                                    REFERENCES sistema.proyecto_ley(id_proyecto)
+                                    ON DELETE SET NULL,
+        sesion_id               VARCHAR(36),
+        tipo_corrector          VARCHAR(50) NOT NULL
+                                    CHECK (tipo_corrector IN
+                                        ('SENADO_NORMATIVA','AUTOR_PROYECTO','AGENTE_SMA')),
+        corrector_email         VARCHAR(255),
+        corrector_nombre        VARCHAR(255),
+        agente_origen           VARCHAR(100),
+        articulo_afectado       VARCHAR(50),
+        texto_original          TEXT,
+        texto_corregido         TEXT,
+        motivo                  TEXT,
+        referencia_cpe          VARCHAR(100),
+        referencia_norma        VARCHAR(200),
+        estado                  VARCHAR(20) DEFAULT 'PENDIENTE'
+                                    CHECK (estado IN
+                                        ('PENDIENTE','APLICADA','RECHAZADA')),
+        fecha_emision           TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        fecha_respuesta         TIMESTAMP WITH TIME ZONE,
+        observacion_respuesta   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_corr_proyecto
+        ON sistema.correcciones_proyecto(id_proyecto);
+    CREATE INDEX IF NOT EXISTS idx_corr_estado
+        ON sistema.correcciones_proyecto(estado);
+    CREATE INDEX IF NOT EXISTS idx_corr_tipo
+        ON sistema.correcciones_proyecto(tipo_corrector);
+    CREATE INDEX IF NOT EXISTS idx_corr_fecha
+        ON sistema.correcciones_proyecto(fecha_emision DESC);
+    """
+    try:
+        cur = conn.cursor()
+        cur.execute(ddl)
+        conn.commit()
+        cur.close()
+        logger.info("✅ Tabla sistema.correcciones_proyecto verificada/creada")
+    except Exception as e:
+        conn.rollback()
+        logger.warning(f"No se pudo crear tabla correcciones_proyecto: {e}")
+
+
+def guardar_correccion_proyecto(
+    id_proyecto: Optional[int],
+    tipo_corrector: str,
+    agente_origen: str,
+    articulo_afectado: Optional[str] = None,
+    texto_original: Optional[str] = None,
+    texto_corregido: Optional[str] = None,
+    motivo: Optional[str] = None,
+    referencia_cpe: Optional[str] = None,
+    referencia_norma: Optional[str] = None,
+    corrector_email: Optional[str] = None,
+    corrector_nombre: Optional[str] = None,
+    sesion_id: Optional[str] = None,
+) -> Optional[int]:
+    """
+    Persiste una corrección normativa generada por un agente.
+    tipo_corrector: 'SENADO_NORMATIVA' | 'AUTOR_PROYECTO' | 'AGENTE_SMA'
+    Retorna el id de la corrección creada.
+    """
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO sistema.correcciones_proyecto (
+                id_proyecto, sesion_id, tipo_corrector, corrector_email,
+                corrector_nombre, agente_origen, articulo_afectado,
+                texto_original, texto_corregido, motivo,
+                referencia_cpe, referencia_norma, estado, fecha_emision
+            ) VALUES (
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, 'PENDIENTE', NOW()
+            )
+            RETURNING id
+            """,
+            (
+                id_proyecto, sesion_id, tipo_corrector, corrector_email,
+                corrector_nombre, agente_origen, articulo_afectado,
+                texto_original, texto_corregido, motivo,
+                referencia_cpe, referencia_norma,
+            ),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        id_corr = row[0] if row else None
+        logger.info(
+            f"✅ Corrección guardada → id: {id_corr} | proyecto: {id_proyecto} "
+            f"| tipo: {tipo_corrector} | artículo: {articulo_afectado}"
+        )
+        return id_corr
+    except Exception as e:
+        try:
+            get_conn().rollback()
+        except Exception:
+            pass
+        logger.warning(f"⚠️ No se pudo guardar corrección en Neon: {e}")
+        return None
+
+
+def obtener_correcciones_proyecto(
+    id_proyecto: int,
+    solo_pendientes: bool = False,
+) -> List[Dict[str, Any]]:
+    """Retorna todas las correcciones de un proyecto, opcionalmente solo las PENDIENTES."""
+    try:
+        import psycopg2.extras
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        filtro = "AND estado = 'PENDIENTE'" if solo_pendientes else ""
+        cur.execute(
+            f"""
+            SELECT * FROM sistema.correcciones_proyecto
+            WHERE id_proyecto = %s {filtro}
+            ORDER BY fecha_emision DESC
+            """,
+            (id_proyecto,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        for r in rows:
+            for field in ("fecha_emision", "fecha_respuesta"):
+                if isinstance(r.get(field), datetime):
+                    r[field] = r[field].strftime("%Y-%m-%d %H:%M:%S")
+        return rows
+    except Exception as e:
+        logger.warning(f"No se pudieron obtener correcciones del proyecto {id_proyecto}: {e}")
+        return []
+
+
+def actualizar_estado_correccion(
+    id_correccion: int,
+    estado: str,
+    observacion_respuesta: Optional[str] = None,
+) -> bool:
+    """
+    Actualiza el estado de una corrección.
+    estado: 'APLICADA' | 'RECHAZADA'
+    """
+    try:
+        if estado not in ("APLICADA", "RECHAZADA"):
+            raise ValueError(f"Estado inválido: {estado}")
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE sistema.correcciones_proyecto
+            SET estado = %s,
+                fecha_respuesta = NOW(),
+                observacion_respuesta = %s
+            WHERE id = %s
+            """,
+            (estado, observacion_respuesta, id_correccion),
+        )
+        conn.commit()
+        cur.close()
+        logger.info(f"✅ Corrección {id_correccion} actualizada → {estado}")
+        return True
+    except Exception as e:
+        try:
+            get_conn().rollback()
+        except Exception:
+            pass
+        logger.warning(f"No se pudo actualizar estado de corrección {id_correccion}: {e}")
+        return False
+
+
+def obtener_email_autor_proyecto(id_proyecto: int) -> Optional[str]:
+    """Retorna el email_autor del proyecto si fue capturado al subir el archivo."""
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT email_autor FROM sistema.proyecto_ley WHERE id_proyecto = %s",
+            (id_proyecto,),
+        )
+        row = cur.fetchone()
+        cur.close()
+        return row[0] if row and row[0] else None
+    except Exception as e:
+        logger.warning(f"No se pudo obtener email_autor del proyecto {id_proyecto}: {e}")
+        return None
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1900,4 +2104,318 @@ def obtener_stats_consistencia() -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"No se pudieron obtener stats de consistencia normativa: {e}")
         return {"total_normas": 0, "total_articulos": 0, "hallazgos_por_tipo": {}}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# TABLAS DE PERSISTENCIA PARA LOS 14 AGENTES LEGISLATIVOS BOLIVIANOS
+# ════════════════════════════════════════════════════════════════════════════
+
+def _ensure_legislativo_14_agentes_tables(conn) -> None:
+    """Crea y valida las tablas relacionales para el ciclo completo de los 14 agentes."""
+    ddl = """
+    CREATE SCHEMA IF NOT EXISTS sistema AUTHORIZATION postgres;
+
+    -- 1. Sesiones de debate (Agente 5 Presidencia Comisión y Agente 7 Secretario Cámara)
+    CREATE TABLE IF NOT EXISTS sistema.sesiones_debates (
+        id_sesion                   SERIAL PRIMARY KEY,
+        id_proyecto                 INTEGER REFERENCES sistema.proyecto_ley(id_proyecto) ON DELETE SET NULL,
+        camara                      VARCHAR(50) NOT NULL,
+        comision_nombre             VARCHAR(255),
+        numero_sesion               VARCHAR(50),
+        fecha_sesion                DATE NOT NULL DEFAULT CURRENT_DATE,
+        hora_inicio                 TIME,
+        hora_cierre                 TIME,
+        total_asistentes            INTEGER DEFAULT 0,
+        orden_del_dia               JSONB,
+        resumen_debate              TEXT,
+        acta_completa               TEXT,
+        fecha_registro              TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- 2. Votaciones nominales (Agente 7 Secretario de Cámara)
+    CREATE TABLE IF NOT EXISTS sistema.votaciones_nominales (
+        id_votacion                 SERIAL PRIMARY KEY,
+        id_sesion                   INTEGER REFERENCES sistema.sesiones_debates(id_sesion) ON DELETE CASCADE,
+        id_proyecto                 INTEGER REFERENCES sistema.proyecto_ley(id_proyecto) ON DELETE SET NULL,
+        articulo                    VARCHAR(50),
+        tipo_votacion               VARCHAR(50) DEFAULT 'EN_GRANDE',
+        votos_favor                 INTEGER DEFAULT 0,
+        votos_contra                INTEGER DEFAULT 0,
+        abstenciones                INTEGER DEFAULT 0,
+        resultado                   VARCHAR(50) NOT NULL,
+        quorum_valido               BOOLEAN DEFAULT TRUE,
+        detalle_votos_nominal       JSONB,
+        fecha_votacion              TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- 3. Dictámenes técnicos especializados (Agentes 4, 6 y 12)
+    CREATE TABLE IF NOT EXISTS sistema.dictamenes_tecnicos (
+        id_dictamen                 SERIAL PRIMARY KEY,
+        id_proyecto                 INTEGER REFERENCES sistema.proyecto_ley(id_proyecto) ON DELETE CASCADE,
+        tipo_dictamen               VARCHAR(50) NOT NULL,
+        agente_emisor               VARCHAR(100) NOT NULL,
+        viabilidad                  VARCHAR(50) NOT NULL,
+        puntuacion                  FLOAT,
+        contenido_dictamen          JSONB NOT NULL,
+        recomendaciones             TEXT,
+        fecha_emision               TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- 4. Ciclos bicamerales y conferencias (Agente 8 Comunicación Bicameral)
+    CREATE TABLE IF NOT EXISTS sistema.ciclos_bicamerales (
+        id_ciclo                    SERIAL PRIMARY KEY,
+        id_proyecto                 INTEGER REFERENCES sistema.proyecto_ley(id_proyecto) ON DELETE CASCADE,
+        camara_origen               VARCHAR(50) NOT NULL,
+        camara_revisora             VARCHAR(50) NOT NULL,
+        estado_bicameral            VARCHAR(50) NOT NULL,
+        articulos_modificados       JSONB,
+        requiere_comision_mixta     BOOLEAN DEFAULT FALSE,
+        texto_armonizado            TEXT,
+        fecha_tramite               TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- 5. Decisiones ejecutivas (Agente 9 Veto y Promulgación)
+    CREATE TABLE IF NOT EXISTS sistema.decisiones_ejecutivas (
+        id_decision                 SERIAL PRIMARY KEY,
+        id_proyecto                 INTEGER REFERENCES sistema.proyecto_ley(id_proyecto) ON DELETE CASCADE,
+        tipo_decision               VARCHAR(50) NOT NULL,
+        evaluacion_multicriterio    JSONB,
+        promedio_ponderado          FLOAT,
+        articulos_observados        JSONB,
+        fundamentacion              TEXT,
+        decreto_supremo_numero      VARCHAR(50),
+        fecha_decision              TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- 6. Leyes promulgadas y Gaceta Oficial (Agente 10 Publicación Oficial)
+    CREATE TABLE IF NOT EXISTS sistema.leyes_promulgadas (
+        id_ley                      SERIAL PRIMARY KEY,
+        id_proyecto                 INTEGER REFERENCES sistema.proyecto_ley(id_proyecto) ON DELETE SET NULL,
+        numero_ley                  VARCHAR(50) UNIQUE NOT NULL,
+        titulo_oficial              TEXT NOT NULL,
+        decreto_promulgacion        VARCHAR(100),
+        edicion_gaceta              VARCHAR(100),
+        fecha_promulgacion          DATE NOT NULL,
+        fecha_publicacion           DATE NOT NULL,
+        fecha_vigencia              DATE NOT NULL,
+        estado                      VARCHAR(50) DEFAULT 'VIGENTE',
+        url_gaceta                  VARCHAR(500),
+        texto_oficial               TEXT,
+        fecha_registro              TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- 7. Alertas de fiscalización y control posterior (Agente 11 Fiscalización)
+    CREATE TABLE IF NOT EXISTS sistema.alertas_fiscalizacion (
+        id_alerta                   SERIAL PRIMARY KEY,
+        id_ley                      INTEGER REFERENCES sistema.leyes_promulgadas(id_ley) ON DELETE CASCADE,
+        id_proyecto                 INTEGER REFERENCES sistema.proyecto_ley(id_proyecto) ON DELETE SET NULL,
+        tipo_anomalia               VARCHAR(100) NOT NULL,
+        severidad                   VARCHAR(50) NOT NULL DEFAULT 'MEDIA',
+        indicadores_evaluados       JSONB,
+        descripcion                 TEXT NOT NULL,
+        organismo_notificado        VARCHAR(200) DEFAULT 'Contraloría General del Estado',
+        fecha_alerta                TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- 8. Consultas ciudadanas y difusión (Agentes 13 y 14)
+    CREATE TABLE IF NOT EXISTS sistema.consultas_ciudadanas (
+        id_consulta                 SERIAL PRIMARY KEY,
+        canal                       VARCHAR(50) DEFAULT 'WEB',
+        nombre_ciudadano            VARCHAR(200),
+        cedula                      VARCHAR(20),
+        texto_consulta              TEXT NOT NULL,
+        audio_url                   VARCHAR(500),
+        intencion                   VARCHAR(100),
+        respuesta_generada          TEXT,
+        id_proyecto_relacionado     INTEGER REFERENCES sistema.proyecto_ley(id_proyecto) ON DELETE SET NULL,
+        satisfaccion_calificacion   INTEGER,
+        fecha_consulta              TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    """
+    try:
+        cur = conn.cursor()
+        cur.execute(ddl)
+        conn.commit()
+        cur.close()
+        logger.info("✅ Tablas del sistema legislativo de 14 agentes verificadas en esquema 'sistema'")
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.warning(f"Aviso al asegurar tablas de 14 agentes: {e}")
+
+
+def guardar_dictamen_tecnico_db(
+    id_proyecto: int,
+    tipo_dictamen: str,
+    agente_emisor: str,
+    viabilidad: str,
+    contenido_dictamen: Dict[str, Any],
+    puntuacion: Optional[float] = None,
+    recomendaciones: Optional[str] = None,
+) -> Optional[int]:
+    """Guarda un dictamen pericial (Técnico, Fondo o Presupuesto) en PostgreSQL Neon."""
+    try:
+        from psycopg2.extras import Json
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO sistema.dictamenes_tecnicos
+                (id_proyecto, tipo_dictamen, agente_emisor, viabilidad, puntuacion,
+                 contenido_dictamen, recomendaciones, fecha_emision)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            RETURNING id_dictamen
+            """,
+            (
+                id_proyecto, tipo_dictamen, agente_emisor, viabilidad,
+                puntuacion, Json(contenido_dictamen), recomendaciones,
+            ),
+        )
+        dictamen_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        logger.info(f"✅ Dictamen técnico guardado → id: {dictamen_id} ({agente_emisor}: {viabilidad})")
+        return dictamen_id
+    except Exception as e:
+        try:
+            get_conn().rollback()
+        except Exception:
+            pass
+        logger.warning(f"Error guardando dictamen técnico: {e}")
+        return None
+
+
+def guardar_sesion_debate_db(
+    camara: str,
+    resumen_debate: str,
+    acta_completa: str,
+    id_proyecto: Optional[int] = None,
+    comision_nombre: Optional[str] = None,
+    numero_sesion: Optional[str] = None,
+    total_asistentes: int = 0,
+    orden_del_dia: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[int]:
+    """Guarda el registro de sesión y debate legislativo."""
+    try:
+        from psycopg2.extras import Json
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO sistema.sesiones_debates
+                (id_proyecto, camara, comision_nombre, numero_sesion,
+                 total_asistentes, orden_del_dia, resumen_debate, acta_completa, fecha_registro)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            RETURNING id_sesion
+            """,
+            (
+                id_proyecto, camara, comision_nombre, numero_sesion,
+                total_asistentes, Json(orden_del_dia or []), resumen_debate, acta_completa,
+            ),
+        )
+        sesion_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        logger.info(f"✅ Sesión de debate guardada → id: {sesion_id} ({camara})")
+        return sesion_id
+    except Exception as e:
+        try:
+            get_conn().rollback()
+        except Exception:
+            pass
+        logger.warning(f"Error guardando sesión de debate: {e}")
+        return None
+
+
+def guardar_decision_ejecutiva_db(
+    id_proyecto: int,
+    tipo_decision: str,
+    evaluacion_multicriterio: Dict[str, Any],
+    promedio_ponderado: float,
+    fundamentacion: str,
+    articulos_observados: Optional[List[str]] = None,
+    decreto_supremo_numero: Optional[str] = None,
+) -> Optional[int]:
+    """Guarda la resolución presidencial de veto o promulgación."""
+    try:
+        from psycopg2.extras import Json
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO sistema.decisiones_ejecutivas
+                (id_proyecto, tipo_decision, evaluacion_multicriterio, promedio_ponderado,
+                 articulos_observados, fundamentacion, decreto_supremo_numero, fecha_decision)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            RETURNING id_decision
+            """,
+            (
+                id_proyecto, tipo_decision, Json(evaluacion_multicriterio), promedio_ponderado,
+                Json(articulos_observados or []), fundamentacion, decreto_supremo_numero,
+            ),
+        )
+        id_decision = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        logger.info(f"✅ Decisión ejecutiva guardada → id: {id_decision} ({tipo_decision})")
+        return id_decision
+    except Exception as e:
+        try:
+            get_conn().rollback()
+        except Exception:
+            pass
+        logger.warning(f"Error guardando decisión ejecutiva: {e}")
+        return None
+
+
+def guardar_ley_promulgada_db(
+    numero_ley: str,
+    titulo_oficial: str,
+    fecha_promulgacion: str,
+    fecha_publicacion: str,
+    fecha_vigencia: str,
+    id_proyecto: Optional[int] = None,
+    decreto_promulgacion: Optional[str] = None,
+    edicion_gaceta: Optional[str] = None,
+    url_gaceta: Optional[str] = None,
+    texto_oficial: Optional[str] = None,
+) -> Optional[int]:
+    """Registra la Ley oficial promulgada y publicada en la Gaceta Oficial."""
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO sistema.leyes_promulgadas
+                (id_proyecto, numero_ley, titulo_oficial, decreto_promulgacion,
+                 edicion_gaceta, fecha_promulgacion, fecha_publicacion, fecha_vigencia,
+                 estado, url_gaceta, texto_oficial, fecha_registro)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'VIGENTE', %s, %s, NOW())
+            ON CONFLICT (numero_ley) DO UPDATE SET
+                titulo_oficial = EXCLUDED.titulo_oficial,
+                fecha_vigencia = EXCLUDED.fecha_vigencia,
+                url_gaceta = EXCLUDED.url_gaceta
+            RETURNING id_ley
+            """,
+            (
+                id_proyecto, numero_ley, titulo_oficial, decreto_promulgacion,
+                edicion_gaceta, fecha_promulgacion, fecha_publicacion, fecha_vigencia,
+                url_gaceta, texto_oficial,
+            ),
+        )
+        id_ley = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        logger.info(f"✅ Ley promulgada guardada → id: {id_ley} ({numero_ley})")
+        return id_ley
+    except Exception as e:
+        try:
+            get_conn().rollback()
+        except Exception:
+            pass
+        logger.warning(f"Error guardando ley promulgada: {e}")
+        return None
+
 

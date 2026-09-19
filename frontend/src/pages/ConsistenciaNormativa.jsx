@@ -61,7 +61,7 @@ export default function ConsistenciaNormativa() {
   const ultimosAnalisis = normativaData?.ultimos_analisis || [];
 
   return (
-    <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '32px 24px' }}>
+    <div style={{ maxWidth: '1720px', width: '96%', margin: '0 auto', padding: '32px 24px' }}>
       {/* Header with CSS Robot Avatar Banner */}
       <div style={{
         marginBottom: '32px',

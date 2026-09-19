@@ -14,6 +14,11 @@ from sma_unified.agents.bicameral import AgenteBicameral
 from sma_unified.agents.veto_promulgacion import AgenteVetoPromulgacion
 from sma_unified.agents.publicacion import AgentePublicacionOficial
 from sma_unified.agents.constitucion_fondo import AgenteConstitucionFondo
+from sma_unified.agents.especialista_tecnico import AgenteEspecialistaTecnico
+from sma_unified.agents.presidencia_comision import AgentePresidenciaComision
+from sma_unified.agents.presupuesto import AgentePresupuesto
+from sma_unified.agents.difusion_ciudadana import AgenteDifusionCiudadana
+from sma_unified.agents.fiscalizacion import AgenteFiscalizacion
 from sma_unified.agents.crew_orchestrator import ejecutar_pipeline_completo, ejecutar_etapa_individual
 
 __all__ = [
@@ -26,15 +31,21 @@ __all__ = [
     "verificar_consistencia_normativa",
     "emitir_informe_pdf",
     "notificar_miembros_comision",
-    # Agentes CrewAI YAML
+    # Agentes CrewAI YAML (14 agentes del proceso legislativo boliviano)
     "AgenteConcentrador",
     "AgenteSecretarioCamara",
     "AgenteBicameral",
     "AgenteVetoPromulgacion",
     "AgentePublicacionOficial",
     "AgenteConstitucionFondo",
+    "AgenteEspecialistaTecnico",
+    "AgentePresidenciaComision",
+    "AgentePresupuesto",
+    "AgenteDifusionCiudadana",
+    "AgenteFiscalizacion",
     # Orquestador unificado
     "ejecutar_pipeline_completo",
     "ejecutar_etapa_individual",
 ]
+
 

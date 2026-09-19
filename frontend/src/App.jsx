@@ -19,7 +19,7 @@ const FOOTER = (
     color: '#475569',
     fontSize: '0.85rem',
   }}>
-    <div style={{ maxWidth: '1440px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+    <div style={{ maxWidth: '1720px', width: '96%', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
       <div>
         <strong style={{ color: '#0f172a' }}>SMA Congreso</strong> — Sistema Multi-Agente de Registro, Clasificación y Auditoría Parlamentaria
       </div>

@@ -30,6 +30,11 @@ from sma_unified.agents.bicameral import AgenteBicameral
 from sma_unified.agents.veto_promulgacion import AgenteVetoPromulgacion
 from sma_unified.agents.publicacion import AgentePublicacionOficial
 from sma_unified.agents.constitucion_fondo import AgenteConstitucionFondo
+from sma_unified.agents.especialista_tecnico import AgenteEspecialistaTecnico
+from sma_unified.agents.presidencia_comision import AgentePresidenciaComision
+from sma_unified.agents.presupuesto import AgentePresupuesto
+from sma_unified.agents.difusion_ciudadana import AgenteDifusionCiudadana
+from sma_unified.agents.fiscalizacion import AgenteFiscalizacion
 from sma_unified.db.neon_client import get_neon_client
 
 
@@ -92,6 +97,50 @@ def ejecutar_pipeline_completo(
     except Exception as e:
         _progress("Etapa_3_Analisis_Fondo", "ERROR", str(e))
         resultados["constitucion_fondo"] = {"error": str(e)}
+
+    # ── DICTAMEN TÉCNICO PERICIAL (Especialista Técnico) ───────────────────
+    _progress("Dictamen_Tecnico", "EN_PROCESO", "Evaluando viabilidad tecnica y estandares...")
+    try:
+        agente_tec = AgenteEspecialistaTecnico(base_agent=base)
+        resultado_tec = agente_tec.ejecutar(
+            texto_proyecto=texto_documento,
+            proyecto_info=proyecto_info
+        )
+        resultados["especialista_tecnico"] = resultado_tec
+        dic_tec = resultado_tec.get("dictamen_tecnico", {})
+        _progress("Dictamen_Tecnico", "COMPLETADO", f"Viabilidad técnica: {dic_tec.get('viabilidad_tecnica', 'VIABLE')}")
+        obs.append({
+            "tipo": "DICTAMEN_TECNICO",
+            "agente_origen": "Especialista Técnico",
+            "contenido": dic_tec.get("dictamen_tecnico_resumen", ""),
+            "riesgo": "BAJO" if dic_tec.get("viabilidad_tecnica") == "VIABLE" else "MEDIO",
+            "viabilidad": dic_tec.get("viabilidad_tecnica", "VIABLE")
+        })
+    except Exception as e:
+        _progress("Dictamen_Tecnico", "ERROR", str(e))
+        resultados["especialista_tecnico"] = {"error": str(e)}
+
+    # ── DICTAMEN FISCAL Y PRESUPUESTARIO (Planificación y Presupuesto) ────
+    _progress("Dictamen_Presupuestario", "EN_PROCESO", "Evaluando impacto en TGN y Ley 1178...")
+    try:
+        agente_pto = AgentePresupuesto(base_agent=base)
+        resultado_pto = agente_pto.ejecutar(
+            texto_proyecto=texto_documento,
+            proyecto_info=proyecto_info
+        )
+        resultados["presupuesto"] = resultado_pto
+        dic_pto = resultado_pto.get("evaluacion_fiscal", {})
+        _progress("Dictamen_Presupuestario", "COMPLETADO", f"Sostenibilidad: {dic_pto.get('viabilidad_fiscal', 'SOSTENIBLE')}")
+        obs.append({
+            "tipo": "DICTAMEN_PRESUPUESTARIO",
+            "agente_origen": "Planificación y Presupuesto",
+            "contenido": dic_pto.get("recomendacion_fiscal", ""),
+            "riesgo": "BAJO" if dic_pto.get("alerta_presupuesto_tgn") == "VERDE" else "ALTO",
+            "viabilidad": dic_pto.get("viabilidad_fiscal", "SOSTENIBLE")
+        })
+    except Exception as e:
+        _progress("Dictamen_Presupuestario", "ERROR", str(e))
+        resultados["presupuesto"] = {"error": str(e)}
 
     # ── ETAPA 4: Concentracion (Sintesis) ──────────────────────────────────
     _progress("Etapa_4_Sintesis", "EN_PROCESO", "Consolidando observaciones de todos los agentes...")
@@ -227,6 +276,38 @@ def ejecutar_pipeline_completo(
             pub = resultado_pub.get("publicacion_oficial", {})
             _progress("Etapa_8_Publicacion", "COMPLETADO",
                       f"{pub.get('numero_ley', 'N/A')} publicada | Vigencia: {pub.get('fecha_vigencia', 'N/A')}")
+
+            # ── FASE 5: DIFUSIÓN CIUDADANA EN LENGUAJE CLARO ─────────────
+            _progress("Difusion_Ciudadana", "EN_PROCESO", "Traduciendo a lenguaje claro y elaborando FAQ...")
+            try:
+                agente_dif = AgenteDifusionCiudadana(base_agent=base)
+                resultado_dif = agente_dif.ejecutar(
+                    texto_ley=texto_documento,
+                    ley_info=pub
+                )
+                resultados["difusion_ciudadana"] = resultado_dif
+                _progress("Difusion_Ciudadana", "COMPLETADO", "Guía ciudadana generada exitosamente")
+            except Exception as ed:
+                _progress("Difusion_Ciudadana", "ERROR", str(ed))
+                resultados["difusion_ciudadana"] = {"error": str(ed)}
+
+            # ── FASE 5: CONTROL POSTERIOR Y FISCALIZACIÓN ───────────────
+            _progress("Fiscalizacion", "EN_PROCESO", "Estableciendo línea base de control posterior...")
+            try:
+                agente_fisc = AgenteFiscalizacion(base_agent=base)
+                resultado_fisc = agente_fisc.ejecutar(
+                    datos_ejecucion={
+                        "dias_transcurridos": 0,
+                        "decreto_reglamentario_emitido": False,
+                        "presupuesto_ejecutado": 0.0
+                    },
+                    ley_info=pub
+                )
+                resultados["fiscalizacion"] = resultado_fisc
+                _progress("Fiscalizacion", "COMPLETADO", "Línea base de fiscalización registrada")
+            except Exception as ef:
+                _progress("Fiscalizacion", "ERROR", str(ef))
+                resultados["fiscalizacion"] = {"error": str(ef)}
         except Exception as e:
             _progress("Etapa_8_Publicacion", "ERROR", str(e))
             resultados["publicacion"] = {"error": str(e)}
@@ -262,7 +343,7 @@ def ejecutar_etapa_individual(
     Util para retry o para interfaces que ejecutan paso a paso.
     
     Args:
-        etapa: Nombre de la etapa (ej: 'bicameral', 'veto_promulgacion')
+        etapa: Nombre de la etapa (ej: 'bicameral', 'veto_promulgacion', 'especialista_tecnico')
         proyecto_info: Info del proyecto
         input_data: Datos especificos de entrada para la etapa
     """
@@ -274,6 +355,24 @@ def ejecutar_etapa_individual(
         return agente.ejecutar(
             texto_proyecto=input_data.get("texto_proyecto", ""),
             obs_formales=input_data.get("obs_formales", []),
+            proyecto_info=proyecto_info
+        )
+    elif etapa_lower in ("especialista_tecnico", "tecnico"):
+        agente = AgenteEspecialistaTecnico(base_agent=base)
+        return agente.ejecutar(
+            texto_proyecto=input_data.get("texto_proyecto", ""),
+            proyecto_info=proyecto_info
+        )
+    elif etapa_lower in ("presidencia_comision", "presidencia"):
+        agente = AgentePresidenciaComision(base_agent=base)
+        return agente.ejecutar(
+            texto_proyecto=input_data.get("texto_proyecto", ""),
+            proyecto_info=proyecto_info
+        )
+    elif etapa_lower in ("presupuesto", "planificacion_presupuesto"):
+        agente = AgentePresupuesto(base_agent=base)
+        return agente.ejecutar(
+            texto_proyecto=input_data.get("texto_proyecto", ""),
             proyecto_info=proyecto_info
         )
     elif etapa_lower in ("concentrador", "concentrar"):
@@ -307,5 +406,18 @@ def ejecutar_etapa_individual(
             evaluacion_veto=input_data.get("evaluacion_veto", {}),
             proyecto_info=proyecto_info
         )
+    elif etapa_lower in ("difusion_ciudadana", "difusion"):
+        agente = AgenteDifusionCiudadana(base_agent=base)
+        return agente.ejecutar(
+            texto_ley=input_data.get("texto_ley", ""),
+            ley_info=input_data.get("ley_info", {})
+        )
+    elif etapa_lower in ("fiscalizacion", "control_posterior"):
+        agente = AgenteFiscalizacion(base_agent=base)
+        return agente.ejecutar(
+            datos_ejecucion=input_data.get("datos_ejecucion", {}),
+            ley_info=input_data.get("ley_info", {})
+        )
     else:
         return {"error": f"Etapa desconocida: {etapa}"}
+

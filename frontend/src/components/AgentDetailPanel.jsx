@@ -1,7 +1,10 @@
 /**
  * AgentDetailPanel — Panel lateral deslizante de detalles del agente
  * Se abre desde la derecha cuando el usuario hace clic en un nodo circular.
- * Muestra: logo + banner, nombre, estado, descripción, webhook/logs, resultado.
+ * Muestra: banner, nombre, estado, voz (sección prominente), descripción, logs, resultado.
+ *
+ * CAMBIO v2: Panel de Voz movido arriba y mostrado de forma prominente al abrir.
+ *            El hook useLatinSpeech se instancia una sola vez por panel y se destruye al cerrar.
  */
 import React, { useEffect, useRef } from 'react';
 import {
@@ -13,12 +16,15 @@ import {
   Target,
   ShieldCheck,
   Cpu,
-  ChevronRight,
   Activity,
   Database,
   BookOpen,
   Eye,
+  Radio,
+  Mic,
 } from 'lucide-react';
+import { useLatinSpeech } from '../hooks/useLatinSpeech';
+import AgentVoiceModule from './AgentVoiceModule';
 
 // Mapeo de logos y banners institucionales
 const AGENT_LOGO_MAP = {
@@ -51,7 +57,7 @@ const AGENT_BANNER_MAP = {
   publicacion: '/robots/banner/emisor.png',
 };
 
-// Color institucional por agente (Diferenciación cromática en espectro de azul)
+// Color institucional por agente
 const AGENT_THEME_COLORS = {
   distribuidor: { primary: '#00B4D8', glow: 'rgba(0, 180, 216, 0.45)', bg: 'rgba(0, 180, 216, 0.1)' },
   comision: { primary: '#38BDF8', glow: 'rgba(56, 189, 248, 0.45)', bg: 'rgba(56, 189, 248, 0.1)' },
@@ -123,6 +129,9 @@ export default function AgentDetailPanel({
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
+  // Hook de voz — una instancia única por agente en este panel
+  const speechHook = useLatinSpeech();
+
   if (!agent) return null;
 
   const tc = AGENT_THEME_COLORS[agent.id] || AGENT_THEME_COLORS.distribuidor;
@@ -148,14 +157,14 @@ export default function AgentDetailPanel({
       <div className="agent-detail-panel" ref={panelRef}>
 
         {/* ── BANNER SUPERIOR ── */}
-        <div style={{ position: 'relative', height: '160px', flexShrink: 0, overflow: 'hidden' }}>
+        <div style={{ position: 'relative', height: '130px', flexShrink: 0, overflow: 'hidden' }}>
           {bannerUrl ? (
             <img
               src={bannerUrl}
               alt={`Banner ${agent.name}`}
               style={{
                 width: '100%', height: '100%', objectFit: 'cover',
-                filter: 'brightness(0.55) saturate(0.8)'
+                filter: 'brightness(0.45) saturate(0.7)'
               }}
             />
           ) : (
@@ -168,36 +177,36 @@ export default function AgentDetailPanel({
           {/* Gradiente sobre el banner */}
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(to bottom, rgba(11,37,69,0.2) 0%, rgba(11,37,69,0.85) 100%)'
+            background: 'linear-gradient(to bottom, rgba(11,37,69,0.2) 0%, rgba(11,37,69,0.92) 100%)'
           }} />
 
           {/* Botón cerrar */}
           <button
             onClick={onClose}
             style={{
-              position: 'absolute', top: '12px', right: '12px',
-              background: 'rgba(0, 0, 0, 0.5)', border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '50%', width: '32px', height: '32px',
+              position: 'absolute', top: '10px', right: '10px',
+              background: 'rgba(0, 0, 0, 0.55)', border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '50%', width: '30px', height: '30px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', color: '#e2e8f0', transition: 'all 0.2s'
             }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(231,111,81,0.6)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.5)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.55)'; }}
           >
-            <X size={16} />
+            <X size={14} />
           </button>
 
           {/* Título del agente sobre el banner */}
-          <div style={{ position: 'absolute', bottom: '12px', left: '16px', right: '60px' }}>
+          <div style={{ position: 'absolute', bottom: '10px', left: '14px', right: '50px' }}>
             <div style={{
-              fontSize: '0.68rem', fontWeight: 700, color: tc.primary,
-              letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '4px'
+              fontSize: '0.62rem', fontWeight: 700, color: tc.primary,
+              letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '3px'
             }}>
               {agent.phaseName}
             </div>
             <h2 style={{
-              fontSize: '1.15rem', fontWeight: 800, color: '#FFFFFF',
-              lineHeight: 1.2, textShadow: '0 2px 8px rgba(0,0,0,0.5)'
+              fontSize: '1.05rem', fontWeight: 800, color: '#FFFFFF',
+              lineHeight: 1.2, textShadow: '0 2px 8px rgba(0,0,0,0.5)', margin: 0
             }}>
               {agent.name}
             </h2>
@@ -206,15 +215,15 @@ export default function AgentDetailPanel({
 
         {/* ── LOGO + STATUS ROW ── */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '14px',
-          padding: '16px 20px', borderBottom: `1px solid rgba(0,180,216,0.15)`,
-          background: 'rgba(0, 0, 0, 0.2)', flexShrink: 0
+          display: 'flex', alignItems: 'center', gap: '12px',
+          padding: '12px 16px', borderBottom: `1px solid rgba(0,180,216,0.15)`,
+          background: 'rgba(0, 0, 0, 0.25)', flexShrink: 0
         }}>
 
           {/* Logo circular */}
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <div style={{
-              width: '68px', height: '68px', borderRadius: '50%',
+              width: '56px', height: '56px', borderRadius: '50%',
               border: `2.5px solid ${tc.primary}`,
               boxShadow: isActive ? `0 0 18px ${tc.glow}` : 'none',
               overflow: 'hidden', background: '#0F172A',
@@ -229,15 +238,10 @@ export default function AgentDetailPanel({
                 />
               ) : (
                 <div style={{
-                  width: '100%',
-                  height: '100%',
+                  width: '100%', height: '100%',
                   background: `linear-gradient(135deg, #0B2545, ${tc.primary}55)`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: tc.primary,
-                  fontWeight: 800,
-                  fontSize: '1.4rem'
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: tc.primary, fontWeight: 800, fontSize: '1.2rem'
                 }}>
                   {agent.name?.charAt(0) || 'A'}
                 </div>
@@ -254,11 +258,11 @@ export default function AgentDetailPanel({
             {isDone && (
               <div style={{
                 position: 'absolute', bottom: '0', right: '0',
-                background: '#8AC926', borderRadius: '50%', width: '20px', height: '20px',
+                background: '#8AC926', borderRadius: '50%', width: '18px', height: '18px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 border: '2px solid #0B2545'
               }}>
-                <CheckCircle2 size={12} color="#0B2545" />
+                <CheckCircle2 size={11} color="#0B2545" />
               </div>
             )}
           </div>
@@ -266,14 +270,14 @@ export default function AgentDetailPanel({
           {/* Nombre + estado */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
-              fontSize: '0.95rem', fontWeight: 800, color: '#F1F5F9',
-              marginBottom: '4px', fontFamily: 'Outfit, sans-serif',
+              fontSize: '0.9rem', fontWeight: 800, color: '#F1F5F9',
+              marginBottom: '3px', fontFamily: 'Outfit, sans-serif',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
             }}>
               {agent.name}
             </div>
             <div style={{
-              fontSize: '0.78rem', color: '#64748B', marginBottom: '8px',
+              fontSize: '0.74rem', color: '#64748B', marginBottom: '6px',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
             }}>
               {agent.role}
@@ -283,32 +287,102 @@ export default function AgentDetailPanel({
 
           {/* Step badge */}
           <div style={{
-            fontSize: '0.65rem', fontWeight: 800, color: tc.primary,
+            fontSize: '0.62rem', fontWeight: 800, color: tc.primary,
             background: tc.bg, border: `1px solid ${tc.primary}55`,
-            borderRadius: '8px', padding: '3px 8px', fontFamily: 'monospace', flexShrink: 0
+            borderRadius: '8px', padding: '3px 7px', fontFamily: 'monospace', flexShrink: 0
           }}>
             P{agent.stepNumber}
           </div>
         </div>
 
         {/* ── CUERPO SCROLLABLE ── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+
+          {/* ══════════════════════════════════════════════════════════ */}
+          {/* SECCIÓN DE VOZ — PROMINENTE, PRIMERO QUE TODO */}
+          {/* ══════════════════════════════════════════════════════════ */}
+          <div style={{
+            marginBottom: '16px',
+            background: `linear-gradient(135deg, rgba(15,23,42,0.95), ${tc.primary}08)`,
+            borderRadius: '14px',
+            border: `1.5px solid ${tc.primary}30`,
+            padding: '14px',
+            boxShadow: `0 4px 20px ${tc.glow}20`
+          }}>
+            {/* Header de sección voz */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              marginBottom: '12px',
+              paddingBottom: '10px',
+              borderBottom: `1px solid ${tc.primary}20`
+            }}>
+              <div style={{
+                width: '28px', height: '28px', borderRadius: '8px',
+                background: `linear-gradient(135deg, ${tc.primary}30, ${tc.primary}10)`,
+                border: `1px solid ${tc.primary}40`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <Mic size={14} color={tc.primary} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: tc.primary, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                  Interacción por Voz
+                </div>
+                <div style={{ fontSize: '0.65rem', color: '#475569' }}>
+                  Habla o escribe comandos para este agente
+                </div>
+              </div>
+              {/* Indicador de modo STT activo */}
+              {speechHook.isSTTSupported && (
+                <div style={{
+                  marginLeft: 'auto', fontSize: '0.62rem', fontWeight: 600,
+                  color: '#10b981', background: 'rgba(16,185,129,0.1)',
+                  border: '1px solid rgba(16,185,129,0.3)',
+                  borderRadius: '6px', padding: '2px 7px',
+                  display: 'flex', alignItems: 'center', gap: '4px'
+                }}>
+                  <Radio size={9} /> Web Speech API
+                </div>
+              )}
+              {!speechHook.isSTTSupported && (
+                <div style={{
+                  marginLeft: 'auto', fontSize: '0.62rem', fontWeight: 600,
+                  color: '#00f0ff', background: 'rgba(0,240,255,0.08)',
+                  border: '1px solid rgba(0,240,255,0.25)',
+                  borderRadius: '6px', padding: '2px 7px',
+                  display: 'flex', alignItems: 'center', gap: '4px'
+                }}>
+                  <Radio size={9} /> Modo WAV Servidor
+                </div>
+              )}
+            </div>
+
+            <AgentVoiceModule
+              agentId={agent.id}
+              agentLabel={agent.name}
+              primaryColor={tc.primary}
+              sesionId={null}
+              resultData={resultData}
+              speechHook={speechHook}
+              compact={false}
+            />
+          </div>
 
           {/* Modelo IA */}
           {agent.model && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: '6px',
-              marginBottom: '16px', padding: '8px 12px', borderRadius: '10px',
+              marginBottom: '14px', padding: '7px 10px', borderRadius: '10px',
               background: 'rgba(2, 132, 199, 0.1)', border: '1px solid rgba(2, 132, 199, 0.25)'
             }}>
-              <Cpu size={14} color="#38BDF8" />
-              <span style={{ fontSize: '0.78rem', color: '#94A3B8', fontFamily: 'monospace' }}>
+              <Cpu size={13} color="#38BDF8" />
+              <span style={{ fontSize: '0.74rem', color: '#94A3B8', fontFamily: 'monospace' }}>
                 Modelo: <strong style={{ color: '#38BDF8' }}>{agent.model}</strong>
               </span>
               {agent.db && agent.db.length > 0 && (
                 <>
-                  <Database size={12} color="#64748B" style={{ marginLeft: '8px' }} />
-                  <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                  <Database size={11} color="#64748B" style={{ marginLeft: '8px' }} />
+                  <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
                     {agent.db.join(', ')}
                   </span>
                 </>
@@ -317,16 +391,16 @@ export default function AgentDetailPanel({
           )}
 
           {/* Descripción */}
-          <Section title="Responsabilidad" icon={<Target size={14} />} color={tc.primary}>
-            <p style={{ fontSize: '0.85rem', color: '#CBD5E1', lineHeight: 1.6 }}>
+          <Section title="Responsabilidad" icon={<Target size={13} />} color={tc.primary}>
+            <p style={{ fontSize: '0.83rem', color: '#CBD5E1', lineHeight: 1.6 }}>
               {agent.desc}
             </p>
           </Section>
 
           {/* Justificación */}
           {agent.justificacion && (
-            <Section title="Fundamento Legal" icon={<BookOpen size={14} />} color={tc.primary}>
-              <p style={{ fontSize: '0.82rem', color: '#94A3B8', lineHeight: 1.55 }}>
+            <Section title="Fundamento Legal" icon={<BookOpen size={13} />} color={tc.primary}>
+              <p style={{ fontSize: '0.79rem', color: '#94A3B8', lineHeight: 1.55 }}>
                 {agent.justificacion}
               </p>
             </Section>
@@ -334,8 +408,8 @@ export default function AgentDetailPanel({
 
           {/* Garantía Ética */}
           {agent.garantiaEtica && (
-            <Section title="Garantía Ética" icon={<ShieldCheck size={14} />} color="#8AC926">
-              <p style={{ fontSize: '0.82rem', color: '#94A3B8', lineHeight: 1.55 }}>
+            <Section title="Garantía Ética" icon={<ShieldCheck size={13} />} color="#8AC926">
+              <p style={{ fontSize: '0.79rem', color: '#94A3B8', lineHeight: 1.55 }}>
                 {agent.garantiaEtica}
               </p>
             </Section>
@@ -344,12 +418,12 @@ export default function AgentDetailPanel({
           {/* Logs / Webhooks */}
           {agentLogs.length > 0 && (
             <Section title={`Registro de Actividad (${agentLogs.length})`}
-              icon={<Activity size={14} />} color="#F4A261">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              icon={<Activity size={13} />} color="#F4A261">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                 {agentLogs.map((log, i) => (
                   <div key={i} style={{
                     display: 'flex', gap: '8px', alignItems: 'flex-start',
-                    padding: '7px 10px', borderRadius: '8px',
+                    padding: '6px 8px', borderRadius: '8px',
                     background: log.estado === 'ERROR' ? 'rgba(231,111,81,0.1)' :
                       log.estado === 'COMPLETADO' ? 'rgba(138,201,38,0.1)' :
                         'rgba(0,180,216,0.08)',
@@ -358,19 +432,19 @@ export default function AgentDetailPanel({
                         'rgba(0,180,216,0.2)'}`
                   }}>
                     <div style={{
-                      fontSize: '0.62rem', color: '#64748B',
+                      fontSize: '0.6rem', color: '#64748B',
                       fontFamily: 'monospace', whiteSpace: 'nowrap', marginTop: '2px'
                     }}>
                       {log.ts}
                     </div>
                     <div style={{
-                      fontSize: '0.78rem', color: '#CBD5E1', flex: 1,
+                      fontSize: '0.74rem', color: '#CBD5E1', flex: 1,
                       lineHeight: 1.4
                     }}>
                       {log.msg}
                     </div>
                     <div style={{
-                      fontSize: '0.62rem', fontWeight: 700,
+                      fontSize: '0.6rem', fontWeight: 700,
                       color: log.estado === 'ERROR' ? '#E76F51' :
                         log.estado === 'COMPLETADO' ? '#8AC926' : '#00B4D8',
                       whiteSpace: 'nowrap'
@@ -385,11 +459,11 @@ export default function AgentDetailPanel({
 
           {/* Resultado del agente (si existe) */}
           {isDone && resultData && (
-            <Section title="Resultado del Proceso" icon={<Eye size={14} />} color="#8AC926">
+            <Section title="Resultado del Proceso" icon={<Eye size={13} />} color="#8AC926">
               <div style={{
                 background: 'rgba(0, 0, 0, 0.3)', borderRadius: '10px',
-                padding: '12px', fontFamily: 'monospace', fontSize: '0.72rem',
-                color: '#94A3B8', lineHeight: 1.6, maxHeight: '200px', overflowY: 'auto',
+                padding: '10px', fontFamily: 'monospace', fontSize: '0.69rem',
+                color: '#94A3B8', lineHeight: 1.6, maxHeight: '180px', overflowY: 'auto',
                 border: '1px solid rgba(138, 201, 38, 0.2)'
               }}>
                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -404,10 +478,10 @@ export default function AgentDetailPanel({
           {/* Estado vacío si no hay datos */}
           {!isDone && !isActive && (
             <div style={{
-              textAlign: 'center', padding: '24px 16px',
-              color: '#475569', fontSize: '0.85rem'
+              textAlign: 'center', padding: '20px 14px',
+              color: '#475569', fontSize: '0.82rem'
             }}>
-              <Clock size={32} color="#334155" style={{ margin: '0 auto 10px' }} />
+              <Clock size={28} color="#334155" style={{ margin: '0 auto 10px' }} />
               <p>Este agente aún no ha sido ejecutado en esta sesión.</p>
             </div>
           )}
@@ -415,25 +489,25 @@ export default function AgentDetailPanel({
 
         {/* ── FOOTER ── */}
         <div style={{
-          padding: '14px 20px', borderTop: '1px solid rgba(0,180,216,0.15)',
+          padding: '12px 16px', borderTop: '1px solid rgba(0,180,216,0.15)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           background: 'rgba(0, 0, 0, 0.2)', flexShrink: 0
         }}>
-          <span style={{ fontSize: '0.72rem', color: '#475569' }}>
+          <span style={{ fontSize: '0.68rem', color: '#475569' }}>
             Paso {agent.stepNumber} · {agent.phaseName}
           </span>
           <button
             onClick={onClose}
             style={{
               background: 'rgba(0, 180, 216, 0.12)', border: '1px solid rgba(0, 180, 216, 0.3)',
-              color: '#00B4D8', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer',
-              fontSize: '0.78rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px',
+              color: '#00B4D8', padding: '5px 12px', borderRadius: '8px', cursor: 'pointer',
+              fontSize: '0.74rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px',
               fontFamily: 'Outfit, sans-serif', transition: 'all 0.2s'
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,180,216,0.22)'}
             onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,180,216,0.12)'}
           >
-            <X size={13} /> Cerrar Panel
+            <X size={12} /> Cerrar Panel
           </button>
         </div>
       </div>
@@ -444,10 +518,10 @@ export default function AgentDetailPanel({
 // ── Sub-componente de sección ──
 function Section({ title, icon, color, children }) {
   return (
-    <div style={{ marginBottom: '16px' }}>
+    <div style={{ marginBottom: '14px' }}>
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px',
-        fontSize: '0.72rem', fontWeight: 800, color: color, textTransform: 'uppercase',
+        display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '7px',
+        fontSize: '0.68rem', fontWeight: 800, color: color, textTransform: 'uppercase',
         letterSpacing: '0.06em'
       }}>
         <span style={{ color }}>{icon}</span>

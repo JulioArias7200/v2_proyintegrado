@@ -91,6 +91,24 @@ def _ensure_indexes(db):
         msg_ofic.create_index([("sesion_id", 1)])
         msg_ofic.create_index([("fecha_envio", -1)])
 
+        # ── Colecciones de Expedientes Digitales, Audio y Ciudadanía ──
+        exp_dig = db["expedientes_digitales"]
+        exp_dig.create_index([("id_proyecto", 1)], unique=True, sparse=True)
+        exp_dig.create_index([("estado", 1)])
+
+        reg_aud = db["registros_audio"]
+        reg_aud.create_index([("id_proyecto", 1)])
+        reg_aud.create_index([("tipo_audio", 1)])
+        reg_aud.create_index([("fecha_captura", -1)])
+
+        resp_ciud = db["respuestas_ciudadanas"]
+        resp_ciud.create_index([("id_consulta", 1)], sparse=True)
+        resp_ciud.create_index([("timestamp", -1)])
+
+        actas_det = db["actas_detalladas"]
+        actas_det.create_index([("id_sesion", 1)])
+        actas_det.create_index([("fecha_sesion", -1)])
+
         logger.info("Índices MongoDB verificados/creados.")
     except Exception as e:
         logger.warning(f"No se pudieron crear índices: {e}")
@@ -443,3 +461,63 @@ def obtener_kpis_constitucionales_mongo() -> Dict[str, Any]:
         "avg_confianza": avg_confianza,
         "por_severidad": sev_stats,
     }
+
+
+# ── Colecciones Especializadas del Proceso Legislativo 14 Agentes ────────────
+
+def guardar_expediente_digital_mongo(data: Dict[str, Any]) -> str:
+    """Guarda o actualiza un expediente digital completo en expedientes_digitales."""
+    try:
+        db = get_db()
+        col = db["expedientes_digitales"]
+        id_proyecto = data.get("id_proyecto", str(uuid.uuid4()))
+        data["timestamp_actualizacion"] = datetime.now(timezone.utc)
+        col.update_one(
+            {"id_proyecto": id_proyecto},
+            {"$set": data},
+            upsert=True
+        )
+        return id_proyecto
+    except Exception as e:
+        logger.warning(f"Error guardando expediente digital en Mongo: {e}")
+        return ""
+
+
+def guardar_registro_audio_mongo(data: Dict[str, Any]) -> str:
+    """Registra metadata de audio capturado (STT/TTS) en registros_audio."""
+    try:
+        db = get_db()
+        col = db["registros_audio"]
+        data["fecha_captura"] = datetime.now(timezone.utc)
+        res = col.insert_one(data)
+        return str(res.inserted_id)
+    except Exception as e:
+        logger.warning(f"Error guardando registro de audio en Mongo: {e}")
+        return ""
+
+
+def guardar_respuesta_ciudadana_mongo(data: Dict[str, Any]) -> str:
+    """Registra consulta ciudadana atendida y respuesta generada en respuestas_ciudadanas."""
+    try:
+        db = get_db()
+        col = db["respuestas_ciudadanas"]
+        data["timestamp"] = datetime.now(timezone.utc)
+        res = col.insert_one(data)
+        return str(res.inserted_id)
+    except Exception as e:
+        logger.warning(f"Error guardando respuesta ciudadana en Mongo: {e}")
+        return ""
+
+
+def guardar_acta_detallada_mongo(data: Dict[str, Any]) -> str:
+    """Registra acta completa con cronología paso a paso en actas_detalladas."""
+    try:
+        db = get_db()
+        col = db["actas_detalladas"]
+        data["fecha_registro"] = datetime.now(timezone.utc)
+        res = col.insert_one(data)
+        return str(res.inserted_id)
+    except Exception as e:
+        logger.warning(f"Error guardando acta detallada en Mongo: {e}")
+        return ""
+

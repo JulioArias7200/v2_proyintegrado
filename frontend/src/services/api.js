@@ -30,6 +30,58 @@ async function request(endpoint, options = {}) {
   }
 }
 
+// CHAT CONVERSACIONAL POR AGENTE — retornan { success: false, error } en vez de lanzar
+export async function sendChatMessage({ sesionId = null, agente, mensaje, datosContexto = null, confirmar = false }) {
+  try {
+    return await request('/chat/mensaje', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sesion_id: sesionId,
+        agente,
+        mensaje,
+        datos_contexto: datosContexto,
+        confirmar,
+      }),
+    });
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function sendChatAudio({ audioBlob, agente, sesionId = null, datosContexto = null }) {
+  try {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'audio_chat.wav');
+    formData.append('agente', agente);
+    if (sesionId) formData.append('sesion_id', sesionId);
+    if (datosContexto) formData.append('datos_contexto', JSON.stringify(datosContexto));
+    return await request('/chat/audio', { method: 'POST', body: formData });
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function getChatHistory(sesionId) {
+  try {
+    return await request(`/chat/historial/${sesionId}`);
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function confirmarChatAccion(sesionId) {
+  try {
+    return await request('/chat/confirmar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sesion_id: sesionId }),
+    });
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
 export const api = {
   getHealth: () => request('/health'),
   getDashboardStats: () => request('/dashboard/stats'),
@@ -98,6 +150,9 @@ export const api = {
   runAgentPublicacion: (data) =>
     request('/pipeline/agent_publicacion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
+  getTextoConsolidado: (idProyecto) => request(`/proyectos/${idProyecto}/texto-consolidado`),
+  generarPdfGaceta: (idProyecto) => request(`/proyectos/${idProyecto}/generar-pdf-gaceta`, { method: 'POST' }),
+
   runPipelineCompleto: (data) =>
     request('/pipeline/pipeline_completo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
@@ -117,4 +172,56 @@ export const api = {
     const q = sesion_id ? `?limit=${limit}&sesion_id=${sesion_id}` : `?limit=${limit}`;
     return request(`/messages${q}`);
   },
+
+  // MÓDULO DE VOZ MULTIMODAL (STT / TTS / COMANDOS)
+  vozEstado: () => request('/voz/estado'),
+  vozLeer: (data) =>
+    request('/voz/leer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  vozComando: (data) =>
+    request('/voz/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  vozComandosAgente: (agente) => request(`/voz/comandos/${agente}`),
+
+  // MÉTODOS GENÉRICOS DE ACCESO A API (CON NORMALIZACIÓN DE PREFIJO /api)
+  post: (endpoint, data) => {
+    const cleanEndpoint = endpoint.startsWith('/api/')
+      ? endpoint.slice(4)
+      : endpoint.startsWith('/api')
+      ? endpoint.slice(4)
+      : endpoint;
+    return request(cleanEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  get: (endpoint) => {
+    const cleanEndpoint = endpoint.startsWith('/api/')
+      ? endpoint.slice(4)
+      : endpoint.startsWith('/api')
+      ? endpoint.slice(4)
+      : endpoint;
+    return request(cleanEndpoint);
+  },
+
+  // MENSAJE OFICIAL AL PRESIDENTE DEL SENADO (CREWAI + TOKEN GOOGLE)
+  redactarMensajeSenado: (data) =>
+    request('/pipeline/mensaje_presidente_senado', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, solo_redactar: true }),
+    }),
+
+  enviarMensajeSenado: (data) =>
+    request('/pipeline/mensaje_presidente_senado', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, solo_redactar: false }),
+    }),
+
+  // CHAT CONVERSACIONAL POR AGENTE
+  sendChatMessage,
+  sendChatAudio,
+  getChatHistory,
+  confirmarChatAccion,
 };

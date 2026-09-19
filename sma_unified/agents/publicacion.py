@@ -163,6 +163,14 @@ class AgentePublicacionOficial:
         "Responde ÚNICAMENTE con JSON válido, sin texto adicional."
     )
 
+    def __init__(self, base_agent: Optional[Any] = None):
+        self.base = base_agent
+        if base_agent:
+            try:
+                self.agent = base_agent.crear_agente("Publicacion_Oficial")
+            except Exception:
+                self.agent = None
+
     def ejecutar(self, evaluacion_veto: Dict, proyecto_info: Dict) -> Dict:
         """
         Pipeline determinista de 5 pasos:

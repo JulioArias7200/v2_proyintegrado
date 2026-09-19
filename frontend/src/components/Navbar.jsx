@@ -38,7 +38,8 @@ export default function Navbar({ activeTab, setActiveTab, healthStatus, user, on
       padding: '0 28px',
     }}>
       <div style={{
-        maxWidth: '1440px',
+        maxWidth: '1720px',
+        width: '96%',
         margin: '0 auto',
         height: '72px',
         display: 'flex',

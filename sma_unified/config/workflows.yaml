@@ -1,123 +1,92 @@
 # ============================================================================
 # DEFINICIÓN DE WORKFLOWS — SMA CONGRESO (CrewAI Orchestration)
+# Proceso Legislativo Plurinacional de Bolivia — 5 Fases Canónicas
 # ============================================================================
 
 workflows:
-  # ========== WORKFLOW COMPLETO ==========
+  # ========== WORKFLOW INTEGRAL COMPLETO (5 FASES) ==========
   Pipeline_Legislativo_Completo:
-    nombre: "Pipeline Legislativo Completo"
-    descripcion: "Flujo completo desde ingreso hasta publicación oficial"
+    nombre: "Pipeline Legislativo Completo de Bolivia"
+    descripcion: "Flujo integral desde la Mesa de Entradas hasta la Difusión Ciudadana y Fiscalización Posterior"
     
     etapas:
-      Etapa_1_Clasificacion:
-        nombre: "Clasificación y Control Humano"
+      Fase_1_Ingreso_Admision:
+        nombre: "Fase 1: Ingreso, Admisión y Atención"
         tareas:
           - Clasificar_Documento
+          - Atender_Consulta_Ciudadana
         punto_control: true
-        descripcion: "El operador confirma o ajusta la clasificación automática"
-      
-      Etapa_2_Auditoria_Paralela:
-        nombre: "Auditoría en Paralelo"
+        descripcion: "Recepción de iniciativa legislativa, validación formal y asignación de expediente"
+
+      Fase_2_Comision_Dictamenes:
+        nombre: "Fase 2: Trabajo en Comisión y Dictámenes Especializados"
         tareas:
           - Auditar_Constitucionalidad
           - Analizar_Consistencia
-          - Asignar_Comision
-        paralelo: true
-        timeout_segundos: 60
-      
-      Etapa_3_Analisis_Fondo:
-        nombre: "Análisis Constitucional de Fondo"
-        tareas:
+          - Evaluar_Viabilidad_Tecnica
+          - Planificar_Debate_Comision
           - Analizar_Fondo_Constitucional
-        dependencias:
-          - Etapa_2_Auditoria_Paralela
-      
-      Etapa_4_Sintesis:
-        nombre: "Síntesis Consolidada"
-        tareas:
+          - Evaluar_Impacto_Presupuestario
           - Concentrar_Observaciones
+        paralelo: true
         dependencias:
-          - Etapa_3_Analisis_Fondo
-      
-      Etapa_5_Debate:
-        nombre: "Debate Legislativo"
+          - Fase_1_Ingreso_Admision
+        descripcion: "Auditoría legal (forma y fondo), técnica, presupuestaria y consolidación de expediente"
+
+      Fase_3_Plenaria_Bicameral:
+        nombre: "Fase 3: Debate en Plenaria y Trámite Bicameral"
         tareas:
           - Registrar_Debate
-        punto_control: true
-        descripcion: "Debate en cámaras, registro de intervenciones y votaciones"
-      
-      Etapa_6_Bicameral:
-        nombre: "Trámite Bicameral"
-        tareas:
           - Gestionar_Bicameral
-      
-      Etapa_7_Veto:
-        nombre: "Evaluación de Veto/Promulgación"
+        punto_control: true
+        dependencias:
+          - Fase_2_Comision_Dictamenes
+        descripcion: "Debate artículo por artículo, votación nominal y coordinación entre Cámara de Origen y Revisora"
+
+      Fase_4_Ejecutivo_Promulgacion:
+        nombre: "Fase 4: Evaluación Ejecutiva y Publicación Oficial"
         tareas:
           - Evaluar_Veto_Promulgacion
-        dependencias:
-          - Etapa_6_Bicameral
-      
-      Etapa_8_Publicacion:
-        nombre: "Publicación Oficial"
-        tareas:
           - Publicar_Ley_Oficial
         dependencias:
-          - Etapa_7_Veto
-    
-    tiempo_estimado_minutos: 120
+          - Fase_3_Plenaria_Bicameral
+        descripcion: "Evaluación multicriterio presidencial (10 días), promulgación y publicación en Gaceta Oficial"
 
-  # ========== WORKFLOW SIMPLIFICADO ==========
-  Pipeline_Auditoria_Simple:
-    nombre: "Auditoría Simplificada"
-    descripcion: "Para proyectos de bajo riesgo o Peticiones"
+      Fase_5_Ciudadania_Fiscalizacion:
+        nombre: "Fase 5: Difusión en Lenguaje Claro y Control Posterior"
+        tareas:
+          - Generar_Difusion_Ciudadana
+          - Monitorear_Fiscalizacion
+          - Notificar_Comision
+        dependencias:
+          - Fase_4_Ejecutivo_Promulgacion
+        descripcion: "Explicación pedagógica ciudadana, monitoreo de decretos reglamentarios y auditoría de ejecución"
+
+    tiempo_estimado_minutos: 90
+
+  # ========== WORKFLOW RÁPIDO DE AUDITORÍA Y FILTRO INICIAL ==========
+  Pipeline_Auditoria_Rapida:
+    nombre: "Filtro Rápido de Admisibilidad y Coherencia"
+    descripcion: "Verificación de forma, constitucionalidad literal y antinomias para admisión inmediata"
     
     etapas:
-      Etapa_1_Clasificacion:
+      Etapa_Clasificacion:
         nombre: "Clasificación"
         tareas:
           - Clasificar_Documento
-        punto_control: true
+        punto_control: false
       
-      Etapa_2_Auditoria_Rapida:
-        nombre: "Auditoría Rápida"
+      Etapa_Auditoria:
+        nombre: "Auditoría Legal Inmediata"
         tareas:
           - Auditar_Constitucionalidad
           - Analizar_Consistencia
         paralelo: true
-        timeout_segundos: 30
       
-      Etapa_3_Informe:
-        nombre: "Generación de Informe"
+      Etapa_Informe:
+        nombre: "Consolidación de Admisibilidad"
         tareas:
           - Concentrar_Observaciones
         punto_control: true
-    
-    tiempo_estimado_minutos: 15
 
-  # ========== WORKFLOW CONSTITUCIONAL ==========
-  Pipeline_Analisis_Constitucional:
-    nombre: "Análisis Constitucional Profundo"
-    descripcion: "Análisis detallado de constitucionalidad de fondo"
-    
-    etapas:
-      Etapa_1_Revision_Formal:
-        nombre: "Revisión Constitucional Formal"
-        tareas:
-          - Auditar_Constitucionalidad
-      
-      Etapa_2_Analisis_Fondo:
-        nombre: "Análisis Hermenéutico"
-        tareas:
-          - Analizar_Fondo_Constitucional
-        dependencias:
-          - Etapa_1_Revision_Formal
-      
-      Etapa_3_Dictamen:
-        nombre: "Generación de Dictamen"
-        tareas:
-          - Concentrar_Observaciones
-        dependencias:
-          - Etapa_2_Analisis_Fondo
-    
-    tiempo_estimado_minutos: 45
+    tiempo_estimado_minutos: 10

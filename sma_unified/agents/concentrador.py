@@ -183,6 +183,15 @@ class AgenteConcentrador:
         "5. Responde ÚNICAMENTE con JSON válido, sin texto adicional."
     )
 
+    def __init__(self, base_agent: Optional[Any] = None):
+        self.base = base_agent
+        if base_agent:
+            try:
+                self.agent = base_agent.crear_agente("Concentrador")
+            except Exception:
+                self.agent = None
+
+
     def ejecutar(self, observaciones: List[Dict], proyecto_info: Dict) -> Dict:
         """
         Pipeline CoT de 7 pasos — síntesis fidedigna.

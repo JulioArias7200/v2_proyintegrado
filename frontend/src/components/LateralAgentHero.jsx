@@ -42,9 +42,10 @@ export default function LateralAgentHero({
   isProcessing = false,
   isCompleted = false,
 }) {
+  const [imgError, setImgError] = useState(false);
+
   if (!agent) return null;
 
-  const [imgError, setImgError] = useState(false);
   const bannerUrl = AGENT_BANNER_MAP[agent.id] || '/robots/banner/disribuidor.png';
   const accent = AGENT_ACCENT[agent.id] || '#00B4D8';
 

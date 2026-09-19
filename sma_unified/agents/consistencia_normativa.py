@@ -50,6 +50,8 @@ from sma_unified.db.mongo_atlas import publicar_mensaje, marcar_en_proceso, marc
 from sma_unified.db.neon_postgres import (
     buscar_articulos_normativos_semantico,
     guardar_analisis_consistencia,
+    guardar_correccion_proyecto,
+    obtener_email_autor_proyecto,
 )
 
 # ── Constantes de profundidad ────────────────────────────────────────────────
@@ -433,6 +435,48 @@ def verificar_consistencia_normativa(
         f"Consistencia normativa: {len(hallazgos)} hallazgos | "
         f"Riesgo: {resumen['nivel_riesgo_global']} [{duracion_ms}ms]"
     )
+
+    # ── Persistir correcciones automáticas por hallazgos críticos ────────────────────
+    tipos_criticos = {"contradiccion", "repeticion"}
+    hallazgos_criticos = [h for h in hallazgos if (h.get("tipo_relacion") in tipos_criticos or h.get("tipo") in tipos_criticos)]
+    if id_proyecto and hallazgos_criticos:
+        email_autor = obtener_email_autor_proyecto(id_proyecto)
+        for hallazgo in hallazgos_criticos:
+            norma_nombre = hallazgo.get("norma") or hallazgo.get("norma_vigente") or hallazgo.get("ley_referencia") or ""
+            art_cand = hallazgo.get("numero_articulo") or ""
+            norma_ref = f"{norma_nombre} Art. {art_cand}".strip()
+            art_proy = hallazgo.get("articulo_proyecto") or "Documento"
+            motivo_txt = hallazgo.get("justificacion") or hallazgo.get("fundamento") or ""
+            texto_proy = hallazgo.get("texto_proyecto") or hallazgo.get("justificacion") or ""
+
+            # Corrección para Mesa de Senadores Normativa
+            guardar_correccion_proyecto(
+                id_proyecto=id_proyecto,
+                tipo_corrector="SENADO_NORMATIVA",
+                agente_origen="AGENTE_CONSISTENCIA_NORMATIVA",
+                articulo_afectado=art_proy,
+                texto_original=texto_proy,
+                motivo=motivo_txt,
+                referencia_norma=str(norma_ref)[:200] if norma_ref else None,
+                sesion_id=sesion_id,
+            )
+            # Corrección para el autor del proyecto si tiene email
+            if email_autor:
+                guardar_correccion_proyecto(
+                    id_proyecto=id_proyecto,
+                    tipo_corrector="AUTOR_PROYECTO",
+                    agente_origen="AGENTE_CONSISTENCIA_NORMATIVA",
+                    corrector_email=email_autor,
+                    articulo_afectado=art_proy,
+                    texto_original=texto_proy,
+                    motivo=motivo_txt,
+                    referencia_norma=str(norma_ref)[:200] if norma_ref else None,
+                    sesion_id=sesion_id,
+                )
+        logger.info(
+            f"[ConsistenciaNormativa] {len(hallazgos_criticos)} corrección(es) normativas "
+            f"guardadas en sistema.correcciones_proyecto para proyecto {id_proyecto}"
+        )
 
     return {
         "hallazgos": hallazgos,
