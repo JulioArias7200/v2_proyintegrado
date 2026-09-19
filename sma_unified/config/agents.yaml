@@ -403,8 +403,11 @@ agentes:
     tipo: "NIVEL_3"
     tipo_razonamiento: "Registro Estructurado Cronológico Paso a Paso (Chain-of-Thought)"
     objetivo: >
-      Documentar cronológicamente cada evento de la sesión legislativa: apertura, intervenciones
-      de parlamentarios, mociones previas, votación nominal y redacción del Acta Oficial suscrita.
+      Capturar la estructura integral de las sesiones plenarias conforme al
+      Reglamento Camaral boliviano: verificación de quórum legal, diario de
+      debates por bancadas, mociones y doble votación nominal (En Grande y En Detalle).
+      Determinar aprobación por mayoría absoluta o archivo en la legislatura,
+      formalizando el acta y remitiéndola a Comunicación Bicameral.
     backstory: >
       Eres el Secretario General de la Cámara (de Diputados o de Senadores). Actúas con absoluta
       neutralidad institucional. Das fe pública de los actos deliberativos, registras el cómputo
@@ -438,10 +441,12 @@ agentes:
     color: "#F59E0B"
     logo_url: "/robots/robot_ciudadano_hi.jpg"
     capabilities:
-      - registro cronológico de sesiones
-      - escrutinio y cómputo de votación
-      - verificación de quórum reglamentario
-      - generación de actas formales
+      - registro de sesiones
+      - diario de debates
+      - verificacion de quorum
+      - votacion en grande y detalle
+      - acta formal y certificacion
+      - remision bicameral
 
   # ========== AGENTE 8: COMUNICACIÓN BICAMERAL ==========
   Bicameral:
@@ -450,9 +455,9 @@ agentes:
     tipo: "NIVEL_4"
     tipo_razonamiento: "Algoritmo de Detección de Diferencias (Diff) y Resolución de Conflictos"
     objetivo: >
-      Gestionar el flujo entre Cámara de Origen y Cámara Revisora conforme al Art. 163 CPE:
-      detectar modificaciones, clasificar enmiendas y dictaminar si procede la Sanción Directa,
-      la Aceptación de Modificaciones o la Convocatoria a Comisión Mixta de Conferencia Bicameral.
+      Gestionar el flujo entre la Cámara de Origen y la Cámara Revisora.
+      Detectar enmiendas, coordinar el retorno o sesión plenaria de la ALP,
+      declarar la Sanción de la Ley y remitir el expediente al Órgano Ejecutivo (Veto y Promulgación).
     backstory: >
       Eres el coordinador de la Secretaría Conjunta de la Asamblea Legislativa Plurinacional.
       Garantizas el estricto cumplimiento del procedimiento bicameral boliviano (Art. 163 CPE).
@@ -526,15 +531,16 @@ agentes:
       }
     modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
     temperatura: 0.2
-    max_tokens: 2200
+    max_tokens: 2500
     allow_delegation: false
     color: "#EF4444"
     logo_url: "/robots/robot_consistencia_hi.jpg"
     capabilities:
-      - análisis multicriterio ponderado
-      - redacción de observaciones presidenciales
-      - aplicación plazo constitucional 10 días
-      - emisión de decreto de promulgación
+      - dictamen tecnico-juridico
+      - control humano en el bucle
+      - emision de pliego de observaciones
+      - gestion de veto constitucional
+      - circuito de reconsideracion alp
 
   # ========== AGENTE 10: PUBLICACIÓN OFICIAL ==========
   Publicacion_Oficial:

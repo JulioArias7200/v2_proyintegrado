@@ -217,76 +217,137 @@ tareas:
 
   Registrar_Debate:
     descripcion: >
-      Capturar la estructura del debate en el Pleno camaral en secuencia cronológica.
-      1. Registrar intervenciones de parlamentarios con posturas a favor y en contra.
-      2. Documentar la votación en grande y artículo por artículo (en detalle).
-      3. Computar votos afirmativos, negativos y abstenciones verificando quórum de dos tercios o mayoría absoluta (Art. 160 CPE).
-      4. Generar Acta Oficial suscrita por Secretaría.
+      Capturar la estructura formal del debate legislativo conforme al Reglamento Camaral:
+      verificar quórum de asistencia, registrar intervenciones de parlamentarios por bancada,
+      mociones de sala y ejecutar el cómputo de la doble votación nominal:
+      1. Votación En Grande (Mayoría Absoluta > 50% presentes o archivo del proyecto).
+      2. Votación En Detalle (Aprobación artículo por artículo y enmiendas).
+      Formalizar el acta oficial y certificar para el trámite bicameral.
     agente: "Secretario_Camara"
     expected_output: >
-      JSON con:
+      JSON con acta estructurada del debate.
+      Estructura:
       {
-        "numero_acta": "ACTA-2026-042",
-        "camara": "DIPUTADOS | SENADORES",
-        "fecha_sesion": "2026-03-20",
-        "resumen_debate": "string",
-        "votacion_general": {
-          "total_presentes": 125,
-          "votos_favor": 85,
-          "votos_contra": 35,
-          "abstenciones": 5,
-          "resultado": "APROBADO_EN_GRANDE"
-        },
-        "enmiendas_aprobadas_en_detalle": [],
-        "texto_aprobado_integro": "string"
+        "acta_debate": {
+          "fecha": "YYYY-MM-DD",
+          "sesion_numero": 14,
+          "camara": "Cámara de Diputados | Cámara de Senadores",
+          "tipo_sesion": "ORDINARIA | EXTRAORDINARIA",
+          "quorum_legal": {
+            "total_miembros": 130,
+            "presentes": 110,
+            "quorum_verificado": true
+          },
+          "intervenciones": [
+            {
+              "orden": 1,
+              "legislador": "string",
+              "partido": "string",
+              "postura": "A_FAVOR | EN_CONTRA | OBSERVACION",
+              "contenido": "string",
+              "timestamp": "HH:MM"
+            }
+          ],
+          "mociones": [
+            {
+              "tipo": "PREVIA | ORDEN | APLAZAMIENTO",
+              "proponente": "string",
+              "resultado": "APROBADA | RECHAZADA"
+            }
+          ],
+          "votacion_en_grande": {
+            "total_votantes": 110,
+            "favor": 75,
+            "contra": 30,
+            "abstenciones": 5,
+            "mayoria_absoluta_requerida": 56,
+            "resultado": "APROBADO | RECHAZADO"
+          },
+          "votacion_en_detalle": [
+            {
+              "articulo": 1,
+              "favor": 80,
+              "contra": 25,
+              "abstenciones": 5,
+              "resultado": "APROBADO | MODIFICADO | SUPRIMIDO"
+            }
+          ],
+          "acuerdos": ["string"],
+          "resultado_final": "APROBADO_EN_GRANDE_Y_DETALLE | RECHAZADO_EN_ORIGEN_ARCHIVADO",
+          "estado_siguiente": "EN_TRAMITE_BICAMERAL | ARCHIVADO_LEGISLATURA"
+        }
       }
     herramientas: []
 
   Gestionar_Bicameral:
     descripcion: >
-      Gestionar el procedimiento bicameral conforme al Art. 163 de la CPE:
-      1. Cotejar la versión aprobada en Cámara de Origen contra las modificaciones de la Cámara Revisora.
-      2. Clasificar enmiendas en sustanciales vs. de forma.
-      3. Determinar la ruta constitucional: Sanción Definitiva, Aceptación de Modificaciones o Convocatoria a Comisión Mixta de Conferencia Bicameral.
+      Gestionar trámite bicameral recibiendo el acta certificada de la Cámara de Origen.
+      Comparar versiones original y retornada, clasificar enmiendas como MAYORES o MENORES,
+      declarar la Sanción de la Ley o convocar a Sesión Plenaria Conjunta de la ALP.
     agente: "Bicameral"
     expected_output: >
-      JSON con:
+      JSON con decisión bicameral y estado de sanción.
+      Estructura:
       {
-        "camara_origen": "DIPUTADOS",
-        "camara_revisora": "SENADORES",
-        "estado_bicameral": "SANCION_DEFINITIVA | MODIFICADO_REQUIERE_CONSENSO | RECHAZADO_EN_REVISORA",
-        "articulos_con_diferencias": [],
-        "requiere_comision_mixta": false,
-        "texto_armonizado_propuesto": "string"
+        "ciclo_bicameral": {
+          "proyecto_id": "string",
+          "version_original": {"articulos": []},
+          "version_retornada": {"articulos": []},
+          "cambios_detectados": [
+            {
+              "tipo": "MODIFICACION|ELIMINACION|ADICION",
+              "articulo": 5,
+              "descripcion": "string"
+            }
+          ],
+          "clasificacion_cambios": "MAYORES|MENORES",
+          "resolucion": "SANCION_DIRECTA | CONVOCATORIA_PLENO_ALP",
+          "estado_siguiente": "LISTO_PARA_VETO_PROMULGACION"
+        }
       }
     herramientas: []
+    depends_on:
+      - "Registrar_Debate"
 
-  # ==========================================================================
-  # FASE 4: EJECUTIVO Y PUBLICACIÓN OFICIAL
-  # ==========================================================================
-
+  # ========== TAREA 4: EVALUAR VETO/PROMULGACIÓN (HUMAN-IN-THE-LOOP) ==========
   Evaluar_Veto_Promulgacion:
     descripcion: >
-      Evaluación estratégica multicriterio del Presidente del Estado antes de promulgar la Ley (Art. 163 CPE).
-      1. Evaluar legalidad constitucional (25%), sostenibilidad fiscal (25%), factibilidad técnica (20%), alineamiento político (15%) y urgencia (15%).
-      2. Decidir dentro del plazo constitucional de 10 días hábiles: PROMULGAR, VETAR_TOTAL o VETAR_PARCIAL con observaciones.
-      3. Redactar el Mensaje a la Asamblea o el Decreto de Promulgación.
+      Analizar el expediente del proyecto sancionado y emitir dictamen técnico-jurídico con recomendaciones
+      de Promulgación o Veto conforme al Art. 164 de la CPE. Habilitar la confirmación u orden de decisión
+      ejecutiva en manos del operador humano (Human-in-the-Loop).
     agente: "Veto_Promulgacion"
     expected_output: >
-      JSON con:
+      JSON con dictamen técnico de asesoría ejecutiva, pliego de observaciones y opciones de acción para el operador.
+      Estructura:
       {
-        "decision": "PROMULGAR | VETO_PARCIAL | VETO_TOTAL",
-        "puntuacion_multicriterio": {
-          "legalidad": 9,
-          "impacto_fiscal": 8,
-          "viabilidad_tecnica": 8,
-          "alineamiento_politico": 8,
-          "urgencia_social": 9,
-          "promedio_ponderado": 8.4
-        },
-        "articulos_observados": [],
-        "fundamentacion_decision": "string",
-        "mensaje_a_la_asamblea": "string"
+        "evaluacion_veto": {
+          "proyecto_id": "string",
+          "decision": "PROMULGAR | VETAR_TOTAL | VETAR_PARCIAL",
+          "modo_control": "HUMAN_IN_THE_LOOP",
+          "plazo_constitucional_dias": 10,
+          "recomendacion_tecnica": {
+            "dictamen_sugerido": "RECOMIENDA_PROMULGAR | RECOMIENDA_VETAR_TOTAL | RECOMIENDA_VETAR_PARCIAL",
+            "resumen_ejecutivo": "string",
+            "alertas_constitucionales": ["string"],
+            "alertas_fiscales": ["string"],
+            "fundamentacion": "string"
+          },
+          "pliego_observaciones": [
+            {
+              "articulo": "string",
+              "objecion": "string",
+              "propuesta_modificacion": "string"
+            }
+          ],
+          "opciones_operador_humano": [
+            {"accion": "PROMULGAR", "etiqueta": "Firmar y Promulgar Ley", "destino": "PUBLICACION_GACETA"},
+            {"accion": "VETAR_TOTAL", "etiqueta": "Emitir Veto Total con Observaciones", "destino": "REMISION_ALP"},
+            {"accion": "VETAR_PARCIAL", "etiqueta": "Emitir Veto Parcial a Artículos Específicos", "destino": "REMISION_ALP"}
+          ],
+          "justificacion": "string",
+          "ruta_siguiente": "PUBLICACION_GACETA | REMISION_OBSERVACIONES_ALP",
+          "estado_siguiente": "PROMULGADO_EJECUTIVO | VETADO_REMITIDO_A_ALP"
+        }
       }
     herramientas: []
 

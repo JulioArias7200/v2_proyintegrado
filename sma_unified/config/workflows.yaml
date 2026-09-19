@@ -8,7 +8,7 @@ workflows:
   Pipeline_Legislativo_Completo:
     nombre: "Pipeline Legislativo Completo de Bolivia"
     descripcion: "Flujo integral desde la Mesa de Entradas hasta la Difusión Ciudadana y Fiscalización Posterior"
-    
+
     etapas:
       Fase_1_Ingreso_Admision:
         nombre: "Fase 1: Ingreso, Admisión y Atención"
@@ -39,18 +39,19 @@ workflows:
           - Registrar_Debate
           - Gestionar_Bicameral
         punto_control: true
+        descripcion: "Debate en Cámara de Origen (verificación de quórum, oradores, votación en grande y detalle) y coordinación bicameral de enmiendas"
         dependencias:
           - Fase_2_Comision_Dictamenes
-        descripcion: "Debate artículo por artículo, votación nominal y coordinación entre Cámara de Origen y Revisora"
 
       Fase_4_Ejecutivo_Promulgacion:
-        nombre: "Fase 4: Evaluación Ejecutiva y Publicación Oficial"
+        nombre: "Fase 4: Evaluación de Veto/Promulgación y Publicación Oficial"
         tareas:
           - Evaluar_Veto_Promulgacion
           - Publicar_Ley_Oficial
+        punto_control: true
+        descripcion: "Asesoría técnica ejecutiva (10 días) con control humano de decisión (Human-in-the-Loop) y publicación oficial en Gaceta"
         dependencias:
           - Fase_3_Plenaria_Bicameral
-        descripcion: "Evaluación multicriterio presidencial (10 días), promulgación y publicación en Gaceta Oficial"
 
       Fase_5_Ciudadania_Fiscalizacion:
         nombre: "Fase 5: Difusión en Lenguaje Claro y Control Posterior"
@@ -58,9 +59,9 @@ workflows:
           - Generar_Difusion_Ciudadana
           - Monitorear_Fiscalizacion
           - Notificar_Comision
+        descripcion: "Explicación pedagógica ciudadana, monitoreo de decretos reglamentarios y auditoría de ejecución presupuestaria"
         dependencias:
           - Fase_4_Ejecutivo_Promulgacion
-        descripcion: "Explicación pedagógica ciudadana, monitoreo de decretos reglamentarios y auditoría de ejecución"
 
     tiempo_estimado_minutos: 90
 
@@ -68,21 +69,21 @@ workflows:
   Pipeline_Auditoria_Rapida:
     nombre: "Filtro Rápido de Admisibilidad y Coherencia"
     descripcion: "Verificación de forma, constitucionalidad literal y antinomias para admisión inmediata"
-    
+
     etapas:
       Etapa_Clasificacion:
         nombre: "Clasificación"
         tareas:
           - Clasificar_Documento
         punto_control: false
-      
+
       Etapa_Auditoria:
         nombre: "Auditoría Legal Inmediata"
         tareas:
           - Auditar_Constitucionalidad
           - Analizar_Consistencia
         paralelo: true
-      
+
       Etapa_Informe:
         nombre: "Consolidación de Admisibilidad"
         tareas:
