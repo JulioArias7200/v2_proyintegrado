@@ -46,7 +46,13 @@ from sma_unified.config import (
 from sma_unified.agents.llm_client import chat_completion_resiliente
 from sma_unified.agents.embeddings_nvidia import embeber_pregunta
 from sma_unified.utils.parser_normativa import parsear_articulos
-from sma_unified.db.mongo_atlas import publicar_mensaje, marcar_en_proceso, marcar_completado, marcar_error
+from sma_unified.db.mongo_atlas import (
+    publicar_mensaje,
+    marcar_en_proceso,
+    marcar_completado,
+    marcar_error,
+    guardar_reporte_consistencia_mongo,
+)
 from sma_unified.db.neon_postgres import (
     buscar_articulos_normativos_semantico,
     guardar_analisis_consistencia,
@@ -435,6 +441,28 @@ def verificar_consistencia_normativa(
         f"Consistencia normativa: {len(hallazgos)} hallazgos | "
         f"Riesgo: {resumen['nivel_riesgo_global']} [{duracion_ms}ms]"
     )
+
+    # ── Persistir reporte completo en MongoDB Atlas (reportes_consistencia) ───
+    if persistir:
+        try:
+            reporte_mongo = {
+                "expediente_id": id_proyecto,
+                "sesion_id": sesion_id,
+                "nombre_archivo": nombre_archivo,
+                "task_id": task_id,
+                "hallazgos": hallazgos,
+                "resumen_por_tipo": resumen.get("resumen_por_tipo", {}),
+                "nivel_riesgo_global": resumen.get("nivel_riesgo_global", "NINGUNO"),
+                "total_hallazgos": len(hallazgos),
+                "alertas_riesgo_alto": resumen.get("alertas_riesgo_alto", 0),
+                "alertas_riesgo_medio": resumen.get("alertas_riesgo_medio", 0),
+                "posibles_derogaciones_tacitas": resumen.get("posibles_derogaciones_tacitas", 0),
+                "conflictos_especialidad": resumen.get("conflictos_especialidad", 0),
+                "duracion_ms": duracion_ms,
+            }
+            guardar_reporte_consistencia_mongo(reporte_mongo)
+        except Exception as _rme:
+            logger.warning(f"No se pudo guardar reporte de consistencia en Mongo: {_rme}")
 
     # ── Persistir correcciones automáticas por hallazgos críticos ────────────────────
     tipos_criticos = {"contradiccion", "repeticion"}

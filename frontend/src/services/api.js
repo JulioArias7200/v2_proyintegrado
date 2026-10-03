@@ -202,6 +202,15 @@ export const api = {
     const q = sesion_id ? `?limit=${limit}&sesion_id=${sesion_id}` : `?limit=${limit}`;
     return request(`/messages${q}`);
   },
+  getReportesConsistencia: (limit = 20, sesion_id = null) => {
+    const q = sesion_id ? `?limit=${limit}&sesion_id=${sesion_id}` : `?limit=${limit}`;
+    return request(`/consistencia/reportes${q}`);
+  },
+  getReporteConsistenciaSesion: (sesion_id) => request(`/consistencia/reporte/${sesion_id}`),
+  getActasRecientes: (limit = 20) => request(`/actas/recientes?limit=${limit}`),
+  getActasProyecto: (id_proyecto) => request(`/actas/proyecto/${id_proyecto}`),
+  guardarActa: (data) =>
+    request('/actas/guardar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
   // MÓDULO DE VOZ MULTIMODAL (STT / TTS / COMANDOS)
   vozEstado: () => request('/voz/estado'),

@@ -60,7 +60,17 @@ from sma_unified.db.neon_postgres import (
     actualizar_estado_correccion,
 )
 from sma_unified.agents.embeddings_nvidia import generar_embeddings
-from sma_unified.db.mongo_atlas import get_db, obtener_documentos_recientes, obtener_kpis_mongo
+from sma_unified.db.mongo_atlas import (
+    get_db,
+    obtener_documentos_recientes,
+    obtener_kpis_mongo,
+    guardar_reporte_consistencia_mongo,
+    obtener_reportes_consistencia_mongo,
+    obtener_reporte_consistencia_por_sesion_mongo,
+    guardar_acta_detallada_mongo,
+    obtener_actas_detalladas_mongo,
+    obtener_acta_por_proyecto_mongo,
+)
 
 app = FastAPI(
     title="SMA Congreso API",
@@ -739,6 +749,26 @@ def run_agent_consistencia(req: Phase2Request):
                 )
             except Exception as _be:
                 logger.warning(f"No se pudo registrar bitacora consistencia: {_be}")
+
+        # Persistir en MongoDB Atlas (colección reportes_consistencia)
+        try:
+            guardar_reporte_consistencia_mongo({
+                "expediente_id": id_proyecto,
+                "sesion_id": req.sesion_id,
+                "nombre_archivo": req.nombre_archivo,
+                "task_id": resultado.get("task_id_consistencia"),
+                "hallazgos": resultado.get("hallazgos", []),
+                "resumen_por_tipo": resultado.get("resumen_por_tipo", {}),
+                "nivel_riesgo_global": resultado.get("nivel_riesgo_global", "NINGUNO"),
+                "total_hallazgos": resultado.get("total_hallazgos", 0),
+                "alertas_riesgo_alto": resultado.get("alertas_riesgo_alto", 0),
+                "alertas_riesgo_medio": resultado.get("alertas_riesgo_medio", 0),
+                "posibles_derogaciones_tacitas": resultado.get("posibles_derogaciones_tacitas", 0),
+                "conflictos_especialidad": resultado.get("conflictos_especialidad", 0),
+                "duracion_ms": int((time.time() - t_inicio) * 1000),
+            })
+        except Exception as _cme:
+            logger.warning(f"No se pudo guardar reporte_consistencia en Mongo: {_cme}")
 
         return {"success": True, "data": resultado}
     except Exception as e:
@@ -1809,6 +1839,85 @@ def get_agent_messages(limit: int = Query(50, ge=1, le=200), sesion_id: Optional
     except Exception as e:
         logger.error(f"Error listando mensajes de agentes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Endpoints de Reportes de Consistencia Normativa (MongoDB Atlas) ──────────
+
+@app.get("/api/consistencia/reportes")
+def api_obtener_reportes_consistencia(
+    limit: int = Query(20, ge=1, le=100),
+    expediente_id: Optional[str] = None,
+    sesion_id: Optional[str] = None,
+):
+    """Obtiene el historial de reportes de consistencia normativa almacenados en MongoDB."""
+    try:
+        reportes = obtener_reportes_consistencia_mongo(
+            expediente_id=expediente_id,
+            sesion_id=sesion_id,
+            limit=limit,
+        )
+        return {"success": True, "total": len(reportes), "data": reportes}
+    except Exception as e:
+        logger.error(f"Error obteniendo reportes_consistencia en Mongo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/consistencia/reporte/{sesion_id}")
+def api_obtener_reporte_consistencia_sesion(sesion_id: str):
+    """Obtiene el reporte de consistencia normativa de una sesión específica desde MongoDB."""
+    try:
+        rep = obtener_reporte_consistencia_por_sesion_mongo(sesion_id)
+        if not rep:
+            raise HTTPException(status_code=404, detail="Reporte de consistencia no encontrado para esta sesión")
+        return {"success": True, "data": rep}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo reporte de consistencia por sesión: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Endpoints de Actas Detalladas Parlamentarias (MongoDB Atlas) ──────────────
+
+@app.get("/api/actas/recientes")
+def api_obtener_actas_recientes(limit: int = Query(20, ge=1, le=100)):
+    """Obtiene las actas detalladas de debates parlamentarios desde MongoDB."""
+    try:
+        actas = obtener_actas_detalladas_mongo(limit=limit)
+        return {"success": True, "total": len(actas), "data": actas}
+    except Exception as e:
+        logger.error(f"Error obteniendo actas_detalladas en Mongo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/actas/proyecto/{id_proyecto}")
+def api_obtener_actas_proyecto(id_proyecto: int):
+    """Obtiene las actas parlamentarias de un proyecto de ley desde MongoDB."""
+    try:
+        actas = obtener_actas_detalladas_mongo(id_proyecto=id_proyecto)
+        acta_reciente = obtener_acta_por_proyecto_mongo(id_proyecto=id_proyecto)
+        return {
+            "success": True,
+            "id_proyecto": id_proyecto,
+            "total": len(actas),
+            "acta_actual": acta_reciente,
+            "historial_actas": actas,
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo actas de proyecto {id_proyecto} en Mongo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/actas/guardar")
+def api_guardar_acta_manual(payload: Dict[str, Any] = Body(...)):
+    """Guarda un acta parlamentaria formal directamente en actas_detalladas de MongoDB."""
+    try:
+        acta_id = guardar_acta_detallada_mongo(payload)
+        return {"success": True, "acta_id": acta_id, "mensaje": "Acta parlamentaria registrada exitosamente"}
+    except Exception as e:
+        logger.error(f"Error guardando acta en Mongo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ── Endpoints de Voz han sido consolidados más abajo (línea ~1563) ────────────

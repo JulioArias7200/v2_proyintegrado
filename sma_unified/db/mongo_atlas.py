@@ -82,6 +82,7 @@ def _ensure_indexes(db):
         rep_cons = db["reportes_consistencia"]
         rep_cons.create_index([("expediente_id", 1)])
         rep_cons.create_index([("sesion_id", 1)])
+        rep_cons.create_index([("timestamp", -1)])
 
         notif_pend = db["notificaciones_pendientes"]
         notif_pend.create_index([("id_comision", 1)])
@@ -106,8 +107,11 @@ def _ensure_indexes(db):
         resp_ciud.create_index([("timestamp", -1)])
 
         actas_det = db["actas_detalladas"]
+        actas_det.create_index([("id_proyecto", 1)])
         actas_det.create_index([("id_sesion", 1)])
+        actas_det.create_index([("sesion_id", 1)])
         actas_det.create_index([("fecha_sesion", -1)])
+        actas_det.create_index([("fecha_registro", -1)])
 
         logger.info("Índices MongoDB verificados/creados.")
     except Exception as e:
@@ -120,6 +124,60 @@ def guardar_reporte_constitucionalidad_mongo(data: Dict[str, Any]) -> str:
     data["timestamp"] = datetime.now(timezone.utc)
     res = db["reportes_constitucionalidad"].insert_one(data)
     return str(res.inserted_id)
+
+
+def guardar_reporte_consistencia_mongo(data: Dict[str, Any]) -> str:
+    """Guarda reporte en la colección reportes_consistencia."""
+    try:
+        db = get_db()
+        col = db["reportes_consistencia"]
+        data["timestamp"] = datetime.now(timezone.utc)
+        res = col.insert_one(data)
+        logger.info(f"📋 Reporte de consistencia guardado en Mongo: {res.inserted_id} | sesión: {data.get('sesion_id')}")
+        return str(res.inserted_id)
+    except Exception as e:
+        logger.warning(f"Error guardando reporte de consistencia en Mongo: {e}")
+        return ""
+
+
+def obtener_reportes_consistencia_mongo(
+    expediente_id: Optional[Any] = None,
+    sesion_id: Optional[str] = None,
+    limit: int = 20,
+) -> List[Dict[str, Any]]:
+    """Obtiene reportes de consistencia normativa desde MongoDB."""
+    try:
+        db = get_db()
+        col = db["reportes_consistencia"]
+        filtro: Dict[str, Any] = {}
+        if expediente_id is not None:
+            filtro["$or"] = [{"expediente_id": expediente_id}, {"expediente_id": str(expediente_id)}]
+        if sesion_id:
+            filtro["sesion_id"] = sesion_id
+
+        cursor = col.find(filtro, {"_id": 0}).sort("timestamp", -1).limit(limit)
+        docs = list(cursor)
+        for d in docs:
+            if isinstance(d.get("timestamp"), datetime):
+                d["timestamp"] = d["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+        return docs
+    except Exception as e:
+        logger.warning(f"Error consultando reportes_consistencia en Mongo: {e}")
+        return []
+
+
+def obtener_reporte_consistencia_por_sesion_mongo(sesion_id: str) -> Optional[Dict[str, Any]]:
+    """Obtiene el reporte de consistencia normativa más reciente por sesion_id."""
+    try:
+        db = get_db()
+        col = db["reportes_consistencia"]
+        doc = col.find_one({"sesion_id": sesion_id}, {"_id": 0}, sort=[("timestamp", -1)])
+        if doc and isinstance(doc.get("timestamp"), datetime):
+            doc["timestamp"] = doc["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+        return doc
+    except Exception as e:
+        logger.warning(f"Error consultando reporte_consistencia por sesión en Mongo: {e}")
+        return None
 
 
 def guardar_notificacion_oficial_mongo(data: Dict[str, Any]) -> str:
@@ -516,8 +574,54 @@ def guardar_acta_detallada_mongo(data: Dict[str, Any]) -> str:
         col = db["actas_detalladas"]
         data["fecha_registro"] = datetime.now(timezone.utc)
         res = col.insert_one(data)
+        logger.info(
+            f"📜 Acta detallada guardada en Mongo: {res.inserted_id} | "
+            f"Proyecto: {data.get('id_proyecto')} | Sesión: {data.get('numero_sesion', data.get('id_sesion'))}"
+        )
         return str(res.inserted_id)
     except Exception as e:
         logger.warning(f"Error guardando acta detallada en Mongo: {e}")
         return ""
+
+
+def obtener_actas_detalladas_mongo(
+    id_proyecto: Optional[Any] = None,
+    sesion_id: Optional[str] = None,
+    limit: int = 20,
+) -> List[Dict[str, Any]]:
+    """Obtiene actas detalladas parlamentarias desde MongoDB."""
+    try:
+        db = get_db()
+        col = db["actas_detalladas"]
+        filtro: Dict[str, Any] = {}
+        if id_proyecto is not None:
+            filtro["$or"] = [{"id_proyecto": id_proyecto}, {"id_proyecto": str(id_proyecto)}]
+        if sesion_id:
+            filtro["sesion_id"] = sesion_id
+
+        cursor = col.find(filtro, {"_id": 0}).sort("fecha_registro", -1).limit(limit)
+        docs = list(cursor)
+        for d in docs:
+            if isinstance(d.get("fecha_registro"), datetime):
+                d["fecha_registro"] = d["fecha_registro"].strftime("%Y-%m-%d %H:%M:%S")
+        return docs
+    except Exception as e:
+        logger.warning(f"Error consultando actas_detalladas en Mongo: {e}")
+        return []
+
+
+def obtener_acta_por_proyecto_mongo(id_proyecto: Any) -> Optional[Dict[str, Any]]:
+    """Obtiene el acta detallada más reciente de un proyecto de ley."""
+    try:
+        db = get_db()
+        col = db["actas_detalladas"]
+        filtro = {"$or": [{"id_proyecto": id_proyecto}, {"id_proyecto": str(id_proyecto)}]}
+        doc = col.find_one(filtro, {"_id": 0}, sort=[("fecha_registro", -1)])
+        if doc and isinstance(doc.get("fecha_registro"), datetime):
+            doc["fecha_registro"] = doc["fecha_registro"].strftime("%Y-%m-%d %H:%M:%S")
+        return doc
+    except Exception as e:
+        logger.warning(f"Error consultando acta de proyecto en Mongo: {e}")
+        return None
+
 

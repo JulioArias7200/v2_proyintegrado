@@ -7,6 +7,7 @@ from crewai import Task
 from sma_unified.agents.base_agent import BaseAgenteLegislativo, get_base_agent
 from sma_unified.agents.llm_client import chat_completion_resiliente
 from sma_unified.db.neon_postgres import guardar_sesion_debate_db
+from sma_unified.db.mongo_atlas import guardar_acta_detallada_mongo
 
 try:
     from loguru import logger
@@ -154,5 +155,23 @@ class AgentePresidenciaComision:
                 )
             except Exception as ep:
                 logger.warning(f"No se pudo registrar sesión de comisión en Neon: {ep}")
+
+            try:
+                guardar_acta_detallada_mongo({
+                    "id_proyecto": int(proyecto_id),
+                    "sesion_id": proyecto_info.get("sesion_id") if isinstance(proyecto_info, dict) else None,
+                    "id_sesion": 1,
+                    "numero_sesion": "SES-COM-01",
+                    "camara": "COMISION",
+                    "comision_nombre": comision,
+                    "fecha_sesion": time.strftime("%Y-%m-%d"),
+                    "total_asistentes": 13,
+                    "orden_del_dia": plan_obj.get("orden_del_dia", []),
+                    "resumen_debate": f"Apertura de tratamiento en {comision}.",
+                    "acta_debate": plan_obj,
+                    "duracion_ms": plan_obj.get("duracion_ms", 0),
+                })
+            except Exception as em:
+                logger.warning(f"No se pudo guardar acta de comisión en Mongo: {em}")
 
         return data

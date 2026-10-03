@@ -2113,7 +2113,7 @@ def obtener_stats_consistencia() -> Dict[str, Any]:
 def _ensure_legislativo_14_agentes_tables(conn) -> None:
     """Crea y valida las tablas relacionales para el ciclo completo de los 14 agentes."""
     ddl = """
-    CREATE SCHEMA IF NOT EXISTS sistema AUTHORIZATION postgres;
+    CREATE SCHEMA IF NOT EXISTS sistema;
 
     -- 1. Sesiones de debate (Agente 5 Presidencia Comisión y Agente 7 Secretario Cámara)
     CREATE TABLE IF NOT EXISTS sistema.sesiones_debates (

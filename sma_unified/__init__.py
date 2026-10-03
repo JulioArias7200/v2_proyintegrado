@@ -1,3 +1,7 @@
-from sma_unified.sma_unified import app
+"""
+SMA Unified - Sistema Multi-Agente para Registro y Auditoría Legislativa
+"""
 
-__all__ = ["app"]
+__version__ = "2.0.0"
+__all__ = ["__version__"]
+

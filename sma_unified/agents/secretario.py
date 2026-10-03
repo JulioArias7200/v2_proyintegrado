@@ -8,6 +8,7 @@ from sma_unified.agents.base_agent import BaseAgenteLegislativo, get_base_agent
 from sma_unified.agents.llm_client import chat_completion_resiliente
 from sma_unified.db.neon_client import get_neon_client
 from sma_unified.db.cosmos_client import CosmosDBClient
+from sma_unified.db.mongo_atlas import guardar_acta_detallada_mongo
 
 class AgenteSecretarioCamara:
     """Agente Secretario de Cámara — Registro integral de debates, quórum, votaciones y actas formales"""
@@ -188,7 +189,7 @@ class AgenteSecretarioCamara:
         except Exception as err:
             print(f"Aviso Neon Secretario: {err}")
             
-        # MongoDB logging
+        # MongoDB logging en agent_executions
         try:
             cosmos = CosmosDBClient()
             cosmos.log_agent_execution(
@@ -201,5 +202,27 @@ class AgenteSecretarioCamara:
             cosmos.close()
         except Exception as err:
             print(f"Aviso Mongo Secretario: {err}")
+
+        # Guardar Acta Detallada Oficial en MongoDB (actas_detalladas)
+        try:
+            acta_info = data.get("acta_debate", {})
+            sesion_num = acta_info.get("sesion_numero", debate_data.get("sesion_numero", 1))
+            guardar_acta_detallada_mongo({
+                "id_proyecto": int(proyecto_id) if str(proyecto_id).isdigit() else proyecto_id,
+                "sesion_id": debate_data.get("sesion_id") or proyecto_info.get("sesion_id"),
+                "id_sesion": sesion_num,
+                "numero_sesion": f"SES-{sesion_num}",
+                "camara": acta_info.get("camara", debate_data.get("camara", "Cámara de Diputados")),
+                "fecha_sesion": acta_info.get("fecha", time.strftime("%Y-%m-%d")),
+                "acta_debate": acta_info,
+                "intervenciones": acta_info.get("intervenciones", []),
+                "votaciones": acta_info.get("votaciones", []),
+                "acuerdos": acta_info.get("acuerdos", []),
+                "estado_siguiente": acta_info.get("estado_siguiente", "EN_TRAMITE_BICAMERAL"),
+                "proyecto_titulo": proyecto_info.get("titulo", proyecto_info.get("titulo_proyecto", "")),
+                "duracion_ms": duracion_ms,
+            })
+        except Exception as e_acta:
+            print(f"Aviso guardando acta detallada en Mongo: {e_acta}")
             
         return data
