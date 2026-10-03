@@ -221,6 +221,47 @@ class MiembroComisionRequest(BaseModel):
 
 
 # ── Auto-migración: tabla sistema.miembro_comision ──────────────────────────
+class AgenteCiudadanoRequest(BaseModel):
+    nombre: str
+    logo: Optional[str] = None
+    system_prompt: str
+    trigger_description: str
+    modelo: Optional[str] = None
+    temperature: Optional[float] = 0.5
+    top_p: Optional[float] = 1.0
+    max_tokens: Optional[int] = 1024
+    activo: Optional[bool] = True
+
+
+class AgenteCiudadanoUpdateRequest(BaseModel):
+    nombre: Optional[str] = None
+    logo: Optional[str] = None
+    system_prompt: Optional[str] = None
+    trigger_description: Optional[str] = None
+    modelo: Optional[str] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    max_tokens: Optional[int] = None
+    activo: Optional[bool] = None
+
+
+class ChatCiudadanoRequest(BaseModel):
+    mensaje: str
+    sesion_id: Optional[str] = None
+    agente_id: Optional[str] = None  # opcional: fuerza una faceta concreta
+    caso_texto: Optional[str] = None        # texto del documento/caso subido
+    caso_nombre: Optional[str] = None
+    usar_especialista: bool = False         # activa al Especialista Técnico Pericial
+    dictamen: Optional[Dict[str, Any]] = None  # dictamen ya emitido (evita re-peritar)
+
+
+class DictamenCasoRequest(BaseModel):
+    caso_texto: str
+    caso_nombre: Optional[str] = None
+    materia: Optional[str] = None
+    sesion_id: Optional[str] = None
+
+
 def _ensure_miembro_comision_table() -> None:
     """Crea la tabla de miembros si no existe."""
     try:
@@ -1613,6 +1654,107 @@ def get_ciudadana_solicitudes(limit: int = Query(50, ge=1, le=200)):
     except Exception as e:
         logger.error(f"Error obteniendo solicitudes ciudadanas: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Agente Multi-Faceta de Atención Ciudadana (routing automático) ───────────
+
+@app.get("/api/ciudadana/agentes")
+def api_listar_agentes_ciudadanos(solo_activos: bool = Query(False)):
+    """Lista las facetas (sub-agentes) del asistente ciudadano multi-prompt."""
+    try:
+        from sma_unified.agents.multiagente_ciudadano import listar_agentes
+        return {"success": True, "data": listar_agentes(solo_activos=solo_activos)}
+    except Exception as e:
+        logger.error(f"Error listando agentes ciudadanos: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ciudadana/agentes", status_code=201)
+def api_crear_agente_ciudadano(req: AgenteCiudadanoRequest):
+    """Crea una nueva faceta ciudadana (nombre, logo, prompt y trigger de routing)."""
+    try:
+        from sma_unified.agents.multiagente_ciudadano import crear_agente
+        return {"success": True, "data": crear_agente(req.model_dump())}
+    except Exception as e:
+        logger.error(f"Error creando agente ciudadano: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ciudadana/agentes/{agente_id}")
+def api_obtener_agente_ciudadano(agente_id: str):
+    from sma_unified.agents.multiagente_ciudadano import obtener_agente
+    agente = obtener_agente(agente_id)
+    if not agente:
+        raise HTTPException(status_code=404, detail="Agente ciudadano no encontrado")
+    return {"success": True, "data": agente}
+
+
+@app.patch("/api/ciudadana/agentes/{agente_id}")
+def api_actualizar_agente_ciudadano(agente_id: str, req: AgenteCiudadanoUpdateRequest):
+    from sma_unified.agents.multiagente_ciudadano import actualizar_agente
+    agente = actualizar_agente(agente_id, req.model_dump(exclude_unset=True))
+    if not agente:
+        raise HTTPException(status_code=404, detail="Agente ciudadano no encontrado")
+    return {"success": True, "data": agente}
+
+
+@app.delete("/api/ciudadana/agentes/{agente_id}")
+def api_eliminar_agente_ciudadano(agente_id: str):
+    from sma_unified.agents.multiagente_ciudadano import eliminar_agente
+    if not eliminar_agente(agente_id):
+        raise HTTPException(status_code=404, detail="Agente ciudadano no encontrado")
+    return {"success": True}
+
+
+@app.post("/api/ciudadana/chat")
+def api_chat_ciudadano(req: ChatCiudadanoRequest):
+    """
+    Chat ciudadano sin estado: el mensaje se enruta automáticamente a la faceta
+    (arquitectura, salud, educación, trámites legislativos...) cuyo trigger encaja
+    mejor. El usuario no elige el agente y no se guarda historial.
+    """
+    try:
+        from sma_unified.agents.multiagente_ciudadano import responder_ciudadano
+        if not (req.mensaje or "").strip():
+            raise HTTPException(status_code=400, detail="El campo 'mensaje' es obligatorio.")
+        return responder_ciudadano(
+            mensaje=req.mensaje,
+            sesion_id=req.sesion_id,
+            agente_id=req.agente_id,
+            caso_texto=req.caso_texto,
+            caso_nombre=req.caso_nombre,
+            usar_especialista=req.usar_especialista,
+            dictamen=req.dictamen,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en /api/ciudadana/chat: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/ciudadana/especialista/dictamen")
+def api_dictamen_especialista(req: DictamenCasoRequest):
+    """
+    Emite el dictamen técnico pericial de un caso subido (viabilidad, estándares,
+    infraestructura y matriz de riesgos). El frontend lo guarda y lo reenvía en
+    cada mensaje del chat para que el Especialista no vuelva a peritar de cero.
+    """
+    try:
+        from sma_unified.agents.especialista_chat import analizar_caso
+        if not (req.caso_texto or "").strip():
+            raise HTTPException(status_code=400, detail="El caso no tiene texto que analizar.")
+        return analizar_caso(
+            texto_caso=req.caso_texto,
+            titulo=req.caso_nombre,
+            materia=req.materia,
+            sesion_id=req.sesion_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en /api/ciudadana/especialista/dictamen: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @app.get("/api/agentes")

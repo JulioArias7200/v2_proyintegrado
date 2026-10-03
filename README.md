@@ -269,3 +269,93 @@ Desarrollado para el análisis y auditoría legislativa del Congreso. Reservados
 public.Solicitudes_Documentos: Entrada de documentos de atención ciudadana y correspondencia institucional externa.
 public.Clasificacion_Agente: (Candidata a unificación/eliminación) Guarda el resultado inicial del Agente Distribuidor para solicitudes.
 public.Clasificacion_Comision: (Candidata a unificación/eliminación) Guarda la comisión y metadatos derivados para solicitudes.
+
+
+---
+
+## Agente Multi-Faceta de Atención Ciudadana (routing automático de prompts)
+
+Módulo: `sma_unified/agents/multiagente_ciudadano.py` · Tabla: `sistema.agentes_ciudadanos`
+
+Asistente ciudadano compuesto por varias **facetas** (sub-agentes), cada una con
+su nombre, logo, `system_prompt` y un `trigger_description`. El ciudadano **no
+elige** la faceta: cada mensaje se analiza con el LLM y se enruta solo a la que
+mejor encaja. Es **sin estado**: no se guarda historial de chat.
+
+Facetas sembradas al primer arranque (idempotente): Arquitectura y Urbanismo,
+Salud, Educación y Trámites Legislativos.
+
+### Integración con el resto del SMA
+
+- **Base de datos**: reutiliza la conexión Neon del sistema (`NEON_DATABASE_URL`),
+  no una `DATABASE_URL` aparte.
+- **LLM**: usa `chat_completion_resiliente` (cascada de modelos NVIDIA NIM con
+  fallback automático), no un modelo fijo que queda *end of life*.
+- **Trazabilidad**: cada consulta se publica en MongoDB Atlas como mensaje
+  inter-agente, igual que los demás agentes, y el agente se autoregistra en
+  `sistema.agentes_registrados` (visible en `GET /api/agentes`).
+- **No requiere variables de entorno ni dependencias nuevas.**
+
+### Endpoints
+
+| Método | Ruta                             | Descripción                                   |
+|--------|----------------------------------|-----------------------------------------------|
+| POST   | `/api/ciudadana/chat`            | Enviar consulta; la faceta se elige sola       |
+| GET    | `/api/ciudadana/agentes`         | Listar facetas (`?solo_activos=true`)          |
+| POST   | `/api/ciudadana/agentes`         | Crear faceta                                   |
+| GET    | `/api/ciudadana/agentes/{id}`    | Ver una faceta                                 |
+| PATCH  | `/api/ciudadana/agentes/{id}`    | Editar faceta                                  |
+| DELETE | `/api/ciudadana/agentes/{id}`    | Eliminar faceta                                |
+
+```bash
+curl -X POST http://localhost:8000/api/ciudadana/chat \
+  -H "Content-Type: application/json" \
+  -d '{"mensaje": "¿Qué necesito para aprobar los planos de una ampliación?"}'
+```
+
+```json
+{
+  "success": true,
+  "reply": "...",
+  "agente_nombre": "Arquitectura y Urbanismo",
+  "agente_logo": "🏗️",
+  "routing_automatico": true,
+  "modelo_usado": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
+}
+```
+
+### Frontend
+
+`frontend/src/components/AsistenteMultifacetaPanel.jsx`, montado en la página
+**Atención Ciudadana**. Muestra las facetas disponibles como chips y, en cada
+respuesta, qué faceta atendió, el modelo usado y la latencia.
+
+Si el router no logra decidir o el modelo no responde, cae a la primera faceta
+activa — el chat nunca falla por el routing.
+
+### Especialista Técnico sobre un caso subido
+
+En el panel del chat ciudadano se puede **adjuntar un caso** (PDF/DOCX/TXT). Al
+hacerlo aparece el botón **«Usar Especialista Técnico»**: al activarlo se emite
+una vez el dictamen pericial del documento (`POST /api/ciudadana/especialista/dictamen`,
+módulo `sma_unified/agents/especialista_chat.py`, sobre el `AgenteEspecialistaTecnico`
+ya existente) y, a partir de ahí, **cada mensaje del chatbot lo responde el
+Especialista** sobre ese dictamen y el texto del caso, sin volver a peritar.
+
+- Sin el toggle, el caso adjunto viaja igual como contexto y responde la faceta
+  que elija el router (arquitectura, salud, educación, trámites).
+- El dictamen viaja de ida y vuelta en el campo `dictamen`, así el chat sigue
+  siendo sin estado en el servidor.
+- Campos nuevos de `POST /api/ciudadana/chat`: `caso_texto`, `caso_nombre`,
+  `usar_especialista`, `dictamen`.
+
+### Crear facetas desde el frontend
+
+`frontend/src/components/GestionFacetasPanel.jsx`, montado en **Atención
+Ciudadana** solo para roles internos (`esRolInterno(currentUser.rol)` —
+cualquier rol distinto de `Ciudadano`). Permite crear, editar, activar/desactivar
+y eliminar facetas sin tocar código ni la base de datos a mano; usa los mismos
+endpoints `GET/POST/PATCH/DELETE /api/ciudadana/agentes[/id]`.
+
+Un ciudadano sin sesión interna solo ve el chat (`AsistenteMultifacetaPanel`),
+nunca el panel de administración.

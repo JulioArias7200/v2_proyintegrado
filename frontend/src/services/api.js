@@ -168,6 +168,36 @@ export const api = {
   searchNormativa: (query, documento = null, umbral = 0.5, top_k = 8) =>
     request('/normativa/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, documento, umbral, top_k }) }),
   getCiudadana: (limit = 50) => request(`/ciudadana?limit=${limit}`),
+
+  // AGENTE MULTI-FACETA CIUDADANO (routing automático de prompts)
+  getAgentesCiudadanos: (soloActivos = false) =>
+    request(`/ciudadana/agentes?solo_activos=${soloActivos}`),
+  crearAgenteCiudadano: (data) =>
+    request('/ciudadana/agentes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  actualizarAgenteCiudadano: (id, data) =>
+    request(`/ciudadana/agentes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  eliminarAgenteCiudadano: (id) =>
+    request(`/ciudadana/agentes/${id}`, { method: 'DELETE' }),
+  chatCiudadano: ({ mensaje, sesionId = null, agenteId = null, casoTexto = null, casoNombre = null, usarEspecialista = false, dictamen = null }) =>
+    request('/ciudadana/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mensaje,
+        sesion_id: sesionId,
+        agente_id: agenteId,
+        caso_texto: casoTexto,
+        caso_nombre: casoNombre,
+        usar_especialista: usarEspecialista,
+        dictamen,
+      }),
+    }),
+  dictamenEspecialista: ({ casoTexto, casoNombre = null, materia = null, sesionId = null }) =>
+    request('/ciudadana/especialista/dictamen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ caso_texto: casoTexto, caso_nombre: casoNombre, materia, sesion_id: sesionId }),
+    }),
   getMessages: (limit = 50, sesion_id = null) => {
     const q = sesion_id ? `?limit=${limit}&sesion_id=${sesion_id}` : `?limit=${limit}`;
     return request(`/messages${q}`);

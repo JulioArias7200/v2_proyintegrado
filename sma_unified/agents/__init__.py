@@ -21,6 +21,13 @@ from sma_unified.agents.difusion_ciudadana import AgenteDifusionCiudadana
 from sma_unified.agents.fiscalizacion import AgenteFiscalizacion
 from sma_unified.agents.crew_orchestrator import ejecutar_pipeline_completo, ejecutar_etapa_individual
 
+# Agente Multi-Faceta de Atención Ciudadana (routing automático de prompts)
+from sma_unified.agents.multiagente_ciudadano import (
+    responder_ciudadano,
+    listar_agentes as listar_agentes_ciudadanos,
+    crear_agente as crear_agente_ciudadano,
+)
+
 __all__ = [
     # Pipeline base
     "ejecutar_pipeline",
@@ -31,6 +38,10 @@ __all__ = [
     "verificar_consistencia_normativa",
     "emitir_informe_pdf",
     "notificar_miembros_comision",
+    # Agente Multi-Faceta Ciudadano
+    "responder_ciudadano",
+    "listar_agentes_ciudadanos",
+    "crear_agente_ciudadano",
     # Agentes CrewAI YAML (14 agentes del proceso legislativo boliviano)
     "AgenteConcentrador",
     "AgenteSecretarioCamara",

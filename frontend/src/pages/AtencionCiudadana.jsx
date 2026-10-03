@@ -18,6 +18,9 @@ import {
 import { api } from '../services/api';
 
 import CssRobotAvatar from '../components/CssRobotAvatar';
+import AsistenteMultifacetaPanel from '../components/AsistenteMultifacetaPanel';
+import GestionFacetasPanel from '../components/GestionFacetasPanel';
+import { esRolInterno } from '../context/AuthContext';
 
 export default function AtencionCiudadana({ isAuthenticated = false, currentUser = null, onNavigateLogin }) {
   const [solicitudes, setSolicitudes] = useState([]);
@@ -158,6 +161,12 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
           </div>
         </div>
       </div>
+
+      {/* Administración de facetas: visible solo para roles internos (Secretaría, Comisión, etc.) */}
+      {esRolInterno(currentUser?.rol) && <GestionFacetasPanel />}
+
+      {/* Asistente ciudadano multi-faceta: el mensaje se enruta solo al prompt correcto */}
+      <AsistenteMultifacetaPanel />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '24px' }}>
         {/* Formulario de Registro Rápido (solo autenticado) / Panel informativo (público) */}
