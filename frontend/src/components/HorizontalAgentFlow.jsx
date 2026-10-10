@@ -437,17 +437,30 @@ export default function HorizontalAgentFlow({
     }}>
       {/* ── WORKFLOW INTERACTIVE CONTROLS BAR ── */}
       <div style={{
+<<<<<<< HEAD
         background: 'rgba(15, 23, 42, 0.92)',
         border: '1px solid rgba(148, 163, 184, 0.22)',
         borderRadius: '16px',
         padding: '10px 18px',
         marginBottom: '14px',
+=======
+        background: 'linear-gradient(135deg, #071224 0%, #0B1C35 100%)',
+        border: '1px solid rgba(56, 189, 248, 0.22)',
+        borderRadius: '12px',
+        padding: '9px 15px',
+        marginBottom: '12px',
+>>>>>>> c7c2dd5 (Actualiza el proyecto)
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
+<<<<<<< HEAD
         gap: '12px',
         boxShadow: '0 4px 18px rgba(0, 0, 0, 0.3)'
+=======
+        gap: '10px',
+        boxShadow: '0 4px 18px rgba(4, 12, 24, 0.35)'
+>>>>>>> c7c2dd5 (Actualiza el proyecto)
       }}>
         {/* Left: Workflow title & Interactive Phase Filters */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -586,6 +599,7 @@ export default function HorizontalAgentFlow({
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* ── HORIZONTAL FLOW TRACK WITH CONNECTORS & LARGE ROBOT IMAGES ── */}
       <div
         ref={scrollContainerRef}
@@ -606,6 +620,21 @@ export default function HorizontalAgentFlow({
           const isInspected = inspectedAgentId === agent.id;
           const canInspect = isDone;
           const ActionIcon = agent.workflowIcon;
+=======
+      {/* ── TRACK DEL FLUJO HORIZONTAL ── */}
+      <div style={{
+        background: 'linear-gradient(180deg, #071224 0%, #0A1C36 50%, #071224 100%)',
+        border: '1px solid rgba(56, 189, 248, 0.22)',
+        borderRadius: '16px',
+        padding: compact ? '14px 16px' : '18px 16px',
+        boxShadow: '0 8px 32px rgba(4, 12, 24, 0.45)',
+        position: 'relative'
+      }}>
+        <div ref={scrollContainerRef}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px',
+            overflowX: 'auto', paddingBottom: '4px',
+            scrollBehavior: 'smooth', userSelect: 'none' }}>
+>>>>>>> c7c2dd5 (Actualiza el proyecto)
 
           const cardBorder = isInspected
             ? `2.5px solid ${tc.primary}`

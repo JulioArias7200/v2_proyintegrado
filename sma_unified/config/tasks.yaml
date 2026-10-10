@@ -188,25 +188,39 @@ tareas:
 
   Concentrar_Observaciones:
     descripcion: >
-      Integrar observaciones de múltiples agentes (Constitucional Formal, Consistencia,
-      Especialista Técnico, Constitución Fondo y Presupuesto) en un expediente consolidado.
-      Eliminar redundancias manteniendo la trazabilidad estricta de la fuente.
+      Integrar observaciones de los agentes de análisis (Constitucionalidad y Consistencia Normativa,
+      Especialista Técnico, Constitución Fondo y Presupuesto) en un expediente y dictamen unificado.
+      Eliminar redundancias manteniendo trazabilidad estricta de la fuente, aplicar pensamiento
+      analítico ampliado para generar resumen del proyecto y conclusiones técnico-jurídicas,
+      y emitir un informe oficial formal en PDF con letra negra y certificación criptográfica.
     agente: "Concentrador"
     expected_output: >
-      JSON con expediente consolidado y trazabilidad de origen:
+      JSON con expediente consolidado, análisis ampliado, conclusiones y dictamen PDF:
       {
         "expediente_consolidado": {
           "resumen_ejecutivo": "string",
+          "resumen_proyecto_detallado": "string",
+          "sintesis_constitucional": "string",
+          "sintesis_normativa": "string",
+          "conclusiones_juridicas": "string",
+          "recomendaciones_vinculantes": "string",
+          "declaracion_metodologia": "string",
           "observaciones_integradas": [
             {
+              "id": "OBS-001",
               "tipo": "CONSTITUCIONAL | CONSISTENCIA | TECNICO | FONDO | PRESUPUESTO",
-              "agente_origen": "string",
-              "contenido": "string",
+              "fuente": "string",
+              "cita_original": "string",
               "riesgo": "BAJO | MEDIO | ALTO | CRITICO",
-              "articulos_afectados": ["string"]
+              "articulo_afectado": "string"
             }
           ],
-          "estado_siguiente": "LISTO_PARA_PLENARIA"
+          "pdf_informe": {
+            "filename": "string",
+            "url_descarga": "string",
+            "sha256": "string"
+          },
+          "estado_siguiente": "LISTO_PARA_DEBATE | BLOQUEADO_PARA_DEBATE"
         }
       }
     herramientas: []

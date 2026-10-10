@@ -230,7 +230,11 @@ python test_sma.py
 ### 2. Iniciar el Backend (FastAPI)
 
 ```bash
-.\venv\Scripts\uvicorn.exe server:app --host 127.0.0.1 --port 8085 --reload
+# Con el entorno virtual activado:
+python -m uvicorn server:app --host 127.0.0.1 --port 8085 --reload
+
+# O directamente sin activar:
+.\venv\Scripts\python.exe -m uvicorn server:app --host 127.0.0.1 --port 8085 --reload
 ```
 * API activa en: `http://127.0.0.1:8085`
 * Documentación Swagger: `http://127.0.0.1:8085/docs`

@@ -1068,26 +1068,44 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
       {/* ── HEADER INSTITUCIONAL ── */}
       <div style={{
         marginBottom: '20px',
-        background: 'rgba(11,37,69,0.7)',
-        border: '1px solid rgba(0,180,216,0.2)',
-        borderRadius: '18px',
+        background: 'linear-gradient(135deg, #071224 0%, #0A1C36 50%, #08162C 100%)',
+        border: '1px solid rgba(56, 189, 248, 0.25)',
+        borderRadius: '16px',
         padding: '22px 28px',
-        backdropFilter: 'blur(12px)',
+        boxShadow: '0 8px 32px rgba(4, 12, 24, 0.45)',
         position: 'relative',
         overflow: 'hidden'
       }}>
         {/* Ambient glow */}
-        <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '200px', height: '200px',
-          borderRadius: '50%', background: 'rgba(0,180,216,0.08)', filter: 'blur(60px)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '220px', height: '220px',
+          borderRadius: '50%', background: 'radial-gradient(circle, rgba(14, 165, 233, 0.16) 0%, transparent 70%)', filter: 'blur(45px)', pointerEvents: 'none' }} />
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
-          <span className="badge badge-blue" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '5px',
+            background: 'rgba(14, 165, 233, 0.16)',
+            color: '#38BDF8',
+            border: '1px solid rgba(56, 189, 248, 0.35)',
+            padding: '4px 10px', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 600
+          }}>
             <Shield size={12} /> Mesa de Partes Virtual
           </span>
-          <span className="badge badge-gold" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '5px',
+            background: 'rgba(245, 158, 11, 0.16)',
+            color: '#FBBF24',
+            border: '1px solid rgba(245, 158, 11, 0.35)',
+            padding: '4px 10px', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 600
+          }}>
             <Zap size={12} /> Flujo Multi-Agente · Paralelo
           </span>
-          <span className="badge badge-green" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: '5px',
+            background: 'rgba(16, 185, 129, 0.16)',
+            color: '#34D399',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            padding: '4px 10px', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 600
+          }}>
             <CheckCircle2 size={12} /> Persistencia Automática
           </span>
 
@@ -1100,12 +1118,12 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
               alignItems: 'center',
               gap: '6px',
               padding: '6px 14px',
-              borderRadius: '10px',
+              borderRadius: '8px',
               background: 'linear-gradient(135deg, #0284C7 0%, #00B4D8 100%)',
-              border: '1px solid rgba(0, 180, 216, 0.6)',
+              border: '1px solid rgba(56, 189, 248, 0.6)',
               color: '#FFFFFF',
-              fontWeight: 800,
-              fontSize: '0.78rem',
+              fontWeight: 700,
+              fontSize: '0.76rem',
               cursor: 'pointer',
               boxShadow: '0 2px 12px rgba(0, 180, 216, 0.4)',
               transition: 'all 0.2s ease',
@@ -1117,12 +1135,12 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
             <span>Ver Todos los Resultados ({AGENTS_DEFINITION.filter(a => pipelineStep >= a.doneAtStep).length})</span>
           </button>
         </div>
-        <h1 style={{ fontSize: '1.9rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '6px',
+        <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '6px',
           letterSpacing: '-0.02em', fontFamily: 'Outfit, sans-serif',
-          textShadow: '0 2px 12px rgba(0,180,216,0.3)' }}>
+          textShadow: '0 2px 14px rgba(0,180,216,0.35)' }}>
           Auditoría Automática de Documentos Legislativos
         </h1>
-        <p style={{ color: '#94A3B8', fontSize: '0.92rem', maxWidth: '800px', lineHeight: 1.55, margin: 0 }}>
+        <p style={{ color: '#94A3B8', fontSize: '0.90rem', maxWidth: '800px', lineHeight: 1.55, margin: 0 }}>
           Procese múltiples expedientes en simultáneo con flujo paralelo. Los agentes de Verificación Constitucional y Consistencia Normativa ejecutan de forma simultánea. Haga clic en cualquier agente para ver su detalle.
         </p>
       </div>

@@ -1,10 +1,11 @@
 """
-SMA Congreso — Backend FastAPI
+SMA Congreso - Backend FastAPI
 ==============================
 Servidor REST para la orquestación del Sistema Multi-Agente (SMA),
 procesamiento de documentos, persistencia dual (MongoDB Atlas + PostgreSQL Neon)
 y auditoría constitucional/normativa.
 """
+
 
 import os
 import sys
@@ -45,6 +46,7 @@ from sma_unified.agents.pipeline import (
 from sma_unified.db.neon_postgres import (
     get_conn,
     obtener_comisiones_activas,
+    obtener_comisiones_con_descripcion,
     obtener_stats_constitucionales,
     obtener_ultimas_observaciones,
     obtener_observacion_por_proyecto,
@@ -59,6 +61,7 @@ from sma_unified.db.neon_postgres import (
     obtener_correcciones_proyecto,
     actualizar_estado_correccion,
 )
+
 from sma_unified.agents.embeddings_nvidia import generar_embeddings
 from sma_unified.db.mongo_atlas import (
     get_db,
@@ -346,7 +349,7 @@ def get_health_status():
 
 
 # ── Endpoints de Autenticación (Usuarios_Sistema) ─────────────────────────────
-# Nota: entorno de prueba — contraseña en texto plano, sin hashing ni JWT.
+# Nota: entorno de prueba - contraseña en texto plano, sin hashing ni JWT.
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
@@ -515,98 +518,280 @@ def _resolve_id_proyecto(sesion_id: str, id_proyecto: Optional[int] = None, text
 
 @app.post("/api/pipeline/agent_comision")
 def run_agent_comision(req: Phase2Request):
-    """Ejecuta únicamente el Agente de Asignación de Comisión (con comisiones desde BD Neon)."""
-    from sma_unified.agents.comision import _get_asignador_agent
-    from sma_unified.db.neon_postgres import obtener_comisiones_activas, asignar_comision_a_proyecto, registrar_bitacora
+    """
+    Agente de Asignación de Comisión - Powered by NVIDIA NIM + CrewAI.
+    Carga nombre, descripción y palabras clave de cada comisión desde sistema.comision (Neon),
+    y usa LLM para determinar la comisión parlamentaria competente según la materia del proyecto.
+    """
+    from sma_unified.db.neon_postgres import (
+        obtener_comisiones_con_descripcion, asignar_comision_a_proyecto, registrar_bitacora
+    )
     from sma_unified.utils.text_sampler import muestrear_texto
-    from sma_unified.config import load_tasks_yaml
-    from crewai import Task, Crew
-    import json
-
-    def _strip_json(txt: str) -> str:
-        if "```json" in txt:
-            txt = txt.split("```json")[1].split("```")[0].strip()
-        elif "```" in txt:
-            txt = txt.split("```")[1].split("```")[0].strip()
-        return txt.strip()
+    from openai import OpenAI
+    import json as _json
 
     try:
         t_inicio = time.time()
-        # Cargar comisiones desde Neon (con fallback)
-        comisiones = obtener_comisiones_activas()
-        comisiones_str = "\n".join(f"- {c}" for c in comisiones)
 
-        # Heurística temática basada en comisiones reales de Neon
-        def _determinar_comision_heuristica(texto: str, lista_comisiones: List[str]) -> str:
-            t = texto.lower()
-            if any(k in t for k in ["agua", "medio ambiente", "tierra", "bosque", "biodiversidad", "recursos naturales"]):
-                for c in lista_comisiones:
-                    if "medio ambiente" in c.lower() or "tierra" in c.lower(): return c
-            if any(k in t for k in ["economía", "tribut", "financ", "presupuesto", "banco", "fiscal", "inversión"]):
-                for c in lista_comisiones:
-                    if "planificación" in c.lower() or "economía" in c.lower() or "finanzas" in c.lower(): return c
-            if any(k in t for k in ["salud", "educación", "deporte", "escuela", "hospital", "médic"]):
-                for c in lista_comisiones:
-                    if "educación" in c.lower() or "salud" in c.lower(): return c
-            if any(k in t for k in ["justicia", "penal", "civil", "derechos humanos", "constituc"]):
-                for c in lista_comisiones:
-                    if "constitución" in c.lower() or "justicia" in c.lower(): return c
-            for c in lista_comisiones:
-                if "constitución" in c.lower(): return c
-            return lista_comisiones[0] if lista_comisiones else "Comisión de Constitución, Legislación y Sistema Electoral"
+        # ── 1. Cargar comisiones con descripción completa desde Neon ──────────
+        comisiones_data = obtener_comisiones_con_descripcion()
 
-        # Intento con LLM resiliente
-        data = None
-        try:
-            from sma_unified.agents.llm_client import chat_completion_resiliente, extraer_json_de_llm
-            prompt_com = f"""Eres el Asignador de Comisiones de la Asamblea Legislativa de Bolivia.
-Comisiones disponibles en la base de datos:
-{comisiones_str}
-
-Texto del documento:
-{muestrear_texto(req.texto_documento, 3000)}
-
-Determina la comisión competente según la materia. Responde ÚNICAMENTE con JSON:
-{{"comision_principal": "<nombre exacto de una comisión de la lista>", "prioridad": "Alta|Media|Normal", "resumen": "<breve resumen>", "complejidad": "Baja|Media|Alta"}}
-"""
-            raw_out, mod = chat_completion_resiliente(
-                messages=[{"role": "user", "content": prompt_com}],
-                temperature=0.1,
-                max_tokens=250,
-                timeout=8
+        # Construir texto de catálogo enriquecido para el LLM
+        lineas_catalogo = []
+        for c in comisiones_data:
+            linea = (
+                f"  • ID {c['id_comision']} | {c['nombre_comision']}\n"
+                f"    Nombre: {c['nombre']}\n"
+                f"    Descripción: {c['descripcion']}\n"
+                f"    Palabras clave: {', '.join(c.get('palabras_clave', []))}"
             )
-            data = extraer_json_de_llm(raw_out)
-        except Exception as _llm_e:
-            logger.warning(f"Fallback heurístico comisiones por error LLM: {_llm_e}")
+            lineas_catalogo.append(linea)
+        catalogo_str = "\n".join(lineas_catalogo)
 
-        if not data or not isinstance(data, dict) or not data.get("comision_principal"):
-            com_elegida = _determinar_comision_heuristica(req.texto_documento, comisiones)
-            data = {
-                "comision_principal": com_elegida,
-                "prioridad": "Alta" if "urgente" in req.texto_documento.lower() else "Normal",
-                "resumen": req.texto_documento.strip().split("\n")[0][:180] or "Proyecto legislativo canalizado por especialidad temática.",
+        # Lista de nombres exactos para validación
+        nombres_validos = [c["nombre_comision"] for c in comisiones_data]
+        nombres_validos_lower = {n.lower(): n for n in nombres_validos}
+
+        texto_doc = muestrear_texto(req.texto_documento, 3500)
+
+        # ── 2. Heurística temática robusta (fallback) ─────────────────────────
+        def _determinar_comision_heuristica(texto: str) -> Dict[str, Any]:
+            t = texto.lower()
+            palabras_economicas = ["economía", "tribut", "financ", "presupuesto", "banco", "fiscal",
+                                   "inversión", "impuesto", "deuda", "monetar", "bce", "tgn"]
+            palabras_educacion  = ["educación", "escuela", "colegio", "universidad", "docente",
+                                   "maestro", "enseñanza", "curricul", "académic", "cultura",
+                                   "deporte", "recreación"]
+            palabras_salud      = ["salud", "hospital", "médic", "enferm", "sani", "farmac",
+                                   "epidem", "vacun", "psicol"]
+            palabras_ambiente   = ["agua", "medio ambiente", "tierra", "bosque", "biodiversidad",
+                                   "recursos naturales", "minería", "energía", "ecolog",
+                                   "contamin", "forestal"]
+            palabras_justicia   = ["justicia", "penal", "civil", "código", "pena", "delito",
+                                   "tribunal", "juzgado", "fiscalía", "ministerio público"]
+            palabras_const      = ["constitución", "constitucional", "derechos humanos",
+                                   "sistema electoral", "referendum", "legislac"]
+            palabras_seguridad  = ["seguridad", "fuerzas armadas", "policía", "narcotráfico",
+                                   "defensa nacional", "crimen organizado"]
+            palabras_autonomia  = ["autonomía", "municipio", "gobernación", "descentraliz",
+                                   "organización territorial"]
+            palabras_indigena   = ["indígena", "originario", "campesino", "nación", "pueblo",
+                                   "interculturalidad", "plurinacional"]
+            palabras_social     = ["social", "vivienda", "familia", "niñez", "mujer", "género",
+                                   "inclusión", "discapacidad"]
+            palabras_economia_plural = ["producción", "industria", "industrializ", "empresa",
+                                        "comercio", "emprendimiento", "artesanía", "economia plural"]
+            palabras_int        = ["internacional", "tratado", "diplomacia", "relaciones exteriores",
+                                   "convenio", "onu", "oea"]
+
+            # Función para buscar la comisión por nombre parcial en la lista de BD
+            def _buscar_comision(keywords: List[str]) -> Optional[Dict[str, Any]]:
+                for c in comisiones_data:
+                    nombre_low = c["nombre_comision"].lower() + " " + c["descripcion"].lower()
+                    for kw in keywords:
+                        if kw in nombre_low:
+                            return c
+                return None
+
+            if any(kw in t for kw in palabras_ambiente):
+                c = _buscar_comision(["tierra", "medio ambiente", "recursos naturales"])
+            elif any(kw in t for kw in palabras_economicas):
+                c = _buscar_comision(["planificacion", "financ", "econom"])
+            elif any(kw in t for kw in palabras_educacion):
+                c = _buscar_comision(["educacion", "social"])
+            elif any(kw in t for kw in palabras_salud):
+                c = _buscar_comision(["salud", "social"])
+            elif any(kw in t for kw in palabras_justicia):
+                c = _buscar_comision(["justicia"])
+            elif any(kw in t for kw in palabras_seguridad):
+                c = _buscar_comision(["seguridad"])
+            elif any(kw in t for kw in palabras_autonomia):
+                c = _buscar_comision(["autonomia", "territorial"])
+            elif any(kw in t for kw in palabras_indigena):
+                c = _buscar_comision(["indigena", "interculturalidad"])
+            elif any(kw in t for kw in palabras_social):
+                c = _buscar_comision(["social", "educacion"])
+            elif any(kw in t for kw in palabras_economia_plural):
+                c = _buscar_comision(["produccion", "econom", "industria"])
+            elif any(kw in t for kw in palabras_int):
+                c = _buscar_comision(["internacional"])
+            elif any(kw in t for kw in palabras_const):
+                c = _buscar_comision(["constitucion"])
+            else:
+                c = _buscar_comision(["constitucion"])
+
+            if not c and comisiones_data:
+                c = comisiones_data[0]
+
+            return {
+                "comision_principal": c["nombre_comision"],
+                "nombre_comision_display": c["nombre"],
+                "descripcion_comision": c["descripcion"],
+                "id_comision": c["id_comision"],
+                "prioridad": "Normal",
+                "resumen": texto_doc.strip().split("\n")[0][:200] or "Proyecto legislativo asignado por especialidad temática.",
                 "complejidad": "Media",
+                "metodo": "heuristica_tematica",
             }
 
+        # ── 3. LLM NVIDIA NIM: Nemotron Super 120B (via OpenAI client) ────────
+        data = None
+        modelo_usado = "heuristica"
+        nvidia_api_key = (
+            os.getenv("NVIDIA_API_KEY") or
+            "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"
+        )
+
+        system_prompt_comision = (
+            "Eres el Asignador Oficial de Comisiones de la Asamblea Legislativa Plurinacional de Bolivia. "
+            "Tu única función es determinar cuál comisión parlamentaria es competente para tramitar un proyecto de ley "
+            "según su materia, objeto y contenido sustantivo. "
+            "REGLAS OBLIGATORIAS:\n"
+            "1. DEBES elegir EXACTAMENTE una comisión del catálogo proporcionado, copiando su nombre_comision literalmente.\n"
+            "2. Responde ÚNICAMENTE con JSON válido, sin texto adicional antes ni después.\n"
+            "3. NO inventes comisiones, NO parafrasees el nombre de la comisión."
+        )
+
+        nombres_lista = "\n".join([f"  {i+1}. {c['nombre_comision']} - {c['nombre']}" for i, c in enumerate(comisiones_data)])
+
+        user_prompt_comision = f"""CATÁLOGO DE COMISIONES DISPONIBLES EN LA ASAMBLEA (desde base de datos):
+{catalogo_str}
+
+TEXTO DEL PROYECTO DE LEY A ANALIZAR:
+{texto_doc}
+
+INSTRUCCIÓN: Analiza el objeto, materia y contenido del proyecto y determina la comisión competente.
+Elige SOLO de esta lista (copia el nombre_comision exacto):
+{nombres_lista}
+
+Responde con este JSON exacto:
+{{
+  "comision_principal": "<nombre_comision exacto de la lista>",
+  "id_comision": <número entero>,
+  "prioridad": "Alta|Media|Normal",
+  "complejidad": "Alta|Media|Baja",
+  "resumen": "<resumen del proyecto en 1-2 frases>",
+  "justificacion": "<por qué esta comisión es la competente según materia>"
+}}"""
+
+        # 3a. Intento primario: NVIDIA NIM con modelo Nemotron Super 120B
+        try:
+            client_nim = OpenAI(
+                base_url="https://integrate.api.nvidia.com/v1",
+                api_key=nvidia_api_key,
+                timeout=30.0,
+            )
+            completion = client_nim.chat.completions.create(
+                model="nvidia/nemotron-3-super-120b-a12b",
+                messages=[
+                    {"role": "system", "content": system_prompt_comision},
+                    {"role": "user",   "content": user_prompt_comision},
+                ],
+                temperature=0.1,
+                top_p=0.95,
+                max_tokens=700,
+                stream=False,
+            )
+            raw_llm = completion.choices[0].message.content or ""
+            modelo_usado = "nvidia/nemotron-3-super-120b-a12b"
+            from sma_unified.agents.llm_client import extraer_json_de_llm
+            data = extraer_json_de_llm(raw_llm)
+            if isinstance(data, dict) and data.get("comision_principal"):
+                logger.info(f"[Comision] ✅ LLM NIM asignó: {data['comision_principal']} (modelo: {modelo_usado})")
+            else:
+                data = None
+        except Exception as e_nim:
+            logger.warning(f"[Comision] NVIDIA NIM falló ({e_nim}). Intentando fallback resiliente.")
+
+        # 3b. Fallback resiliente al cliente multi-modelo del sistema
+        if not data:
+            try:
+                from sma_unified.agents.llm_client import chat_completion_resiliente, extraer_json_de_llm
+                raw_out, modelo_usado = chat_completion_resiliente(
+                    messages=[
+                        {"role": "system", "content": system_prompt_comision},
+                        {"role": "user",   "content": user_prompt_comision},
+                    ],
+                    temperature=0.1,
+                    max_tokens=500,
+                    timeout=20,
+                )
+                data = extraer_json_de_llm(raw_out)
+                if isinstance(data, dict) and data.get("comision_principal"):
+                    logger.info(f"[Comision] ✅ Fallback resiliente asignó: {data['comision_principal']} (modelo: {modelo_usado})")
+                else:
+                    data = None
+            except Exception as e_fb:
+                logger.warning(f"[Comision] Fallback resiliente también falló: {e_fb}")
+
+        # 3c. Heurística temática si el LLM no responde correctamente
+        if not data or not isinstance(data, dict) or not data.get("comision_principal"):
+            logger.warning("[Comision] Usando heurística temática como último recurso.")
+            data = _determinar_comision_heuristica(req.texto_documento)
+            modelo_usado = "heuristica_tematica"
+
+        # ── 4. Validar que el nombre de comisión sea exacto de la BD ──────────
+        comision_raw = str(data.get("comision_principal", "")).strip()
+        comision_normalizada = None
+
+        # Búsqueda exacta primero
+        if comision_raw.upper() in nombres_validos_lower:
+            comision_normalizada = nombres_validos_lower[comision_raw.upper()]
+        elif comision_raw in nombres_validos:
+            comision_normalizada = comision_raw
+
+        # Búsqueda parcial si falla la exacta
+        if not comision_normalizada:
+            for c in comisiones_data:
+                if (c["nombre_comision"].lower() in comision_raw.lower() or
+                        comision_raw.lower() in c["nombre_comision"].lower() or
+                        comision_raw.lower() in c["nombre"].lower()):
+                    comision_normalizada = c["nombre_comision"]
+                    break
+
+        # Último recurso: la primera de la lista
+        if not comision_normalizada and comisiones_data:
+            comision_normalizada = comisiones_data[0]["nombre_comision"]
+
+        data["comision_principal"] = comision_normalizada
+
+        # Enriquecer la respuesta con datos completos de la comisión elegida
+        comision_elegida_data = next(
+            (c for c in comisiones_data if c["nombre_comision"] == comision_normalizada),
+            comisiones_data[0] if comisiones_data else {}
+        )
+        data["nombre_comision_display"] = comision_elegida_data.get("nombre", comision_normalizada)
+        data["descripcion_comision"]    = comision_elegida_data.get("descripcion", "")
+        data["id_comision"]             = comision_elegida_data.get("id_comision", data.get("id_comision"))
+        data["rol_principal"]           = comision_elegida_data.get("rol_principal", "")
+        data["palabras_clave"]          = comision_elegida_data.get("palabras_clave", [])
+        data["modelo_llm_usado"]        = modelo_usado
+
+        # ── 5. Resolver y persistir en Neon ───────────────────────────────────
         id_proyecto = _resolve_id_proyecto(req.sesion_id, req.id_proyecto, req.texto_documento, req.nombre_archivo)
         data["id_proyecto"] = id_proyecto
 
         if id_proyecto and data.get("comision_principal"):
-            # Actualizar proyecto en Neon
+            from sma_unified.db.neon_postgres import asignar_comision_a_proyecto
             asignar_comision_a_proyecto(
-                id_proyecto, data["comision_principal"],
-                data.get("resumen", "Asignado por IA"), True
+                id_proyecto,
+                data["comision_principal"],
+                data.get("resumen", "Asignado por LLM NVIDIA NIM"),
+                True
             )
-            # Actualizar titulo y resumen si vienen de la IA
             try:
                 conn = get_conn()
                 cur = conn.cursor()
-                titulo_extract = data.get("tema_principal") or data.get("resumen", "").split(".")[0][:250] or req.nombre_archivo
+                titulo_extract = (
+                    data.get("resumen", "").split(".")[0][:250] or
+                    req.nombre_archivo or
+                    f"Proyecto Ley #{id_proyecto}"
+                )
                 cur.execute(
                     """
                     UPDATE sistema.proyecto_ley SET
-                        titulo = COALESCE(NULLIF(%s, ''), titulo),
-                        resumen = COALESCE(NULLIF(%s, ''), resumen),
+                        titulo    = COALESCE(NULLIF(%s, ''), titulo),
+                        resumen   = COALESCE(NULLIF(%s, ''), resumen),
                         prioridad = %s
                     WHERE id_proyecto = %s
                     """,
@@ -617,17 +802,20 @@ Determina la comisión competente según la materia. Responde ÚNICAMENTE con JS
             except Exception as _ue:
                 logger.warning(f"No se pudo actualizar titulo/resumen en Neon: {_ue}")
 
-            # Registrar en Bitácora de Neon
             duracion_s = max(1, int(time.time() - t_inicio))
             registrar_bitacora(
                 id_proyecto=id_proyecto,
                 agente_accion="Agente_Comision_Legislativa",
                 accion_realizada="Asignación de Comisión y Temática",
-                descripcion=f"Comisión: {data.get('comision_principal')} | Prioridad: {data.get('prioridad', 'Normal')}",
+                descripcion=(
+                    f"Comisión: {data.get('comision_principal')} | "
+                    f"Prioridad: {data.get('prioridad', 'Normal')} | "
+                    f"Modelo: {modelo_usado}"
+                ),
                 tiempo_segundos=duracion_s
             )
 
-        # Buscar miembros de la comisión asignada en sistema.miembro_comision
+        # ── 6. Cargar miembros de la comisión asignada ─────────────────────────
         miembros = []
         try:
             conn = get_conn()
@@ -636,16 +824,16 @@ Determina la comisión competente según la materia. Responde ÚNICAMENTE con JS
                 SELECT m.nombre_completo, m.cargo, m.tipo_camara, m.email, m.partido_politico
                 FROM sistema.miembro_comision m
                 JOIN sistema.comision c ON c.id_comision = m.id_comision
-                WHERE (c.codigo_comision = %s OR c.nombre_corto = %s OR c.nombre_comision ILIKE %s)
+                WHERE (c.nombre_comision ILIKE %s OR c.nombre ILIKE %s)
                   AND (m.activo IS NULL OR m.activo = TRUE)
-                ORDER BY 
-                  CASE m.cargo 
-                    WHEN 'Presidente' THEN 1 
-                    WHEN 'Vicepresidente' THEN 2 
-                    WHEN 'Secretario' THEN 3 
-                    ELSE 4 
+                ORDER BY
+                  CASE m.cargo
+                    WHEN 'Presidente'     THEN 1
+                    WHEN 'Vicepresidente' THEN 2
+                    WHEN 'Secretario'     THEN 3
+                    ELSE 4
                   END
-            """, (data.get("comision_principal"), data.get("comision_principal"), f"%{data.get('comision_principal')}%"))
+            """, (f"%{comision_normalizada}%", f"%{data.get('nombre_comision_display', '')}%"))
             rows = cur.fetchall()
             cur.close()
             miembros = [dict(r) for r in rows]
@@ -653,15 +841,21 @@ Determina la comisión competente según la materia. Responde ÚNICAMENTE con JS
             logger.warning(f"No se pudieron obtener miembros de comisión: {_me}")
 
         data["miembros"] = miembros
+        logger.info(
+            f"[Comision] ✅ Asignación completada | "
+            f"Comisión: {comision_normalizada} | ID: {id_proyecto} | Modelo: {modelo_usado}"
+        )
         return {"success": True, "data": data}
+
     except Exception as e:
         logger.error(f"Error en Agente Comisión: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 @app.post("/api/pipeline/agent_constitucional")
 def run_agent_constitucional(req: Phase2Request):
-    """Ejecuta el Agente de Verificación Constitucional (CPE) — módulo independiente."""
+    """Ejecuta el Agente de Verificación Constitucional (CPE) - módulo independiente."""
     from sma_unified.agents.verificador_constitucional import verificar_constitucionalidad
     from sma_unified.db.neon_postgres import actualizar_proyecto_con_observacion, registrar_bitacora
     from sma_unified.db.mongo_atlas import guardar_reporte_constitucionalidad_mongo
@@ -719,7 +913,7 @@ def run_agent_constitucional(req: Phase2Request):
 
 @app.post("/api/pipeline/agent_consistencia")
 def run_agent_consistencia(req: Phase2Request):
-    """Ejecuta el Agente de Consistencia Normativa (leyes vigentes) — módulo independiente."""
+    """Ejecuta el Agente de Consistencia Normativa (leyes vigentes) - módulo independiente."""
     from sma_unified.agents.consistencia_normativa import verificar_consistencia_normativa
     from sma_unified.db.neon_postgres import registrar_bitacora
     try:
@@ -933,7 +1127,7 @@ Asamblea Legislativa Plurinacional de Bolivia"""
                     "success": True,
                     "data": {
                         "mensaje_redactado": mensaje_redactado,
-                        "agente": "Agente CrewAI de Enlace Legislativo — Presidencia del Senado",
+                        "agente": "Agente CrewAI de Enlace Legislativo - Presidencia del Senado",
                         "numero_ley": numero_ley,
                         "boletin_oficial": boletin
                     }
@@ -1197,10 +1391,10 @@ async def run_agent_bicameral_endpoint(payload: Dict[str, Any]):
 @app.post("/api/pipeline/confirmar_aprobacion_bicameral")
 def confirmar_aprobacion_bicameral_endpoint(req: ConfirmarAprobacionBicameralRequest):
     """
-    Confirmación de Aprobación — Trámite Bicameral.
+    Confirmación de Aprobación - Trámite Bicameral.
     Cuando un Senador confirma la aprobación de un proyecto de ley, notifica por
     correo (con el PDF del proyecto y el informe de constitucionalidad/consistencia
-    adjuntos) a todos los Diputados registrados en Usuarios_Sistema — y viceversa
+    adjuntos) a todos los Diputados registrados en Usuarios_Sistema - y viceversa
     cuando quien confirma es un Diputado.
     """
     try:
@@ -2101,7 +2295,7 @@ def api_generar_pdf_gaceta(id_proyecto: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Endpoints de Voz (TTS & STT — Fallback Whisper + Web Speech API) ─────────
+# ── Endpoints de Voz (TTS & STT - Fallback Whisper + Web Speech API) ─────────
 
 @app.get("/api/voz/estado")
 def api_voz_estado():

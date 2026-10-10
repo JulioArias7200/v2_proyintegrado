@@ -288,7 +288,7 @@ def chat_completion_resiliente(
     Timeout acotado para respuesta ultra-rápida.
     """
     modelos = modelos or _lista_modelos_razonamiento()
-    timeout_efectivo = timeout or 10  # 10s máximo por intento para no bloquear el sistema
+    timeout_efectivo = timeout or 35  # 35s para dar tiempo suficiente a modelos grandes (30B-120B) en NVIDIA NIM
     ultimo_error: Optional[Exception] = None
 
     for modelo in modelos:

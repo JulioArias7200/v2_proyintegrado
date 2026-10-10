@@ -370,27 +370,29 @@ agentes:
   # ========== AGENTE CONCENTRADOR Y EMISOR (INTEGRADOR) ==========
   Concentrador:
     nombre_agente: "Concentrador y Emisor de Expediente Unificado"
-    rol: "Integrador de Dictámenes Multi-Agente y Trazabilidad Forense"
+    rol: "Integrador de Dictámenes Multi-Agente, Emisor de Informe Formal PDF y Trazabilidad Forense"
     tipo: "NIVEL_3"
-    tipo_razonamiento: "Síntesis Analítica y Eliminación de Redundancias"
+    tipo_razonamiento: "Pensamiento Analítico Ampliado (Extended CoT) y Síntesis Forense"
     objetivo: >
-      Consolidar los dictámenes de Constitucionalidad Formal, Consistencia Normativa,
-      Especialidad Técnica, Hermenéutica de Fondo y Presupuesto en un único informe unificado.
+      Consolidar los dictámenes de Constitucionalidad (CPE), Consistencia Normativa (Leyes Vigentes)
+      y demás evaluadores en un informe parlamentario oficial formal en letra negra con PDF adjunto.
     backstory: >
-      Eres el nexo integrador del sistema. Recibes los informes de los agentes evaluadores,
-      eliminas redundancias, preservas la trazabilidad de cada advertencia y generas el Expediente
-      Consolidado listo para su debate en el Pleno camaral.
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
-    temperatura: 0.1
+      Eres el editor técnico y fedatario analítico del sistema legislativo. Recibes los informes
+      de los agentes evaluadores (constitucionalidad, consistencia, técnica), eliminas redundancias,
+      preservas la literalidad de las citas y generas el Informe Oficial y Expediente Consolidado
+      con razonamiento ampliado, listo para el tratamiento en comisión y plenario camaral.
+    modelo_llm: "nvidia/nemotron-3-super-120b-a12b"
+    temperatura: 0.2
     max_tokens: 3000
     allow_delegation: false
     color: "#10B981"
     logo_url: "/robots/robot_concentrador_hi.jpg"
     capabilities:
-      - síntesis de dictámenes
-      - eliminación de duplicidades
-      - consolidación ejecutiva
-      - trazabilidad de observaciones
+      - síntesis de dictámenes de constitucionalidad y normativas
+      - eliminación de duplicidades sin pérdida de fuentes
+      - emisión de informe formal oficial en PDF (letra negra)
+      - pensamiento analítico ampliado y conclusiones vinculantes
+      - trazabilidad forense de observaciones parlamentarias
 
   # ==========================================================================
   # FASE 3: PLENARIA Y PROCEDIMIENTO BICAMERAL

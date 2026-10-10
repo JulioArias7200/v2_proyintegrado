@@ -1285,8 +1285,8 @@ def obtener_comisiones_activas() -> List[str]:
             """
             SELECT COALESCE(codigo_comision, nombre_corto, nombre)
             FROM sistema.comision
-            WHERE activa = TRUE OR estado = 'activa'
-            ORDER BY nombre
+            WHERE activa = TRUE OR estado = 'activa' OR activa IS NULL
+            ORDER BY id_comision
             """
         )
         rows = cur.fetchall()
@@ -1298,6 +1298,73 @@ def obtener_comisiones_activas() -> List[str]:
         return _FALLBACK
     except Exception as e:
         logger.warning(f"Usando comisiones hardcodeadas (Neon falló): {e}")
+        return _FALLBACK
+
+
+def obtener_comisiones_con_descripcion() -> List[Dict[str, Any]]:
+    """
+    Lee las comisiones activas desde sistema.comision con nombre completo,
+    descripción y palabras clave para usar en el prompt del LLM de asignación.
+    Retorna lista de dicts con: id_comision, nombre_comision, nombre, descripcion,
+    palabras_clave_principales, rol_principal.
+    """
+    _FALLBACK = [
+        {"id_comision": 1, "nombre_comision": "COMISION DE CONSTITUCION DERECHOS HUMANOS LEGISLACION Y SISTEMA ELECTORAL",
+         "nombre": "Comisión de Constitución, Derechos Humanos, Legislación y Sistema Electoral",
+         "descripcion": "Vela por la observancia de la Constitución, derechos humanos y sistema electoral",
+         "palabras_clave": ["constitución", "derechos humanos", "sistema electoral", "legislación"]},
+        {"id_comision": 2, "nombre_comision": "COMISION DE JUSTICIA PLURAL MINISTERIO PUBLICO Y DEFENSA LEGAL DEL ESTADO",
+         "nombre": "Comisión de Justicia Plural, Ministerio Público y Defensa Legal del Estado",
+         "descripcion": "Supervisa el Órgano Judicial, el Ministerio Público y la defensa legal del Estado",
+         "palabras_clave": ["justicia", "ministerio público", "defensa legal"]},
+        {"id_comision": 5, "nombre_comision": "COMISION DE PLANIFICACION POLITICA ECONOMICA Y FINANZAS",
+         "nombre": "Comisión de Planificación, Política Económica y Finanzas",
+         "descripcion": "Presupuesto General del Estado, política tributaria, fiscal, inversión pública",
+         "palabras_clave": ["planificación", "presupuesto", "economía", "finanzas"]},
+        {"id_comision": 8, "nombre_comision": "COMISION DE POLITICA SOCIAL EDUCACION Y SALUD",
+         "nombre": "Comisión de Política Social, Educación y Salud",
+         "descripcion": "Legisla sobre políticas educativas, salud y vivienda",
+         "palabras_clave": ["educación", "salud", "vivienda", "social"]},
+        {"id_comision": 10, "nombre_comision": "COMISION DE TIERRA Y TERRITORIO RECURSOS NATURALES Y MEDIO AMBIENTE",
+         "nombre": "Comisión de Tierra y Territorio, Recursos Naturales y Medio Ambiente",
+         "descripcion": "Gestión de la tierra, recursos naturales y protección del medio ambiente",
+         "palabras_clave": ["tierra", "recursos naturales", "medio ambiente", "biodiversidad"]},
+    ]
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                id_comision,
+                nombre_comision,
+                nombre,
+                descripcion,
+                palabras_clave_principales,
+                rol_principal
+            FROM sistema.comision
+            WHERE activa = TRUE OR estado = 'activa' OR activa IS NULL
+            ORDER BY id_comision
+            """
+        )
+        rows = cur.fetchall()
+        cur.close()
+        if rows:
+            resultado = []
+            for r in rows:
+                resultado.append({
+                    "id_comision": r[0],
+                    "nombre_comision": r[1] or "",
+                    "nombre": r[2] or "",
+                    "descripcion": r[3] or "",
+                    "palabras_clave": r[4] if isinstance(r[4], list) else [],
+                    "rol_principal": r[5] or "",
+                })
+            logger.info(f"📋 Comisiones con descripción cargadas desde Neon: {len(resultado)}")
+            return resultado
+        return _FALLBACK
+    except Exception as e:
+        logger.warning(f"Usando comisiones fallback con descripción (Neon falló): {e}")
         return _FALLBACK
 
 
