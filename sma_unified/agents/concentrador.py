@@ -288,7 +288,8 @@ INSTRUCCIÓN: Devuelve un JSON estructurado con exactamente estas claves:
             max_tokens=2200,
             stream=False
         )
-        content = completion.choices[0].message.content or ""
+        msg_obj = completion.choices[0].message
+        content = msg_obj.content or getattr(msg_obj, "reasoning_content", "") or ""
         parsed = extraer_json_de_llm(content)
         if isinstance(parsed, dict) and parsed.get("resumen_ejecutivo"):
             logger.info(f"[Concentrador] Análisis con pensamiento ampliado exitoso ({MODELO_RAZONAMIENTO_AMPLIADO})")
@@ -720,9 +721,11 @@ class AgenteConcentrador:
                 "id": o.get("id") or f"OBS-{i+1:03d}",
                 "fuente": (o.get("fuentes")[0] if isinstance(o.get("fuentes"), list) and o.get("fuentes") else o.get("fuente", "?")),
                 "fuentes": o.get("fuentes", [o.get("fuente", "?")]),
+                "agente_origen": (o.get("fuentes")[0] if isinstance(o.get("fuentes"), list) and o.get("fuentes") else o.get("fuente", "Agente")),
                 "articulo": o.get("articulo") or o.get("articulo_afectado", "N/A"),
                 "articulo_afectado": o.get("articulo_afectado") or o.get("articulo", "N/A"),
                 "cita_original": o.get("cita_original", ""),
+                "contenido": o.get("cita_original") or o.get("articulo_afectado", ""),
                 "tipo": o.get("tipo", "OBSERVACION"),
                 "riesgo": o.get("riesgo", "leve"),
                 "verificado": o.get("verificado", True),
@@ -773,6 +776,8 @@ class AgenteConcentrador:
             "bitacora": bitacora_trazabilidad,
             "analisis_ampliado": analisis_ampliado,
             "pdf_informe": pdf_info,
+            "pdf": pdf_info,
+            "pdf_filename": pdf_info.get("filename", ""),
             "expediente_consolidado": {
                 "resumen_ejecutivo": resumen_ejecutivo,
                 "resumen_proyecto_detallado": analisis_ampliado.get("resumen_proyecto_detallado", ""),
@@ -789,6 +794,8 @@ class AgenteConcentrador:
                 "estado_siguiente": estado_siguiente,
                 "bitacora_trazabilidad": bitacora_trazabilidad,
                 "pdf_informe": pdf_info,
+                "pdf": pdf_info,
+                "pdf_filename": pdf_info.get("filename", ""),
             },
             "texto_proyecto_intacto": True
         }

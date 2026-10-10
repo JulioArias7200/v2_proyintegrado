@@ -66,10 +66,11 @@ try:
         messages=[{"role": "system", "content": system_p}, {"role": "user", "content": user_p}],
         temperature=0.1,
         top_p=0.95,
-        max_tokens=400,
+        max_tokens=1500,
         stream=False
     )
-    raw = completion.choices[0].message.content or ""
+    msg = completion.choices[0].message
+    raw = msg.content or getattr(msg, "reasoning_content", "") or ""
     print("Respuesta raw LLM:", raw[:400])
     data = extraer_json_de_llm(raw)
     print()

@@ -311,7 +311,8 @@ def chat_completion_resiliente(
                 ultimo_error = RuntimeError(f"Modelo '{modelo}' no disponible: {resp.text[:300]}")
                 continue
             resp.raise_for_status()
-            contenido = resp.json()["choices"][0]["message"]["content"]
+            msg_obj = resp.json()["choices"][0]["message"]
+            contenido = msg_obj.get("content") or msg_obj.get("reasoning_content") or ""
             if modelo != modelos[0]:
                 logger.info(f"Se usó el modelo de respaldo '{modelo}' (el configurado '{modelos[0]}' no respondió).")
             return contenido, modelo

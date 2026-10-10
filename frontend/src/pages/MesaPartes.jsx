@@ -3537,27 +3537,48 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                     <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>
                       Observaciones Integradas con Trazabilidad:
                     </div>
-                    {obsList.map((o, idx) => (
-                      <div key={idx} style={{
-                        background: 'rgba(15,23,42,0.7)',
-                        border: '1px solid rgba(148,163,184,0.2)',
-                        padding: '12px 16px',
-                        borderRadius: '10px',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px'
-                      }}>
-                        <div>
-                          <span style={{ fontWeight: 700, color: '#e2e8f0', fontSize: '0.85rem', marginRight: '8px' }}>
-                            [{o.tipo || 'OBS'}]
-                          </span>
-                          <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>
-                            {typeof o.contenido === 'string' ? o.contenido.slice(0, 140) : JSON.stringify(o.contenido || {}).slice(0, 140)}...
+                    {obsList.map((o, idx) => {
+                      const artLabel = o.articulo_afectado || o.articulo || '';
+                      const textoObs = o.cita_original || (typeof o.contenido === 'string' ? o.contenido : o.fundamento || (o.contenido ? JSON.stringify(o.contenido) : 'Observación técnica'));
+                      const fuenteLabel = o.agente_origen || o.fuente || (Array.isArray(o.fuentes) ? o.fuentes.join(', ') : 'Agente');
+                      return (
+                        <div key={idx} style={{
+                          background: 'rgba(15,23,42,0.7)',
+                          border: '1px solid rgba(148,163,184,0.2)',
+                          padding: '12px 16px',
+                          borderRadius: '10px',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px'
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                              <span style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem' }}>
+                                [{o.tipo || 'OBS'}]
+                              </span>
+                              {artLabel && artLabel !== 'N/A' && (
+                                <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.82rem' }}>
+                                  {artLabel}
+                                </span>
+                              )}
+                              {o.riesgo && (
+                                <span className="badge" style={{
+                                  fontSize: '0.65rem', padding: '1px 6px',
+                                  background: (o.riesgo === 'bloqueante' || o.riesgo === 'grave') ? 'rgba(239,68,68,0.2)' : 'rgba(234,179,8,0.2)',
+                                  color: (o.riesgo === 'bloqueante' || o.riesgo === 'grave') ? '#f87171' : '#facc15'
+                                }}>
+                                  {o.riesgo}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.82rem', lineHeight: 1.4 }}>
+                              {String(textoObs).slice(0, 200)}{String(textoObs).length > 200 ? '...' : ''}
+                            </div>
+                          </div>
+                          <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(56,189,248,0.15)', color: '#38bdf8', flexShrink: 0 }}>
+                            {fuenteLabel}
                           </span>
                         </div>
-                        <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(56,189,248,0.15)', color: '#38bdf8', flexShrink: 0 }}>
-                          {o.agente_origen || 'Agente'}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
