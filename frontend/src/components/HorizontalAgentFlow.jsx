@@ -27,15 +27,14 @@ import {
 } from 'lucide-react';
 
 // ── Logos de agentes disponibles (desde /robots/logos/) ──
+// ── Logos de agentes disponibles (desde /robots/logos/) ──
 const AGENT_LOGOS = {
   distribuidor:       '/robots/logos/distribuidor.jpg',
   comision:           '/robots/logos/verificadorconstitucional.jpg',
   constitucional:     '/robots/logos/verificadorconstitucional.jpg',
   consistencia:       '/robots/logos/consistencianormativa.jpg',
+  concentrador:       '/robots/logos/distribuidor.jpg',
   emisor:             '/robots/logos/distribuidor.jpg',
-  notificador:        '/robots/logos/consistencianormativa.jpg',
-  constitucion_fondo: '/robots/logos/verificadorconstitucional.jpg',
-  concentrador_crew:  '/robots/logos/distribuidor.jpg',
   secretario:         '/robots/logos/verificadorconstitucional.jpg',
   bicameral:          '/robots/logos/consistencianormativa.jpg',
   veto_promulgacion:  '/robots/logos/distribuidor.jpg',
@@ -46,12 +45,10 @@ const AGENT_LOGOS = {
 const INST_COLORS = {
   distribuidor:       { primary: '#00B4D8', glow: 'rgba(0,180,216,0.6)',    ring: '#00B4D8', done: '#8AC926' }, // Celeste Neón
   comision:           { primary: '#38BDF8', glow: 'rgba(56,189,248,0.55)',  ring: '#38BDF8', done: '#8AC926' }, // Azul Cielo
-  constitucional:     { primary: '#2563EB', glow: 'rgba(37,99,235,0.6)',    ring: '#2563EB', done: '#8AC926' }, // Azul Zafiro Real
+  constitucional:     { primary: '#2563EB', glow: 'rgba(37,99,235,0.6)',    ring: '#2563EB', done: '#8AC926' }, // Azul Zafiro Real (Forma y Fondo)
   consistencia:       { primary: '#1D4ED8', glow: 'rgba(29,78,216,0.6)',    ring: '#1D4ED8', done: '#8AC926' }, // Azul Cobalto Profundo
-  emisor:             { primary: '#0284C7', glow: 'rgba(2,132,199,0.6)',    ring: '#0284C7', done: '#8AC926' }, // Azul Océano Cerúleo
-  notificador:        { primary: '#06B6D4', glow: 'rgba(6,182,212,0.55)',   ring: '#06B6D4', done: '#8AC926' }, // Turquesa Azulado
-  constitucion_fondo: { primary: '#4338CA', glow: 'rgba(67,56,202,0.6)',    ring: '#4338CA', done: '#8AC926' }, // Azul Índigo Parlamentario
-  concentrador_crew:  { primary: '#3B82F6', glow: 'rgba(59,130,246,0.55)',  ring: '#3B82F6', done: '#8AC926' }, // Azul Acero Técnico
+  concentrador:       { primary: '#0284C7', glow: 'rgba(2,132,199,0.6)',    ring: '#0284C7', done: '#8AC926' }, // Azul Océano (Concentrador + PDF + Notif)
+  emisor:             { primary: '#0284C7', glow: 'rgba(2,132,199,0.6)',    ring: '#0284C7', done: '#8AC926' },
   secretario:         { primary: '#1E40AF', glow: 'rgba(30,64,175,0.6)',    ring: '#1E40AF', done: '#8AC926' }, // Azul Marino Clásico
   bicameral:          { primary: '#7DD3FC', glow: 'rgba(125,211,252,0.55)', ring: '#7DD3FC', done: '#8AC926' }, // Azul Hielo Glaciar
   veto_promulgacion:  { primary: '#1E3A8A', glow: 'rgba(30,58,138,0.65)',   ring: '#1E3A8A', done: '#8AC926' }, // Azul Medianoche Ultramar
@@ -79,146 +76,107 @@ export const AGENTS_DEFINITION = [
     role: 'Asignación Parlamentaria',
     phaseKey: 'fase2', phaseName: 'Fase 2: Asignación',
     theme: 'blue', activeStep: 3, doneAtStep: 4,
-    desc: 'Asigna la comisión parlamentaria competente según la materia de ley.',
+    desc: 'Asigna la comisión parlamentaria competente según la materia de ley y catálogo institucional en Neon.',
     justificacion: 'Art. 158 CPE: distribución por especialidad temática a comisiones camarales.',
     garantiaEtica: 'Asignación objetiva por competencia material y especialidad',
-    model: 'Nemotron-3 30B',
+    model: 'Nemotron-3 Super 120B',
     workflowIcon: Building2, iconLabel: 'Comisiones', isParallel: false
   },
-  // ── ETAPA 3a: VERIFICADOR CONSTITUCIONAL (PARALELO) ──
+  // ── ETAPA 3a: VERIFICADOR CONSTITUCIONAL Y CPE FONDO (PARALELO) ──
   {
     id: 'constitucional', key: 'constitucional', stepNumber: '03',
-    name: 'Verificador Constitucional', shortName: 'Constitucional',
-    role: 'Auditoría CPE 2009',
-    phaseKey: 'fase2', phaseName: 'Fase 2: CPE 2009',
+    name: 'Verificador Constitucional (Forma y Fondo)', shortName: 'Constitucional',
+    role: 'Auditoría CPE 2009 & Fondo TCP',
+    phaseKey: 'fase2', phaseName: 'Fase 2: CPE 2009 & Fondo',
     theme: 'green', activeStep: 4, doneAtStep: 5,
-    desc: 'Coteja artículos contra la Constitución Política del Estado.',
-    justificacion: 'Art. 410 CPE: Supremacía Constitucional frente a cualquier proyecto de ley.',
-    garantiaEtica: 'Supremacía constitucional y salvaguarda del debido proceso',
-    model: 'Nemotron-3 30B',
-    workflowIcon: Scale, iconLabel: 'CPE 2009', isParallel: true, parallelGroup: 'auditoria'
+    desc: 'Coteja formalmente y realiza análisis hermenéutico de fondo (Art. 196 CPE, bloque de constitucionalidad y precedentes TCP).',
+    justificacion: 'Art. 410 y 196 CPE: Supremacía constitucional y ponderación sustantiva de derechos.',
+    garantiaEtica: 'Supremacía constitucional, interpretación pro homine y salvaguarda del debido proceso',
+    model: 'Nemotron-3 Super 120B',
+    db: ['Neon PostgreSQL', 'MongoDB'],
+    workflowIcon: Scale, iconLabel: 'CPE & Fondo', isParallel: true, parallelGroup: 'auditoria'
   },
   // ── ETAPA 3b: CONSISTENCIA NORMATIVA (PARALELO) ──
   {
     id: 'consistencia', key: 'consistencia', stepNumber: '04',
     name: 'Consistencia Normativa', shortName: 'Consistencia',
-    role: 'pgvector & Antinomias',
+    role: 'pgvector 2048d & Antinomias',
     phaseKey: 'fase2', phaseName: 'Fase 2: Leyes Vigentes',
     theme: 'gold', activeStep: 5, doneAtStep: 6,
-    desc: 'Detecta contradicciones o repeticiones contra leyes vigentes.',
-    justificacion: 'Seguridad jurídica: previene antinomias con códigos y leyes vigentes.',
+    desc: 'Detecta antinomias, repeticiones o derogaciones tácitas contra las leyes y códigos vigentes.',
+    justificacion: 'Seguridad jurídica: previene antinomias con códigos y leyes del ordenamiento boliviano.',
     garantiaEtica: 'Seguridad jurídica: prevención rigurosa de antinomias normativas',
-    model: 'pgvector 2048d',
+    model: 'pgvector 2048d + NVIDIA NIM',
+    db: ['Neon PostgreSQL', 'MongoDB'],
     workflowIcon: FileSearch, iconLabel: 'Leyes 2048d', isParallel: true, parallelGroup: 'auditoria'
   },
-  // ── ETAPA 4: EMISOR PDF ──
+  // ── ETAPA 4: CONCENTRADOR, EMISOR PDF Y NOTIFICADOR (FUSIONADO) ──
   {
-    id: 'emisor', key: 'emisor', stepNumber: '05',
-    name: 'Concentrador y Emisor', shortName: 'Emisor PDF',
-    role: 'Síntesis Oficial & PDF',
-    phaseKey: 'fase3', phaseName: 'Fase 3: Dictamen PDF',
+    id: 'concentrador', key: 'concentrador', stepNumber: '05',
+    name: 'Concentrador, Emisor y Notificador', shortName: 'Concentrador & PDF',
+    role: 'Síntesis, Dictamen PDF & Despacho',
+    phaseKey: 'fase3', phaseName: 'Fase 3: Dictamen & Despacho',
     theme: 'pink', activeStep: 6, doneAtStep: 7,
-    desc: 'Consolida los dictámenes y emite el reporte profesional en PDF.',
-    justificacion: 'Publicidad y rigor técnico: consolida todos los hallazgos en un informe oficial.',
-    garantiaEtica: 'Fidelidad documental y trazabilidad integral del expediente oficial',
-    model: 'ReportLab + IA',
-    workflowIcon: FileCheck, iconLabel: 'Informe PDF', isParallel: false
-  },
-  // ── ETAPA 5: NOTIFICADOR ──
-  {
-    id: 'notificador', key: 'notificador', stepNumber: '06',
-    name: 'Notificador de Comisión', shortName: 'Notificador',
-    role: 'Correo Institucional HTML',
-    phaseKey: 'fase3', phaseName: 'Fase 3: Notificación',
-    theme: 'violet', activeStep: 7, doneAtStep: 8,
-    desc: 'Redacta y despacha la notificación formal HTML a los legisladores.',
-    justificacion: 'Notificación oportuna: comunica formalmente el dictamen a los parlamentarios.',
-    garantiaEtica: 'Notificación fehaciente y estricta confidencialidad institucional',
-    model: 'SMTP / HTML SMA',
-    db: ['MongoDB'],
-    workflowIcon: SendHorizontal, iconLabel: 'Despacho HTML', isParallel: false
-  },
-  // ── ETAPA 6: CONSTITUCIÓN FONDO ──
-  {
-    id: 'constitucion_fondo', key: 'constitucion_fondo', stepNumber: '07',
-    name: 'Comisión Constitución Fondo', shortName: 'CPE Fondo',
-    role: 'Hermenéutica Constitucional',
-    phaseKey: 'fase4', phaseName: 'Fase 4: Fondo',
-    theme: 'purple', activeStep: 9, doneAtStep: 10,
-    desc: 'Análisis hermenéutico sustantivo: precedentes TC, ponderación de derechos.',
-    justificacion: 'Art. 196 CPE: interpretación conforme al fondo de la norma constitucional.',
-    garantiaEtica: 'Interpretación pro homine y protección de derechos fundamentales',
-    model: 'Nemotron-70B (CrewAI)',
+    desc: 'Sintetiza de forma fidedigna los dictámenes técnicos, emite el Dictamen Oficial en PDF (letra negra formal) y despacha la notificación a los miembros de la comisión.',
+    justificacion: 'Trazabilidad y fe pública: expediente consolidado con dictamen formal y notificación fehaciente.',
+    garantiaEtica: 'Cadena de custodia intacta, síntesis probatoria y notificación fehaciente',
+    model: 'Nemotron-3 Super 120B + FPDF',
     db: ['Neon PostgreSQL', 'MongoDB'],
-    workflowIcon: BookOpen, iconLabel: 'CPE Fondo', isParallel: false
+    workflowIcon: Merge, iconLabel: 'Dictamen & Envío', isParallel: false
   },
-  // ── ETAPA 7: CONCENTRADOR CREWAI ──
+  // ── ETAPA 5: SECRETARIO DE CÁMARA ──
   {
-    id: 'concentrador_crew', key: 'concentrador_crew', stepNumber: '08',
-    name: 'Concentrador y Emisor', shortName: 'Concentrador',
-    role: 'Síntesis Multi-Agente',
-    phaseKey: 'fase4', phaseName: 'Fase 4: Síntesis',
-    theme: 'emerald', activeStep: 10, doneAtStep: 11,
-    desc: 'Integra observaciones de todos los agentes en un expediente consolidado.',
-    justificacion: 'Trazabilidad total: consolida dictámenes con origen de cada observación.',
-    garantiaEtica: 'Cadena de custodia intacta y síntesis probatoria transparente',
-    model: 'Nemotron-70B (CrewAI)',
-    db: ['Neon PostgreSQL', 'MongoDB'],
-    workflowIcon: Merge, iconLabel: 'Síntesis', isParallel: false
-  },
-  // ── ETAPA 8: SECRETARIO ──
-  {
-    id: 'secretario', key: 'secretario', stepNumber: '09',
+    id: 'secretario', key: 'secretario', stepNumber: '06',
     name: 'Secretario de Cámara', shortName: 'Secretario',
     role: 'Acta de Debate & Votaciones',
-    phaseKey: 'fase4', phaseName: 'Fase 4: Debate',
-    theme: 'amber', activeStep: 11, doneAtStep: 12,
-    desc: 'Registra intervenciones, votaciones nominales y acuerdos en sesión plenaria.',
-    justificacion: 'Transparencia parlamentaria: acta fidedigna del debate legislativo.',
+    phaseKey: 'fase4', phaseName: 'Fase 4: Debate y Votación',
+    theme: 'amber', activeStep: 7, doneAtStep: 8,
+    desc: 'Registra intervenciones, quórum legal, votaciones nominales (Grande y Detalle) y formaliza el acta.',
+    justificacion: 'Transparencia parlamentaria: acta fidedigna del debate legislativo plenario.',
     garantiaEtica: 'Fe pública parlamentaria y registro nominal inalterable de votos',
-    model: 'Nemotron-70B (CrewAI)',
+    model: 'Nemotron-3 Super 120B',
     db: ['Neon PostgreSQL', 'MongoDB'],
     workflowIcon: MessagesSquare, iconLabel: 'Acta Debate', isParallel: false
   },
-  // ── ETAPA 9: BICAMERAL ──
+  // ── ETAPA 6: COMUNICACIÓN BICAMERAL ──
   {
-    id: 'bicameral', key: 'bicameral', stepNumber: '10',
+    id: 'bicameral', key: 'bicameral', stepNumber: '07',
     name: 'Comunicación Bicameral', shortName: 'Bicameral',
     role: 'Trámite entre Cámaras',
     phaseKey: 'fase5', phaseName: 'Fase 5: Bicameral',
-    theme: 'sky', activeStep: 12, doneAtStep: 13,
-    desc: 'Compara versiones de ambas cámaras y decide ruta: Sanción o Conferencia.',
-    justificacion: 'Art. 163 CPE: coordinación obligatoria entre Cámara de Origen y Revisora.',
-    garantiaEtica: 'Equilibrio democrático y respeto al trámite bicameral',
-    model: 'Nemotron-70B (CrewAI)',
+    theme: 'sky', activeStep: 8, doneAtStep: 9,
+    desc: 'Compara versiones de ambas cámaras (Origen y Revisora) y decide ruta: Sanción o Comisión Mixta.',
+    justificacion: 'Art. 163 CPE: coordinación obligatoria entre Cámara de Senadores y Diputados.',
+    garantiaEtica: 'Equilibrio democrático y respeto estricto al trámite bicameral',
+    model: 'Nemotron-3 Super 120B',
     db: ['Neon PostgreSQL', 'MongoDB'],
     workflowIcon: GitBranch, iconLabel: 'Bicameral', isParallel: false
   },
-  // ── ETAPA 10: VETO/PROMULGACIÓN ──
+  // ── ETAPA 7: VETO Y PROMULGACIÓN ──
   {
-    id: 'veto_promulgacion', key: 'veto_promulgacion', stepNumber: '11',
+    id: 'veto_promulgacion', key: 'veto_promulgacion', stepNumber: '08',
     name: 'Veto y Promulgación', shortName: 'Veto/Promulg.',
     role: 'Decisión Ejecutiva Final',
-    phaseKey: 'fase5', phaseName: 'Fase 5: Veto',
-    theme: 'rose', activeStep: 13, doneAtStep: 14,
-    desc: 'Evalúa 4 criterios estratégicos y decide: PROMULGAR, VETAR_TOTAL o VETAR_PARCIAL.',
-    justificacion: 'Art. 163-167 CPE: potestad promulgatoria y veto ejecutivo del proyecto.',
+    phaseKey: 'fase5', phaseName: 'Fase 5: Veto y Promulgación',
+    theme: 'rose', activeStep: 9, doneAtStep: 10,
+    desc: 'Evalúa criterios constitucionales del Ejecutivo y emite la resolución de Promulgación o Veto.',
+    justificacion: 'Art. 163-167 CPE: potestad promulgatoria y veto presidencial del proyecto.',
     garantiaEtica: 'Motivación jurídica transparente y razonabilidad ejecutiva',
-    model: 'Nemotron-70B (CrewAI)',
+    model: 'Nemotron-3 Super 120B',
     db: ['Neon PostgreSQL', 'MongoDB'],
     workflowIcon: Gavel, iconLabel: 'Promulgar', isParallel: false
   },
-  // ── ETAPA 11: PUBLICACIÓN ──
+  // ── ETAPA 8: PUBLICACIÓN OFICIAL (GACETA) ──
   {
-    id: 'publicacion', key: 'publicacion', stepNumber: '12',
-    name: 'Publicación Oficial', shortName: 'Gaceta',
+    id: 'publicacion', key: 'publicacion', stepNumber: '09',
+    name: 'Publicación Oficial', shortName: 'Gaceta Oficial',
     role: 'Boletín & Gaceta Oficial',
-    phaseKey: 'fase5', phaseName: 'Fase 5: Publicación',
-    theme: 'indigo', activeStep: 14, doneAtStep: 15,
-    desc: 'Genera número de ley, publica en Gaceta Oficial y emite boletín legislativo.',
-    justificacion: 'Art. 164 CPE: publicidad registral oficial para presunción de conocimiento.',
+    phaseKey: 'fase5', phaseName: 'Fase 5: Gaceta Oficial',
+    theme: 'indigo', activeStep: 10, doneAtStep: 11,
+    desc: 'Genera número de ley, publica en Gaceta Oficial del Estado y emite boletín legislativo.',
+    justificacion: 'Art. 164 CPE: publicidad registral oficial para presunción de conocimiento universal.',
     garantiaEtica: 'Publicidad registral oficial y presunción de conocimiento universal de la ley',
-    model: 'Nemotron-70B (CrewAI)',
+    model: 'Nemotron-3 Super 120B',
     db: ['Neon PostgreSQL', 'MongoDB'],
     workflowIcon: Newspaper, iconLabel: 'Gaceta Oficial', isParallel: false
   }

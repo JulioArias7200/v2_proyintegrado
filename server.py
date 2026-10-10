@@ -55,6 +55,9 @@ from sma_unified.db.neon_postgres import (
     obtener_analisis_consistencia_por_archivo,
     obtener_stats_consistencia,
     listar_documentos_normativos,
+    obtener_normativas_catalogadas_completas,
+    guardar_o_actualizar_normativa_catalogada,
+    insertar_o_actualizar_articulo_normativo,
     buscar_articulos_normativos_semantico,
     autenticar_usuario,
     crear_usuario_ciudadano,
@@ -62,6 +65,8 @@ from sma_unified.db.neon_postgres import (
     actualizar_estado_correccion,
 )
 
+from sma_unified.utils.parser_normativa import parsear_articulos
+from sma_unified.agents.llm_client import chat_completion_resiliente
 from sma_unified.agents.embeddings_nvidia import generar_embeddings
 from sma_unified.db.mongo_atlas import (
     get_db,
@@ -1316,32 +1321,50 @@ async def run_agent_constitucion_fondo_endpoint(payload: Dict[str, Any]):
 @app.post("/api/pipeline/agent_concentrador")
 async def run_agent_concentrador_endpoint(payload: Dict[str, Any]):
     """
-    Etapa 4: Agente Concentrador y Emisor
-    Consolidación y síntesis de observaciones de todos los agentes.
+    Etapa 5: Agente Concentrador, Emisor y Notificador FUSIONADO
+    Consolidación, emisión del PDF institucional formal y despacho a la comisión.
     """
     try:
-        from sma_unified.agents.concentrador import AgenteConcentrador
+        from sma_unified.agents.concentrador import ejecutar_concentrador_emisor_notificador
         from sma_unified.db.neon_postgres import registrar_bitacora
 
-        proyecto_info = payload.get("proyecto_info", {})
-        observaciones = payload.get("observaciones", [])
-        id_proyecto = payload.get("id_proyecto") or proyecto_info.get("id_proyecto") or proyecto_info.get("id")
+        sesion_id = payload.get("sesion_id") or str(uuid.uuid4())
+        id_proyecto = payload.get("id_proyecto") or payload.get("proyecto_info", {}).get("id_proyecto") or payload.get("proyecto_info", {}).get("id")
+        
+        datos_constitucionales = payload.get("datos_constitucionales")
+        datos_consistencia = payload.get("datos_consistencia")
+        datos_fondo = payload.get("datos_fondo")
+        datos_comision = payload.get("datos_comision")
+        texto_proyecto = payload.get("texto_proyecto")
+        titulo_proyecto = payload.get("titulo_proyecto") or payload.get("proyecto_info", {}).get("titulo")
+        notificar = payload.get("notificar", True)
+        destinatario_extra = payload.get("destinatario_extra")
+        mensaje_extra = payload.get("mensaje_extra")
 
-        agente = AgenteConcentrador()
-        resultado = agente.ejecutar(
-            observaciones=observaciones,
-            proyecto_info=proyecto_info
+        resultado = ejecutar_concentrador_emisor_notificador(
+            sesion_id=sesion_id,
+            id_proyecto=int(id_proyecto) if id_proyecto else None,
+            datos_constitucionales=datos_constitucionales,
+            datos_consistencia=datos_consistencia,
+            datos_fondo=datos_fondo,
+            datos_comision=datos_comision,
+            texto_proyecto=texto_proyecto,
+            titulo_proyecto=titulo_proyecto,
+            notificar=notificar,
+            destinatario_extra=destinatario_extra,
+            mensaje_extra=mensaje_extra,
         )
 
         if id_proyecto:
             try:
                 exp = resultado.get("expediente_consolidado", {})
+                pdf_info = resultado.get("pdf", {})
                 registrar_bitacora(
                     id_proyecto=int(id_proyecto),
-                    agente_accion="Agente_Concentrador",
-                    accion_realizada="Consolidación de Expediente y Síntesis de Observaciones",
-                    descripcion=f"Riesgo Global: {exp.get('nivel_riesgo_general', 'MEDIO')} | Observaciones integradas: {len(exp.get('observaciones_integradas', []))}",
-                    tiempo_segundos=1
+                    agente_accion="Agente_Concentrador_Emisor_Notificador",
+                    accion_realizada="Dictamen Consolidado, PDF Formal Emitido y Notificación Despachada",
+                    descripcion=f"Riesgo: {exp.get('nivel_riesgo_general', 'MEDIO')} | PDF: {pdf_info.get('filename', 'N/A')}",
+                    tiempo_segundos=2
                 )
             except Exception as be:
                 logger.warning(f"Error registrando bitácora Concentrador: {be}")
@@ -1947,7 +1970,7 @@ def get_normativa_overview(limit: int = Query(30, ge=1, le=100)):
     """Obtiene el resumen del corpus normativo y los últimos análisis de consistencia."""
     try:
         stats = obtener_stats_consistencia()
-        documentos = listar_documentos_normativos()
+        documentos = obtener_normativas_catalogadas_completas()
         analisis = obtener_ultimos_analisis_consistencia(limit=limit)
         return {
             "success": True,
@@ -1957,6 +1980,158 @@ def get_normativa_overview(limit: int = Query(30, ge=1, le=100)):
         }
     except Exception as e:
         logger.error(f"Error obteniendo normativa: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/normativa/lista")
+def get_normativa_lista():
+    """Lista las normativas vigentes indexadas con sus resúmenes generados por IA."""
+    try:
+        documentos = obtener_normativas_catalogadas_completas()
+        return {
+            "success": True,
+            "documentos": documentos,
+            "total": len(documentos)
+        }
+    except Exception as e:
+        logger.error(f"Error listando normativas catalogadas: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/normativa/subir")
+async def subir_normativa_vigente(
+    file: Optional[UploadFile] = File(None),
+    texto_directo: Optional[str] = Form(None),
+    nombre: str = Form(...),
+    tipo: str = Form("ley"),
+    numero_norma: Optional[str] = Form(None),
+):
+    """
+    Sube y procesa una nueva normativa boliviana:
+    1. Extrae el texto del documento o usa el texto directo.
+    2. Procesa con LLM (NVIDIA NIM) para extraer resumen jurídico formal y materia.
+    3. Parsea los artículos o bloques normativos.
+    4. Genera embeddings NVIDIA y los indexa en public.articulos_normativos (pgvector).
+    5. Registra la norma en el catálogo public.normativas_catalogadas.
+    """
+    import json
+    try:
+        texto = ""
+        if file and file.filename:
+            file_bytes = await file.read()
+            if len(file_bytes) > 0:
+                texto, _ = extraer_texto_archivo(file.filename, file_bytes)
+        
+        if not texto.strip() and texto_directo:
+            texto = texto_directo.strip()
+
+        if not texto.strip():
+            raise HTTPException(status_code=400, detail="Debe proporcionar un archivo PDF/TXT con contenido o texto de la normativa.")
+
+        # 1. LLM para Resumen y Materia
+        prompt_llm = f"""Eres un jurista boliviano experto en técnica legislativa y derecho constitucional.
+Analiza el siguiente texto de la normativa boliviana:
+NOMBRE: {nombre}
+TIPO: {tipo}
+NÚMERO DE NORMA: {numero_norma or 'S/N'}
+
+TEXTO (primeros 4000 caracteres):
+{texto[:4000]}
+
+Genera un JSON estrictamente válido con dos campos:
+{{
+  "resumen": "Resumen ejecutivo formal de 2 o 3 oraciones explicando el objeto, ámbito de aplicación y relevancia jurídica.",
+  "materia": "Materia jurídica principal (ej: Laboral, Penal, Ambiental, Minería, Administrativo, Civil, etc.)"
+}}
+Responde ÚNICAMENTE con el objeto JSON."""
+
+        resumen_ia = f"Normativa regulatoria de materia {tipo.lower()} aplicable en el Estado Plurinacional de Bolivia."
+        materia_ia = "General"
+        try:
+            resp_llm = chat_completion_resiliente(
+                messages=[
+                    {"role": "system", "content": "Eres un asistente legislativo que responde estrictamente en JSON."},
+                    {"role": "user", "content": prompt_llm}
+                ],
+                temperature=0.2,
+                max_tokens=500
+            )
+            raw = (resp_llm.get("content") or "").strip()
+            if raw.startswith("```"):
+                lines = raw.split("\n")
+                raw = "\n".join([l for l in lines if not l.startswith("```")]).strip()
+            datos_ia = json.loads(raw)
+            resumen_ia = datos_ia.get("resumen") or resumen_ia
+            materia_ia = datos_ia.get("materia") or materia_ia
+        except Exception as e_llm:
+            logger.warning(f"No se pudo generar resumen LLM para normativa: {e_llm}")
+
+        # 2. Parsear artículos
+        articulos_parsed = parsear_articulos(texto)
+        if not articulos_parsed:
+            bloques = [b.strip() for b in texto.split("\n\n") if len(b.strip()) > 80]
+            articulos_parsed = [
+                {
+                    "numero_articulo": str(i + 1),
+                    "titulo_articulo": f"Disposición {i + 1}",
+                    "texto": b
+                }
+                for i, b in enumerate(bloques[:50])
+            ]
+
+        # 3. Insertar artículos y embeddings
+        total_insertados = 0
+        articulos_a_procesar = articulos_parsed[:100]
+        textos_arts = [a["texto"][:1500] for a in articulos_a_procesar]
+        
+        embeddings = []
+        try:
+            embeddings = generar_embeddings(textos_arts, input_type="passage")
+        except Exception as e_emb:
+            logger.warning(f"Error generando embeddings en bloque: {e_emb}")
+
+        for i, art in enumerate(articulos_a_procesar):
+            emb = embeddings[i] if i < len(embeddings) else None
+            num_art = str(art.get("numero_articulo") or (i + 1))
+            contenido_art = art.get("texto") or ""
+            hash_art = str(hash(contenido_art))
+            insertar_o_actualizar_articulo_normativo(
+                documento=nombre,
+                articulo_numero=num_art,
+                contenido=contenido_art,
+                contenido_hash=hash_art,
+                tipo_documento=tipo,
+                numero_norma=numero_norma,
+                articulo_titulo=art.get("titulo_articulo"),
+                embedding=emb,
+            )
+            total_insertados += 1
+
+        # 4. Registrar en catálogo de normativas
+        guardar_o_actualizar_normativa_catalogada(
+            documento=nombre,
+            tipo_documento=tipo,
+            numero_norma=numero_norma,
+            resumen=resumen_ia,
+            materia=materia_ia,
+            num_articulos=total_insertados,
+        )
+
+        return {
+            "success": True,
+            "documento": nombre,
+            "tipo_documento": tipo,
+            "numero_norma": numero_norma,
+            "resumen": resumen_ia,
+            "materia": materia_ia,
+            "articulos_indexados": total_insertados,
+            "mensaje": f"Normativa '{nombre}' procesada exitosamente con LLM e indexada en la base de datos.",
+            "normativas": obtener_normativas_catalogadas_completas()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al subir normativa: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

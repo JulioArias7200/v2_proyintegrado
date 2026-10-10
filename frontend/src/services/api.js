@@ -165,6 +165,8 @@ export const api = {
   removeMiembroComision: (id_miembro) =>
     request(`/comisiones/miembros/${id_miembro}`, { method: 'DELETE' }),
   getNormativa: (limit = 30) => request(`/normativa?limit=${limit}`),
+  getNormativasCatalogadas: () => request('/normativa/lista'),
+  subirNormativa: (formData) => request('/normativa/subir', { method: 'POST', body: formData }),
   searchNormativa: (query, documento = null, umbral = 0.5, top_k = 8) =>
     request('/normativa/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, documento, umbral, top_k }) }),
   getCiudadana: (limit = 50) => request(`/ciudadana?limit=${limit}`),

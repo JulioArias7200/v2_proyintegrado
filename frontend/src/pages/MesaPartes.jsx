@@ -158,6 +158,86 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   const fileInputRef = useRef(null);
 
+  // ── Estado para Catálogo de Normativas y Carga con LLM ──
+  const [normativasList, setNormativasList] = useState([]);
+  const [isLoadingNormativas, setIsLoadingNormativas] = useState(false);
+  const [showSubirNormativaModal, setShowSubirNormativaModal] = useState(false);
+  const [normativaFile, setNormativaFile] = useState(null);
+  const [normativaTexto, setNormativaTexto] = useState('');
+  const [normativaNombre, setNormativaNombre] = useState('');
+  const [normativaTipo, setNormativaTipo] = useState('Ley');
+  const [normativaNumero, setNormativaNumero] = useState('');
+  const [isUploadingNormativa, setIsUploadingNormativa] = useState(false);
+  const [normativaUploadStatus, setNormativaUploadStatus] = useState(null);
+
+  const cargarNormativas = async () => {
+    setIsLoadingNormativas(true);
+    try {
+      const res = await api.getNormativasCatalogadas();
+      if (res?.documentos) {
+        setNormativasList(res.documentos);
+      }
+    } catch (err) {
+      console.warn('Error cargando catálogo de normativas:', err);
+    } finally {
+      setIsLoadingNormativas(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarNormativas();
+  }, []);
+
+  const handleSubirNormativa = async (e) => {
+    e.preventDefault();
+    if (!normativaNombre.trim()) {
+      alert('Por favor ingrese el nombre oficial de la normativa');
+      return;
+    }
+    if (!normativaFile && !normativaTexto.trim()) {
+      alert('Por favor seleccione un archivo PDF/TXT o pegue el texto de la normativa');
+      return;
+    }
+
+    setIsUploadingNormativa(true);
+    setNormativaUploadStatus(null);
+    try {
+      const formData = new FormData();
+      formData.append('nombre', normativaNombre.trim());
+      formData.append('tipo', normativaTipo);
+      if (normativaNumero.trim()) formData.append('numero_norma', normativaNumero.trim());
+      if (normativaFile) {
+        formData.append('file', normativaFile);
+      } else {
+        formData.append('texto_directo', normativaTexto.trim());
+      }
+
+      const res = await api.subirNormativa(formData);
+      if (res?.success) {
+        setNormativaUploadStatus({
+          success: true,
+          msg: `Normativa "${res.documento}" procesada con LLM e indexada con éxito (${res.articulos_indexados} artículos).`,
+          resumen: res.resumen
+        });
+        if (res.normativas) {
+          setNormativasList(res.normativas);
+        } else {
+          cargarNormativas();
+        }
+        setNormativaFile(null);
+        setNormativaTexto('');
+        setNormativaNombre('');
+        setNormativaNumero('');
+      } else {
+        setNormativaUploadStatus({ success: false, msg: res?.detail || 'Error procesando la normativa' });
+      }
+    } catch (err) {
+      setNormativaUploadStatus({ success: false, msg: err.message || 'Error en la conexión al servidor' });
+    } finally {
+      setIsUploadingNormativa(false);
+    }
+  };
+
   // Active Session helper
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0] || createDefaultSession(1);
 
@@ -528,18 +608,39 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   const handleConcentrador = async () => {
     if (!fase1Data) return;
     updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 10, inspectedAgentId: null });
-    appendLog('Concentrador', 'EN_PROCESO', 'Consolidando todas las observaciones en expediente unificado...');
+    appendLog('Concentrador', 'EN_PROCESO', 'Consolidando todas las observaciones, emitiendo dictamen formal PDF y despachando notificación...');
     try {
       const res = await api.runAgentConcentrador({
+        sesion_id: fase1Data?.sesion_id,
+        id_proyecto: fase1Data?.id_proyecto,
         proyecto_info: buildProyectoInfo(),
         observaciones: buildObservaciones(),
-        id_proyecto: fase1Data?.id_proyecto
+        datos_constitucionales: dictamenData || {},
+        datos_consistencia: consistenciaData || {},
+        datos_fondo: constitucionFondoData || {},
+        datos_comision: comisionData || {},
+        texto_proyecto: documentText,
+        titulo_proyecto: documentName,
+        notificar: true,
+        destinatario_extra: customEmail || null,
+        mensaje_extra: extraEmailMessage || null,
+        asunto_personalizado: customEmailSubject || null
       });
-      updateActiveSession({ concentradorData: res.data, pipelineStep: 11, isProcessing: false });
-      const exp = res.data?.expediente_consolidado || {};
-      appendLog('Concentrador', 'COMPLETADO', `Riesgo: ${exp.nivel_riesgo_general || 'N/A'} | Obs: ${(exp.observaciones_integradas || []).length}`);
+      const concentradorRes = res.data || {};
+      const exp = concentradorRes.expediente_consolidado || {};
+      const pdfRes = concentradorRes.pdf || { filename: concentradorRes.pdf_filename };
+      const notifRes = concentradorRes.notificacion_comision || {};
+
+      updateActiveSession({
+        concentradorData: concentradorRes,
+        pdfResult: pdfRes,
+        notificadorData: notifRes,
+        pipelineStep: 11,
+        isProcessing: false
+      });
+      appendLog('Concentrador', 'COMPLETADO', `Riesgo: ${exp.nivel_riesgo_general || 'MEDIO'} | Dictamen formal PDF emitido y notificado a la comisión`);
     } catch (err) {
-      updateActiveSession({ errorMessage: err.message || 'Error en Concentrador', pipelineStep: 10, isProcessing: false });
+      updateActiveSession({ errorMessage: err.message || 'Error en Agente Concentrador, Emisor y Notificador', pipelineStep: 6, isProcessing: false });
       appendLog('Concentrador', 'ERROR', err.message);
     }
   };
@@ -1030,10 +1131,11 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     );
   };
 
-  // Inspection step map (extended)
+  // Inspection step map (extended — con fusión de Concentrador, Emisor y Notificador)
   const inspectStepMap = {
-    distribuidor: 2, comision: 4, constitucional: 5, consistencia: 6, emisor: 7, notificador: 8,
-    constitucion_fondo: 10, concentrador_crew: 11, secretario: 12, bicameral: 13, veto_promulgacion: 14, publicacion: 15
+    distribuidor: 2, comision: 4, constitucional: 5, consistencia: 6,
+    emisor: 11, notificador: 11, concentrador: 11, concentrador_crew: 11,
+    constitucion_fondo: 5, secretario: 12, bicameral: 13, veto_promulgacion: 14, publicacion: 15
   };
   const effectiveViewStep = inspectedAgentId ? (inspectStepMap[inspectedAgentId] || pipelineStep) : pipelineStep;
 
@@ -2346,50 +2448,368 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                 </div>
               )}
 
-              {/* Botón PDF */}
+              {/* ── CATÁLOGO DE NORMATIVAS VIGENTES INDEXADAS (NEON PGVECTOR) ── */}
+              <div style={{
+                marginTop: '32px',
+                background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(20, 35, 60, 0.90) 100%)',
+                border: '1.5px solid rgba(251, 191, 36, 0.35)',
+                borderRadius: '16px',
+                padding: '22px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.45)'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '14px',
+                  marginBottom: '18px',
+                  borderBottom: '1px solid rgba(251, 191, 36, 0.2)',
+                  paddingBottom: '14px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ background: 'rgba(251, 191, 36, 0.15)', borderRadius: '10px', padding: '10px', display: 'flex' }}>
+                      <Database size={24} color="#fbbf24" />
+                    </div>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#ffffff' }}>
+                        Corpus Normativo Vigente Indexado en la Base de Datos
+                      </h4>
+                      <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>
+                        Normas bolivianas cargadas con embeddings (2048 dimensiones) para auditoría de antinomias.
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.82rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)', padding: '5px 12px', borderRadius: '20px', fontWeight: 700 }}>
+                      {normativasList.length} Normativas en Neon
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSubirNormativaModal(!showSubirNormativaModal)}
+                      style={{
+                        background: showSubirNormativaModal ? 'rgba(239, 68, 68, 0.2)' : 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)',
+                        color: showSubirNormativaModal ? '#fca5a5' : '#0B2545',
+                        border: showSubirNormativaModal ? '1px solid #ef4444' : 'none',
+                        padding: '8px 16px',
+                        borderRadius: '10px',
+                        fontWeight: 800,
+                        fontSize: '0.86rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 4px 14px rgba(251, 191, 36, 0.35)',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {showSubirNormativaModal ? <X size={16} /> : <Plus size={16} />}
+                      <span>{showSubirNormativaModal ? 'Cerrar Formulario' : 'Subir Otra Normativa'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Formulario Expandible para Subir y Procesar con LLM */}
+                {showSubirNormativaModal && (
+                  <form onSubmit={handleSubirNormativa} style={{
+                    background: 'rgba(15, 23, 42, 0.95)',
+                    border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                    borderRadius: '14px',
+                    padding: '20px',
+                    marginBottom: '22px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                      <Sparkles size={20} color="#38bdf8" />
+                      <h5 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#38bdf8' }}>
+                        Cargar Nueva Normativa y Procesar con LLM (NVIDIA NIM)
+                      </h5>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
+                          Nombre Oficial de la Norma *:
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej: Ley N° 348 Integral para Mujeres / Ley 1333"
+                          value={normativaNombre}
+                          onChange={(e) => setNormativaNombre(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '9px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(15, 23, 42, 0.9)',
+                            border: '1px solid rgba(56, 189, 248, 0.35)',
+                            color: '#ffffff',
+                            fontSize: '0.84rem',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
+                          Tipo de Norma:
+                        </label>
+                        <select
+                          value={normativaTipo}
+                          onChange={(e) => setNormativaTipo(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '9px 12px',
+                            borderRadius: '8px',
+                            background: '#0F172A',
+                            border: '1px solid rgba(56, 189, 248, 0.35)',
+                            color: '#ffffff',
+                            fontSize: '0.84rem',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          <option value="Ley">Ley Nacional</option>
+                          <option value="Código">Código Orgánico / Sustantivo</option>
+                          <option value="Decreto Supremo">Decreto Supremo</option>
+                          <option value="Resolución">Resolución Ministerial / Administrativa</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
+                          Número de Norma (Opcional):
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ej: 348 / 1333"
+                          value={normativaNumero}
+                          onChange={(e) => setNormativaNumero(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '9px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(15, 23, 42, 0.9)',
+                            border: '1px solid rgba(56, 189, 248, 0.35)',
+                            color: '#ffffff',
+                            fontSize: '0.84rem',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#fbbf24', fontWeight: 700, marginBottom: '6px' }}>
+                          📁 Adjuntar Archivo (PDF o TXT):
+                        </label>
+                        <input
+                          type="file"
+                          accept=".pdf,.txt,.docx"
+                          onChange={(e) => setNormativaFile(e.target.files?.[0] || null)}
+                          style={{
+                            width: '100%',
+                            padding: '8px',
+                            borderRadius: '8px',
+                            background: 'rgba(15, 23, 42, 0.85)',
+                            border: '1px solid rgba(251, 191, 36, 0.35)',
+                            color: '#e2e8f0',
+                            fontSize: '0.82rem',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#fbbf24', fontWeight: 700, marginBottom: '6px' }}>
+                          O pegar texto de artículos directamente:
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="ARTÍCULO 1.- (OBJETO)..."
+                          value={normativaTexto}
+                          onChange={(e) => setNormativaTexto(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(15, 23, 42, 0.9)',
+                            border: '1px solid rgba(251, 191, 36, 0.35)',
+                            color: '#ffffff',
+                            fontSize: '0.82rem',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {normativaUploadStatus && (
+                      <div style={{
+                        padding: '12px 16px',
+                        borderRadius: '10px',
+                        marginBottom: '16px',
+                        background: normativaUploadStatus.success ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                        border: `1px solid ${normativaUploadStatus.success ? '#10b981' : '#ef4444'}`,
+                        color: normativaUploadStatus.success ? '#34d399' : '#f87171',
+                        fontSize: '0.84rem'
+                      }}>
+                        <div><strong>{normativaUploadStatus.success ? '✅ Éxito:' : '❌ Error:'}</strong> {normativaUploadStatus.msg}</div>
+                        {normativaUploadStatus.resumen && (
+                          <div style={{ marginTop: '6px', fontSize: '0.8rem', color: '#e2e8f0' }}>
+                            <em>Resumen IA:</em> {normativaUploadStatus.resumen}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowSubirNormativaModal(false)}
+                        className="btn-secondary"
+                        style={{ padding: '9px 18px', fontSize: '0.85rem' }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isUploadingNormativa}
+                        className="btn-primary"
+                        style={{ padding: '9px 24px', fontSize: '0.88rem' }}
+                      >
+                        {isUploadingNormativa ? (
+                          <>
+                            <Cpu size={16} className="pulse-active" />
+                            <span>Procesando con LLM & Indexando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={16} />
+                            <span>⚡ Procesar con LLM y Registrar en BD</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Grid de Normativas Cargadas */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                  {normativasList.length === 0 ? (
+                    <div style={{ color: '#94a3b8', fontSize: '0.85rem', padding: '16px', textAlign: 'center', gridColumn: '1 / -1' }}>
+                      {isLoadingNormativas ? 'Cargando catálogo normativo desde Neon...' : 'No hay normativas registradas en la base de datos.'}
+                    </div>
+                  ) : (
+                    normativasList.map((norma, idx) => (
+                      <div key={idx} style={{
+                        background: 'rgba(15, 23, 42, 0.85)',
+                        border: '1px solid rgba(148, 163, 184, 0.22)',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '12px'
+                      }}>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '1.2rem' }}>📜</span>
+                              <h5 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: '#ffffff' }}>
+                                {norma.documento}
+                              </h5>
+                            </div>
+                            <span style={{
+                              background: 'rgba(56, 189, 248, 0.15)',
+                              color: '#38bdf8',
+                              border: '1px solid rgba(56, 189, 248, 0.3)',
+                              borderRadius: '20px',
+                              padding: '2px 8px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {norma.num_articulos} artículos
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                            <span style={{ fontSize: '0.7rem', padding: '2px 7px', borderRadius: '4px', background: 'rgba(251, 191, 36, 0.12)', color: '#fbbf24', fontWeight: 600 }}>
+                              {norma.tipo_documento?.toUpperCase()} {norma.numero_norma ? `#${norma.numero_norma}` : ''}
+                            </span>
+                            {norma.materia && (
+                              <span style={{ fontSize: '0.7rem', padding: '2px 7px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.12)', color: '#34d399', fontWeight: 600 }}>
+                                {norma.materia}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Resumen IA */}
+                          <div style={{
+                            background: 'rgba(0, 0, 0, 0.35)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            borderRadius: '8px',
+                            padding: '10px 12px',
+                            fontSize: '0.82rem',
+                            color: '#e2e8f0',
+                            lineHeight: 1.55
+                          }}>
+                            <div style={{ fontSize: '0.68rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Sparkles size={11} /> Resumen Generado por IA (LLM):
+                            </div>
+                            {norma.resumen}
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                          <span>Estado: Vigente en BD</span>
+                          <span>{norma.ultima_actualizacion ? new Date(norma.ultima_actualizacion).toLocaleDateString('es-BO') : 'Indexada'}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Botón Acción Siguiente: FUSIONADO EN CONCENTRADOR, EMISOR Y NOTIFICADOR */}
               {selectedCategory === 'AGENTE_REGISTRO_LEGISLATIVO' && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '28px' }}>
                   {/* Módulo de voz: Lectura de Hallazgos Normativos */}
-
-                  <div style={{ marginTop: '24px', marginBottom: '16px', width: '100%' }}>
-
+                  <div style={{ width: '100%' }}>
                     <AgentVoiceModule
-
                       agentId="consistencia"
-
                       agentLabel="Agente de Consistencia Normativa"
-
                       primaryColor="#fbbf24"
-
                       sesionId={fase1Data?.sesion_id || null}
-
                       resultData={consistenciaData}
-
                       speechHook={speechHook}
-
                     />
-
                   </div>
 
-                  <button
-                    onClick={handleEmitPDF}
-                    disabled={isProcessing}
-                    className="btn-primary"
-                    style={{ fontSize: '1.05rem', padding: '14px 30px' }}
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Cpu size={20} className="pulse-active" />
-                        <span>Generando Informe PDF...</span>
-                      </>
-                    ) : (
-                      <>
-                        <FileCheck size={20} />
-                        <span>Generar Informe de Auditoría PDF</span>
-                        <ArrowRight size={18} />
-                      </>
-                    )}
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={handleConcentrador}
+                      disabled={isProcessing}
+                      className="btn-primary"
+                      style={{ fontSize: '1.05rem', padding: '14px 30px' }}
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Cpu size={20} className="pulse-active" />
+                          <span>Consolidando, Emitiendo PDF & Despachando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Merge size={20} />
+                          <span>Consolidar Expediente, Emitir Dictamen PDF y Notificar</span>
+                          <ArrowRight size={18} />
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2978,20 +3398,22 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente Concentrador y Emisor (CrewAI)"
-          role="Consolidación y Síntesis de Observaciones Multi-Agente"
+          agentName="Agente Concentrador, Emisor y Notificador"
+          role="Síntesis de Expediente, Dictamen Formal en PDF & Despacho a Comisión"
           theme="blue"
           status="completed"
-          phaseLabel="Fase 4: Síntesis"
-          thinkingText="Expediente unificado consolidado con trazabilidad de origen"
+          phaseLabel="Fase 3: Síntesis, Dictamen PDF & Despacho"
+          thinkingText="Expediente unificado consolidado, PDF formal generado y notificación despachada"
           image="/robots/banner/emisor.png"
-          justificacion="Rigor y Trazabilidad Parlamentaria: Consolida todas las observaciones de auditoría constitucional, normativa y de comisión en un expediente único."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'constitucion_fondo' })}
-          prevLabel="Ver Dictamen de Fondo CPE"
+          justificacion="Fe pública y debido proceso parlamentario: Consolida los dictámenes constitucionales y normativos, emite el reporte oficial con letra negra formal y despacha la notificación a los miembros de la comisión."
+          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'consistencia' })}
+          prevLabel="Ver Consistencia Normativa"
         >
           {(() => {
             const exp = concentradorData.expediente_consolidado || {};
             const obsList = exp.observaciones_integradas || [];
+            const pdfFilename = pdfResult?.filename || concentradorData?.pdf?.filename || concentradorData?.pdf_filename || '';
+            const notifInfo = notificadorData || concentradorData?.notificacion_comision || {};
             return (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
@@ -3001,10 +3423,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                     </div>
                     <div>
                       <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                        Etapa 4 · Expediente Unificado
+                        Etapa 5 · Expediente Consolidado, Dictamen PDF & Notificación
                       </div>
                       <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                        Expediente Consolidado Multi-Agente
+                        Expediente Unificado y Despacho Formal
                       </h3>
                     </div>
                   </div>
@@ -3025,6 +3447,89 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                     {exp.resumen_ejecutivo || 'Expediente consolidado con observaciones integradas de todos los agentes.'}
                   </p>
                 </div>
+
+                {/* ── BLOQUE DE DICTAMEN FORMAL EN PDF (EMISOR INTEGRADO) ── */}
+                {pdfFilename && (
+                  <div style={{
+                    background: 'linear-gradient(145deg, rgba(15,23,42,0.9) 0%, rgba(20,35,60,0.85) 100%)',
+                    border: '1.5px solid rgba(56,189,248,0.35)',
+                    borderRadius: '12px',
+                    padding: '16px 20px',
+                    marginBottom: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '14px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <FileCheck size={28} color="#38bdf8" />
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: '#7dd3fc', fontWeight: 700, textTransform: 'uppercase' }}>
+                          Dictamen Formal Institucional Emitido (PDF Letra Negra)
+                        </div>
+                        <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.9rem', marginTop: '2px' }}>
+                          {pdfFilename}
+                        </div>
+                      </div>
+                    </div>
+                    <a
+                      href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfFilename}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-secondary"
+                      style={{ fontSize: '0.88rem', padding: '9px 18px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Download size={16} />
+                      <span>Descargar Dictamen Formal (PDF)</span>
+                    </a>
+                  </div>
+                )}
+
+                {/* ── BLOQUE DE DESPACHO / NOTIFICACIÓN A COMISIÓN (NOTIFICADOR INTEGRADO) ── */}
+                {notifInfo && (
+                  <div style={{
+                    background: 'rgba(15,23,42,0.7)',
+                    border: '1px solid rgba(168,85,247,0.3)',
+                    borderRadius: '12px',
+                    padding: '16px 20px',
+                    marginBottom: '20px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Mail size={22} color="#a78bfa" />
+                        <div>
+                          <div style={{ color: '#ffffff', fontWeight: 800, fontSize: '0.92rem' }}>
+                            Notificación Oficial Despachada a la Comisión
+                          </div>
+                          <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
+                            {notifInfo.comision || comisionData?.comision_principal || 'Comisión Asignada'} · {notifInfo.total_destinatarios || (notifInfo.miembros_notificados?.length) || 1} destinatarios notificados
+                          </div>
+                        </div>
+                      </div>
+                      {notifInfo.html_preview && (
+                        <button
+                          type="button"
+                          onClick={() => updateActiveSession({ showEmailPreview: !showEmailPreview })}
+                          className="btn-secondary"
+                          style={{ padding: '6px 14px', fontSize: '0.78rem' }}
+                        >
+                          {showEmailPreview ? 'Ocultar Correo' : 'Ver Vista Previa del Correo'}
+                        </button>
+                      )}
+                    </div>
+                    {showEmailPreview && notifInfo.html_preview && (
+                      <div style={{ marginTop: '12px', maxHeight: '420px', overflowY: 'auto', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.2)' }}>
+                        <iframe
+                          srcDoc={notifInfo.html_preview}
+                          title="Vista previa del correo de comisión"
+                          style={{ width: '100%', height: '400px', border: 'none', display: 'block' }}
+                          sandbox="allow-same-origin"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Lista de Observaciones Integradas */}
                 {obsList.length > 0 && (

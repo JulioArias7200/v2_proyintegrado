@@ -67,6 +67,7 @@ def get_conn():
                 _ensure_observaciones_table(_conn)
                 _ensure_consistencia_tables(_conn)
                 _ensure_articulos_normativos_table(_conn)
+                _ensure_normativas_catalogadas_table(_conn)
                 _ensure_usuarios_table(_conn)
                 _ensure_correcciones_table(_conn)
                 _ensure_legislativo_14_agentes_tables(_conn)
@@ -1676,6 +1677,119 @@ def insertar_o_actualizar_articulo_normativo(
             pass
         logger.warning(f"No se pudo insertar/actualizar el artículo {articulo_numero} de '{documento}': {e}")
         return "error"
+
+
+def _ensure_normativas_catalogadas_table(conn) -> None:
+    """Crea la tabla public.normativas_catalogadas para almacenar el catálogo con resúmenes IA de cada norma."""
+    ddl = """
+    CREATE TABLE IF NOT EXISTS public.normativas_catalogadas (
+        id SERIAL PRIMARY KEY,
+        documento TEXT UNIQUE NOT NULL,
+        tipo_documento TEXT NOT NULL DEFAULT 'ley',
+        numero_norma TEXT,
+        resumen TEXT,
+        materia TEXT,
+        num_articulos INT DEFAULT 0,
+        creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    """
+    try:
+        cur = conn.cursor()
+        cur.execute(ddl)
+        cur.execute("""
+            INSERT INTO public.normativas_catalogadas (documento, tipo_documento, resumen, materia)
+            VALUES 
+                ('Codigo Penal', 'codigo', 'Regula el marco punitivo y los tipos delictivos del Estado Plurinacional de Bolivia, estableciendo sanciones, penas y garantías del debido proceso y proporcionalidad penal.', 'Penal y Sancionatorio'),
+                ('Codigo Comercio', 'codigo', 'Rige las relaciones comerciales, actos mercantiles, obligaciones de los comerciantes, contratos de sociedades y títulos valores en el Estado Plurinacional.', 'Mercantil y Comercial'),
+                ('CCIV', 'codigo', 'Norma el régimen civil boliviano: personalidad jurídica, derechos reales, propiedad, obligaciones civiles, contratos y régimen sucesorio.', 'Civil y Patrimonial')
+            ON CONFLICT (documento) DO NOTHING;
+        """)
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.warning(f"No se pudo asegurar normativas_catalogadas: {e}")
+
+
+def obtener_normativas_catalogadas_completas() -> List[Dict[str, Any]]:
+    """Devuelve los cuerpos normativos cargados en articulos_normativos combinados con su resumen IA."""
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT 
+                a.documento,
+                COALESCE(c.tipo_documento, MAX(a.tipo_documento), 'ley') AS tipo_documento,
+                COALESCE(c.numero_norma, MAX(a.numero_norma), '') AS numero_norma,
+                COUNT(a.id) AS num_articulos,
+                COALESCE(c.resumen, 'Cuerpo normativo del ordenamiento jurídico del Estado Plurinacional de Bolivia, indexado para control de antinomias.') AS resumen,
+                COALESCE(c.materia, 'Legislación Nacional') AS materia,
+                MAX(a.actualizado_en) AS ultima_actualizacion
+            FROM public.articulos_normativos a
+            LEFT JOIN public.normativas_catalogadas c ON LOWER(a.documento) = LOWER(c.documento)
+            GROUP BY a.documento, c.tipo_documento, c.numero_norma, c.resumen, c.materia
+            ORDER BY MAX(a.actualizado_en) DESC NULLS LAST, a.documento ASC
+        """)
+        filas = cur.fetchall()
+        cur.close()
+        return [
+            {
+                "documento": f[0],
+                "tipo_documento": f[1],
+                "numero_norma": f[2],
+                "num_articulos": f[3],
+                "resumen": f[4],
+                "materia": f[5],
+                "ultima_actualizacion": str(f[6]) if f[6] else "",
+            }
+            for f in filas
+        ]
+    except Exception as e:
+        try:
+            get_conn().rollback()
+        except Exception:
+            pass
+        logger.warning(f"Error en obtener_normativas_catalogadas_completas: {e}")
+        return listar_documentos_normativos()
+
+
+def guardar_o_actualizar_normativa_catalogada(
+    documento: str,
+    tipo_documento: str = "ley",
+    numero_norma: Optional[str] = None,
+    resumen: Optional[str] = None,
+    materia: Optional[str] = None,
+    num_articulos: int = 0,
+) -> bool:
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO public.normativas_catalogadas 
+                (documento, tipo_documento, numero_norma, resumen, materia, num_articulos, actualizado_en)
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (documento) DO UPDATE SET
+                tipo_documento = EXCLUDED.tipo_documento,
+                numero_norma = COALESCE(EXCLUDED.numero_norma, public.normativas_catalogadas.numero_norma),
+                resumen = COALESCE(EXCLUDED.resumen, public.normativas_catalogadas.resumen),
+                materia = COALESCE(EXCLUDED.materia, public.normativas_catalogadas.materia),
+                num_articulos = EXCLUDED.num_articulos,
+                actualizado_en = NOW()
+        """, (documento, tipo_documento, numero_norma, resumen, materia, num_articulos))
+        conn.commit()
+        cur.close()
+        return True
+    except Exception as e:
+        try:
+            get_conn().rollback()
+        except Exception:
+            pass
+        logger.warning(f"Error guardando normativa catalogada '{documento}': {e}")
+        return False
 
 
 def listar_documentos_normativos() -> List[Dict[str, Any]]:
