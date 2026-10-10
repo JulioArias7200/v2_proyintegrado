@@ -7,6 +7,7 @@ import AtencionCiudadana from './pages/AtencionCiudadana';
 import Monitoreo from './pages/Monitoreo';
 import Login from './pages/Login';
 import VoiceAssistantPage from './pages/VoiceAssistantPage';
+import FloatingCitizenAssistant from './components/FloatingCitizenAssistant';
 import { api } from './services/api';
 import { useAuth, esRolInterno } from './context/AuthContext';
 
@@ -91,6 +92,7 @@ export default function App() {
         <main style={{ flex: 1 }}>
           <AtencionCiudadana isAuthenticated={false} onNavigateLogin={() => setMostrarLogin(true)} />
         </main>
+        <FloatingCitizenAssistant />
         {FOOTER}
       </div>
     );
@@ -111,6 +113,7 @@ export default function App() {
         <main style={{ flex: 1 }}>
           <AtencionCiudadana isAuthenticated={true} currentUser={user} />
         </main>
+        <FloatingCitizenAssistant />
         {FOOTER}
       </div>
     );
@@ -136,6 +139,7 @@ export default function App() {
         {activeTab === 'monitoreo' && <Monitoreo />}
       </main>
 
+      <FloatingCitizenAssistant />
       {FOOTER}
     </div>
   );
