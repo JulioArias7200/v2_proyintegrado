@@ -233,6 +233,20 @@ class MiembroComisionRequest(BaseModel):
     partido_politico: Optional[str] = None
 
 
+class ConcentradorRequest(BaseModel):
+    sesion_id: str
+    id_proyecto: Optional[int] = None
+    datos_constitucionales: Optional[Dict[str, Any]] = None
+    datos_consistencia: Optional[Dict[str, Any]] = None
+    datos_fondo: Optional[Dict[str, Any]] = None
+    datos_comision: Optional[Dict[str, Any]] = None
+    texto_proyecto: Optional[str] = None
+    titulo_proyecto: Optional[str] = None
+    notificar: Optional[bool] = True
+    destinatario_extra: Optional[str] = None
+    mensaje_extra: Optional[str] = None
+
+
 # ── Auto-migración: tabla sistema.miembro_comision ──────────────────────────
 class AgenteCiudadanoRequest(BaseModel):
     nombre: str
@@ -1042,6 +1056,36 @@ def run_agent_notificador(req: NotificadorComisionRequest):
         return {"success": True, "data": resultado}
     except Exception as e:
         logger.error(f"Error en Agente Notificador: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/pipeline/agent_concentrador")
+def run_agent_concentrador(req: ConcentradorRequest):
+    """
+    Agente Concentrador, Emisor y Notificador de Dictamen:
+    1. Concentra y sintetiza observaciones de Constitucionalidad, Consistencia Normativa y Fondo.
+    2. Emite el Dictamen Oficial en PDF (letra negra formal, alta solidez institucional).
+    3. Despacha la notificación formal por correo HTML con el PDF adjunto a los miembros de comisión.
+    """
+    from sma_unified.agents.concentrador import ejecutar_concentrador_emisor_notificador
+    try:
+        id_proyecto = _resolve_id_proyecto(req.sesion_id, req.id_proyecto)
+        resultado = ejecutar_concentrador_emisor_notificador(
+            sesion_id=req.sesion_id,
+            id_proyecto=id_proyecto,
+            datos_constitucionales=req.datos_constitucionales,
+            datos_consistencia=req.datos_consistencia,
+            datos_fondo=req.datos_fondo,
+            datos_comision=req.datos_comision,
+            texto_proyecto=req.texto_proyecto,
+            titulo_proyecto=req.titulo_proyecto,
+            notificar=bool(req.notificar),
+            destinatario_extra=req.destinatario_extra,
+            mensaje_extra=req.mensaje_extra,
+        )
+        return {"success": True, "data": resultado}
+    except Exception as e:
+        logger.error(f"Error en Agente Concentrador y Emisor: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

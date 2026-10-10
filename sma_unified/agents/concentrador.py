@@ -805,6 +805,28 @@ class AgenteConcentrador:
                 logger.warning(f"[Concentrador] Neon no disponible: {e}")
         _persistir_en_mongo(id_proyecto, resultado, tiempo_ms)
 
+        # ── PASO 9: NOTIFICACIÓN FORMAL A MIEMBROS DE COMISIÓN Y ENCARGADOS ─────
+        notificacion_res = None
+        if proyecto_info.get("notificar_comision", True) and pdf_info.get("filename"):
+            try:
+                from sma_unified.agents.notificador_comision import notificar_miembros_comision
+                notificacion_res = notificar_miembros_comision(
+                    sesion_id=proyecto_info.get("sesion_id") or f"sesion_{id_proyecto}",
+                    id_proyecto=id_proyecto,
+                    datos_comision=proyecto_info.get("comision_data") or {"nombre_comision": proyecto_info.get("comision", "Comisión Legislativa Asignada")},
+                    datos_constitucionales={"valido": riesgo_global != "CRÍTICO", "severidad_maxima": riesgo_global},
+                    datos_consistencia={"total_hallazgos": len(lista_observaciones_final), "nivel_riesgo_global": riesgo_global},
+                    pdf_filename=pdf_info.get("filename"),
+                    destinatario_extra=proyecto_info.get("destinatario_extra"),
+                    mensaje_extra=proyecto_info.get("mensaje_extra"),
+                    asunto_personalizado=f"Dictamen Oficial Consolidado de Auditoría Legislativa — {titulo[:60]}"
+                )
+                resultado["notificacion_comision"] = notificacion_res
+                logger.info(f"[Concentrador] ✅ Notificación formal y PDF despachados a los miembros de comisión")
+            except Exception as _notif_err:
+                logger.warning(f"[Concentrador] No se pudo despachar correo a comisión: {_notif_err}")
+                resultado["notificacion_comision"] = {"enviado": False, "error": str(_notif_err)}
+
         # Enviar Mensaje a Presidencia de Comisión con enlace al PDF adjunto
         try:
             db = get_db()
@@ -820,15 +842,83 @@ class AgenteConcentrador:
                 "pdf_url": pdf_url,
                 "resumen_ejecutivo": resumen_ejecutivo,
                 "conclusiones": analisis_ampliado.get("conclusiones_juridicas", ""),
+                "notificacion_despachada": bool(notificacion_res and notificacion_res.get("enviado")),
                 "metodologia": "Agentes de Análisis Especializados con Pensamiento Ampliado",
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             })
-            logger.info("[Concentrador] Notificación con PDF remitida a Presidencia de Comisión")
+            logger.info("[Concentrador] Notificación con PDF registrada en bitácora de mensajes")
         except Exception as m_err:
             logger.warning(f"[Concentrador] No se pudo encolar mensaje a Presidencia: {m_err}")
 
         logger.info(
-            f"[Concentrador] ✅ Expediente y PDF formal completados | "
+            f"[Concentrador] ✅ Expediente, PDF formal y Notificación completados | "
             f"Obs: {len(obs_verificadas)} | Riesgo: {riesgo_global} | {tiempo_ms}ms"
         )
         return resultado
+
+
+def ejecutar_concentrador_emisor_notificador(
+    sesion_id: str,
+    id_proyecto: Optional[int],
+    datos_constitucionales: Optional[Dict[str, Any]] = None,
+    datos_consistencia: Optional[Dict[str, Any]] = None,
+    datos_fondo: Optional[Dict[str, Any]] = None,
+    datos_comision: Optional[Dict[str, Any]] = None,
+    texto_proyecto: Optional[str] = None,
+    titulo_proyecto: Optional[str] = None,
+    notificar: bool = True,
+    destinatario_extra: Optional[str] = None,
+    mensaje_extra: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Función de orquestación unificada para el Agente Concentrador, Emisor y Notificador.
+    1. Agrupa los insumos de Constitucionalidad, Consistencia Normativa y Fondo.
+    2. Ejecuta la consolidación fidedigna con Pensamiento Analítico Ampliado.
+    3. Emite el Dictamen Formal Oficial en PDF con letra negra institucional.
+    4. Despacha la notificación formal por correo HTML con el PDF adjunto a los encargados.
+    """
+    insumos = []
+    if datos_constitucionales:
+        insumos.append({
+            "agente_origen": "Agente_Verificador_Constitucional",
+            "hallazgos": datos_constitucionales.get("contradicciones", []) or datos_constitucionales.get("hallazgos", []),
+            "confianza": datos_constitucionales.get("confianza", 0.95),
+            "nivel_confianza": datos_constitucionales.get("confianza", 0.95),
+            "valido": datos_constitucionales.get("valido", True),
+            "resumen": datos_constitucionales.get("resumen", ""),
+        })
+
+    if datos_consistencia:
+        insumos.append({
+            "agente_origen": "Agente_Consistencia_Normativa",
+            "hallazgos": datos_consistencia.get("hallazgos", []),
+            "confianza": 0.90,
+            "nivel_confianza": 0.90,
+            "nivel_riesgo_global": datos_consistencia.get("nivel_riesgo_global", "OK"),
+            "resumen": f"Total hallazgos: {datos_consistencia.get('total_hallazgos', 0)}",
+        })
+
+    if datos_fondo:
+        insumos.append({
+            "agente_origen": "Comision_Constitucion_Fondo",
+            "hallazgos": datos_fondo.get("enmiendas_de_fondo_sugeridas", []) or datos_fondo.get("hallazgos", []),
+            "confianza": 0.92,
+            "nivel_confianza": 0.92,
+            "dictamen_fondo": datos_fondo.get("dictamen_fondo_detallado", ""),
+        })
+
+    proyecto_info = {
+        "id": id_proyecto or 0,
+        "id_proyecto": id_proyecto or 0,
+        "titulo": titulo_proyecto or "Proyecto de Ley",
+        "sesion_id": sesion_id,
+        "texto_proyecto": texto_proyecto or "",
+        "comision": (datos_comision or {}).get("comision_principal") or (datos_comision or {}).get("nombre_comision", "Comisión de Constitución"),
+        "comision_data": datos_comision or {},
+        "notificar_comision": notificar,
+        "destinatario_extra": destinatario_extra,
+        "mensaje_extra": mensaje_extra,
+    }
+
+    agente = AgenteConcentrador()
+    return agente.ejecutar(insumos, proyecto_info)
