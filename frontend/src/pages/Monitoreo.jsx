@@ -46,12 +46,12 @@ export default function Monitoreo() {
   const busStats = dashboardStats?.bus_mensajes || {};
 
   const agentList = [
-    { name: 'Agente Distribuidor', role: 'Clasificación', theme: 'cyan', level: 'Fase 1', statusText: 'Escuchando canal...' },
-    { name: 'Comisión Legislativa', role: 'Asignación Temática', theme: 'blue', level: 'Fase 2', statusText: 'Evaluando expedientes...' },
-    { name: 'Verificador Constitucional', role: 'Auditoría CPE', theme: 'green', level: 'Fase 2', statusText: 'Cotejando CPE Art. 104...' },
-    { name: 'Consistencia Normativa', role: 'Vectores pgvector', theme: 'gold', level: 'Fase 2', statusText: 'Indexando 2048d...' },
-    { name: 'Emisor de Resultados', role: 'Compilador PDF', theme: 'pink', level: 'Fase 3', statusText: 'Formateando reportes...' },
-    { name: 'Notificador Comisión', role: 'Despachador HTML', theme: 'violet', level: 'Fase 3', statusText: 'Notificando parlamentarios...' },
+    { name: 'Agente Distribuidor', role: 'Clasificación', theme: 'cyan', level: 'Fase 1', statusText: 'Escuchando canal...', logo: '/robots/logos/agente_distribuidor.jpeg' },
+    { name: 'Comisión Legislativa', role: 'Asignación Temática', theme: 'blue', level: 'Fase 2', statusText: 'Evaluando expedientes...', logo: '/robots/logos/agente_comision.jpeg' },
+    { name: 'Verificador Constitucional', role: 'Auditoría CPE', theme: 'green', level: 'Fase 2', statusText: 'Cotejando CPE Art. 104...', logo: '/robots/logos/agente_constitucional.jpeg' },
+    { name: 'Consistencia Normativa', role: 'Vectores pgvector', theme: 'gold', level: 'Fase 2', statusText: 'Indexando 2048d...', logo: '/robots/logos/agente_consistencia.jpeg' },
+    { name: 'Emisor de Resultados', role: 'Compilador PDF', theme: 'pink', level: 'Fase 3', statusText: 'Formateando reportes...', logo: '/robots/logos/concentrador.jpeg' },
+    { name: 'Notificador Comisión', role: 'Despachador HTML', theme: 'violet', level: 'Fase 3', statusText: 'Notificando parlamentarios...', logo: '/robots/logos/agente_comodin.jpeg' },
   ];
 
   return (
@@ -99,12 +99,29 @@ export default function Monitoreo() {
                 background: 'rgba(15, 23, 42, 0.6)'
               }}
             >
-              <CssRobotAvatar
-                theme={ag.theme}
-                status={loading ? 'thinking' : 'idle'}
-                size="md"
-                showBubble={false}
-              />
+              <div style={{
+                width: '68px',
+                height: '68px',
+                borderRadius: '50%',
+                border: '2.5px solid #00B4D8',
+                boxShadow: '0 0 16px rgba(0, 180, 216, 0.35)',
+                overflow: 'hidden',
+                background: '#0B2545',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {ag.logo ? (
+                  <img src={ag.logo} alt={ag.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <CssRobotAvatar
+                    theme={ag.theme}
+                    status={loading ? 'thinking' : 'idle'}
+                    size="md"
+                    showBubble={false}
+                  />
+                )}
+              </div>
               <div>
                 <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#ffffff' }}>{ag.name}</div>
                 <div style={{ fontSize: '0.76rem', color: '#94a3b8', fontWeight: 600 }}>{ag.role}</div>

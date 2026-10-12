@@ -28,18 +28,21 @@ import AgentVoiceModule from './AgentVoiceModule';
 
 // Mapeo de logos y banners institucionales
 const AGENT_LOGO_MAP = {
-  distribuidor: '/robots/logos/distribuidor.jpg',
-  comision: '/robots/logos/verificadorconstitucional.jpg',
-  constitucional: '/robots/logos/verificadorconstitucional.jpg',
-  consistencia: '/robots/logos/consistencianormativa.jpg',
-  emisor: '/robots/logos/distribuidor.jpg',
-  notificador: '/robots/logos/consistencianormativa.jpg',
-  constitucion_fondo: '/robots/logos/verificadorconstitucional.jpg',
-  concentrador_crew: '/robots/logos/distribuidor.jpg',
-  secretario: '/robots/logos/verificadorconstitucional.jpg',
-  bicameral: '/robots/logos/consistencianormativa.jpg',
-  veto_promulgacion: '/robots/logos/distribuidor.jpg',
-  publicacion: '/robots/logos/verificadorconstitucional.jpg',
+  distribuidor: '/robots/logos/agente_distribuidor.jpeg',
+  comision: '/robots/logos/agente_comision.jpeg',
+  constitucional: '/robots/logos/agente_constitucional.jpeg',
+  consistencia: '/robots/logos/agente_consistencia.jpeg',
+  concentrador: '/robots/logos/concentrador.jpeg',
+  emisor: '/robots/logos/agente_comodin.jpeg',
+  notificador: '/robots/logos/agente_comodin.jpeg',
+  constitucion_fondo: '/robots/logos/agente_constitucional.jpeg',
+  concentrador_crew: '/robots/logos/concentrador.jpeg',
+  secretario: '/robots/logos/agente_secretario.jpeg',
+  bicameral: '/robots/logos/agente_bicamaral.jpeg',
+  veto_promulgacion: '/robots/logos/agente_veto.jpeg',
+  publicacion: '/robots/logos/agente_publicacion.jpeg',
+  ciudadania: '/robots/logos/agente_ciudadania.jpeg',
+  comodin: '/robots/logos/agente_comodin.jpeg',
 };
 
 const AGENT_BANNER_MAP = {

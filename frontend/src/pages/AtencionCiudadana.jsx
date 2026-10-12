@@ -146,18 +146,30 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
           </p>
         </div>
 
-        {/* Dynamic HTML/CSS Bot Avatar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(2, 26, 25, 0.6)', padding: '16px 24px', borderRadius: '20px', border: '1px solid rgba(20, 184, 166, 0.3)' }}>
-          <CssRobotAvatar
-            theme="teal"
-            status={isSubmitting ? 'working' : 'idle'}
-            size="lg"
-            showBubble={true}
-            thinkingText={isSubmitting ? 'Canalizando solicitud ciudadana...' : 'Atendiendo consultas en vivo'}
-          />
+        {/* Dynamic Bot Avatar with Official Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(2, 26, 25, 0.6)', padding: '14px 22px', borderRadius: '20px', border: '1px solid rgba(20, 184, 166, 0.3)' }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            border: '2.5px solid #2dd4bf',
+            boxShadow: '0 0 18px rgba(45, 212, 191, 0.35)',
+            overflow: 'hidden',
+            background: '#042f2e',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <img
+              src="/robots/logos/agente_ciudadania.jpeg"
+              alt="Agente Atención Ciudadana"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </div>
           <div>
-            <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '1rem' }}>Bot Ciudadano</div>
-            <div style={{ fontSize: '0.78rem', color: '#2dd4bf', fontWeight: 600 }}>NVIDIA Nemotron 30B</div>
+            <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '1.05rem' }}>Agente Atención Ciudadana</div>
+            <div style={{ fontSize: '0.78rem', color: '#2dd4bf', fontWeight: 600 }}>NVIDIA Nemotron 30B • SMA AI</div>
           </div>
         </div>
       </div>

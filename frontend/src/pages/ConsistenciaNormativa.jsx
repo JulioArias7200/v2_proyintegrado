@@ -89,18 +89,30 @@ export default function ConsistenciaNormativa() {
           </p>
         </div>
 
-        {/* Dynamic HTML/CSS Bot Avatar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(33, 13, 2, 0.6)', padding: '16px 24px', borderRadius: '20px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-          <CssRobotAvatar
-            theme="gold"
-            status={isSearching ? 'working' : 'idle'}
-            size="lg"
-            showBubble={true}
-            thinkingText={isSearching ? 'Buscando en vectores 2048d...' : 'Auditoría semántica lista'}
-          />
+        {/* Dynamic Bot Avatar with Official Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(33, 13, 2, 0.6)', padding: '14px 22px', borderRadius: '20px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            border: '2.5px solid #fbbf24',
+            boxShadow: '0 0 18px rgba(245, 158, 11, 0.35)',
+            overflow: 'hidden',
+            background: '#451a03',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <img
+              src="/robots/logos/agente_consistencia.jpeg"
+              alt="Agente Consistencia Normativa"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </div>
           <div>
-            <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '1rem' }}>Bot Normativo</div>
-            <div style={{ fontSize: '0.78rem', color: '#fbbf24', fontWeight: 600 }}>NVIDIA Nemotron 1B Embeddings</div>
+            <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '1.05rem' }}>Agente Consistencia Normativa</div>
+            <div style={{ fontSize: '0.78rem', color: '#fbbf24', fontWeight: 600 }}>NVIDIA Nemotron 1B Embeddings • pgvector 2048d</div>
           </div>
         </div>
       </div>

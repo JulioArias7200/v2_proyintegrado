@@ -1,19 +1,19 @@
 // MesaPartes v3.0 — Paleta Institucional GobernIA + Flujo Paralelo + Panel Lateral Deslizante
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  UploadCloud, 
-  FileText, 
-  ArrowRight, 
-  CheckCircle2, 
-  AlertTriangle, 
-  ShieldAlert, 
-  Scale, 
-  Cpu, 
-  Building2, 
-  Users, 
-  Mail, 
-  RotateCcw, 
-  Check, 
+import {
+  UploadCloud,
+  FileText,
+  ArrowRight,
+  CheckCircle2,
+  AlertTriangle,
+  ShieldAlert,
+  Scale,
+  Cpu,
+  Building2,
+  Users,
+  Mail,
+  RotateCcw,
+  Check,
   ExternalLink,
   BookOpen,
   Download,
@@ -53,33 +53,36 @@ import { useLatinSpeech } from '../hooks/useLatinSpeech';
 
 // Mapeo de logos institucionales y colores de acento por agente
 const AGENT_LOGO_MAP = {
-  distribuidor:       '/robots/logos/distribuidor.jpg',
-  comision:           '/robots/logos/verificadorconstitucional.jpg',
-  constitucional:     '/robots/logos/verificadorconstitucional.jpg',
-  consistencia:       '/robots/logos/consistencianormativa.jpg',
-  emisor:             '/robots/logos/distribuidor.jpg',
-  notificador:        '/robots/logos/consistencianormativa.jpg',
-  constitucion_fondo: '/robots/logos/verificadorconstitucional.jpg',
-  concentrador_crew:  '/robots/logos/distribuidor.jpg',
-  secretario:         '/robots/logos/verificadorconstitucional.jpg',
-  bicameral:          '/robots/logos/consistencianormativa.jpg',
-  veto_promulgacion:  '/robots/logos/distribuidor.jpg',
-  publicacion:        '/robots/logos/verificadorconstitucional.jpg',
+  distribuidor: '/robots/logos/agente_distribuidor.jpeg',
+  comision: '/robots/logos/agente_comision.jpeg',
+  constitucional: '/robots/logos/agente_constitucional.jpeg',
+  consistencia: '/robots/logos/agente_consistencia.jpeg',
+  concentrador: '/robots/logos/concentrador.jpeg',
+  emisor: '/robots/logos/agente_comodin.jpeg',
+  notificador: '/robots/logos/agente_comodin.jpeg',
+  constitucion_fondo: '/robots/logos/agente_constitucional.jpeg',
+  concentrador_crew: '/robots/logos/concentrador.jpeg',
+  secretario: '/robots/logos/agente_secretario.jpeg',
+  bicameral: '/robots/logos/agente_bicamaral.jpeg',
+  veto_promulgacion: '/robots/logos/agente_veto.jpeg',
+  publicacion: '/robots/logos/agente_publicacion.jpeg',
+  ciudadania: '/robots/logos/agente_ciudadania.jpeg',
+  comodin: '/robots/logos/agente_comodin.jpeg',
 };
 
 const AGENT_ACCENT_MAP = {
-  distribuidor:       '#00B4D8', // Celeste Neón Eléctrico
-  comision:           '#38BDF8', // Azul Cielo Radiante
-  constitucional:     '#2563EB', // Azul Zafiro Real
-  consistencia:       '#1D4ED8', // Azul Cobalto Profundo
-  emisor:             '#0284C7', // Azul Océano Cerúleo
-  notificador:        '#06B6D4', // Turquesa Azulado
+  distribuidor: '#00B4D8', // Celeste Neón Eléctrico
+  comision: '#38BDF8', // Azul Cielo Radiante
+  constitucional: '#2563EB', // Azul Zafiro Real
+  consistencia: '#1D4ED8', // Azul Cobalto Profundo
+  emisor: '#0284C7', // Azul Océano Cerúleo
+  notificador: '#06B6D4', // Turquesa Azulado
   constitucion_fondo: '#4338CA', // Azul Índigo Parlamentario
-  concentrador_crew:  '#3B82F6', // Azul Acero Técnico
-  secretario:         '#1E40AF', // Azul Marino Clásico
-  bicameral:          '#7DD3FC', // Azul Hielo Glaciar
-  veto_promulgacion:  '#1E3A8A', // Azul Medianoche Ultramar
-  publicacion:        '#00C2CB', // Azul Lapislázuli Brillante
+  concentrador_crew: '#3B82F6', // Azul Acero Técnico
+  secretario: '#1E40AF', // Azul Marino Clásico
+  bicameral: '#7DD3FC', // Azul Hielo Glaciar
+  veto_promulgacion: '#1E3A8A', // Azul Medianoche Ultramar
+  publicacion: '#00C2CB', // Azul Lapislázuli Brillante
 };
 
 const STORAGE_SESSIONS_KEY = 'sma_mesapartes_sessions_v2';
@@ -418,8 +421,8 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     agente_destino_nombre: selectedCategory === 'AGENTE_REGISTRO_LEGISLATIVO'
       ? 'Agente_Comision_Legislativa'
       : selectedCategory === 'AGENTE_ATENCION_CIUDADANA'
-      ? 'Agente_Atencion_Ciudadana'
-      : 'Agente_Gestion_Correspondencia',
+        ? 'Agente_Atencion_Ciudadana'
+        : 'Agente_Gestion_Correspondencia',
     texto_documento: documentText,
     nombre_archivo: fase1Data.nombre_archivo,
     tipo_entrada: fase1Data.tipo_entrada,
@@ -962,7 +965,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     return AGENTS_DEFINITION.find(a => a.id === 'publicacion') || AGENTS_DEFINITION[11];
   };
   const activeAgentDef = getActiveAgentDef();
-  const activeLogoUrl = AGENT_LOGO_MAP[activeAgentDef?.id] || '/robots/logos/distribuidor.jpg';
+  const activeLogoUrl = AGENT_LOGO_MAP[activeAgentDef?.id] || '/robots/logos/agente_distribuidor.jpeg';
   const activeAccent = AGENT_ACCENT_MAP[activeAgentDef?.id] || '#00B4D8';
 
   // ── Renderiza el contenedor superior dedicado (RECUADRO ROJO): Logo más grande (104px) + Nombre del agente destacado ──
@@ -1166,7 +1169,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           onClose={handleCloseDetailPanel}
         />
       )}
-      
+
       {/* ── HEADER INSTITUCIONAL ── */}
       <div style={{
         marginBottom: '20px',
@@ -1179,9 +1182,11 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
         overflow: 'hidden'
       }}>
         {/* Ambient glow */}
-        <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '200px', height: '200px',
-          borderRadius: '50%', background: 'rgba(0,180,216,0.08)', filter: 'blur(60px)', pointerEvents: 'none' }} />
-        
+        <div style={{
+          position: 'absolute', top: '-40px', right: '-40px', width: '200px', height: '200px',
+          borderRadius: '50%', background: 'rgba(0,180,216,0.08)', filter: 'blur(60px)', pointerEvents: 'none'
+        }} />
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
           <span className="badge badge-blue" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <Shield size={12} /> Mesa de Partes Virtual
@@ -1219,9 +1224,11 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
             <span>Ver Todos los Resultados ({AGENTS_DEFINITION.filter(a => pipelineStep >= a.doneAtStep).length})</span>
           </button>
         </div>
-        <h1 style={{ fontSize: '1.9rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '6px',
+        <h1 style={{
+          fontSize: '1.9rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '6px',
           letterSpacing: '-0.02em', fontFamily: 'Outfit, sans-serif',
-          textShadow: '0 2px 12px rgba(0,180,216,0.3)' }}>
+          textShadow: '0 2px 12px rgba(0,180,216,0.3)'
+        }}>
           Auditoría Automática de Documentos Legislativos
         </h1>
         <p style={{ color: '#94A3B8', fontSize: '0.92rem', maxWidth: '800px', lineHeight: 1.55, margin: 0 }}>
@@ -1361,29 +1368,35 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={() => { setShowChat(true); setChatTab('agente'); }}
-              style={{ padding: '6px 12px', fontSize: '0.78rem', borderRadius: '8px',
+              style={{
+                padding: '6px 12px', fontSize: '0.78rem', borderRadius: '8px',
                 background: 'rgba(0,180,216,0.15)', border: '1px solid rgba(0,180,216,0.35)',
                 color: '#00B4D8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
-                fontFamily: 'Outfit, sans-serif', fontWeight: 600 }}
+                fontFamily: 'Outfit, sans-serif', fontWeight: 600
+              }}
               title="Abrir chat emergente con este agente"
             >
               <MessagesSquare size={13} /> Chat Agente
             </button>
             <button
               onClick={() => setDetailPanelAgent(activeAgentDef)}
-              style={{ padding: '6px 12px', fontSize: '0.78rem', borderRadius: '8px',
+              style={{
+                padding: '6px 12px', fontSize: '0.78rem', borderRadius: '8px',
                 background: 'rgba(0,180,216,0.15)', border: '1px solid rgba(0,180,216,0.35)',
                 color: '#00B4D8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
-                fontFamily: 'Outfit, sans-serif', fontWeight: 600 }}
+                fontFamily: 'Outfit, sans-serif', fontWeight: 600
+              }}
             >
               <Eye size={13} /> Ver Detalle
             </button>
             <button
               onClick={() => updateActiveSession({ inspectedAgentId: null })}
-              style={{ padding: '6px 12px', fontSize: '0.78rem', borderRadius: '8px',
+              style={{
+                padding: '6px 12px', fontSize: '0.78rem', borderRadius: '8px',
                 background: 'rgba(2,132,199,0.2)', border: '1px solid rgba(2,132,199,0.4)',
                 color: '#38BDF8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
-                fontFamily: 'Outfit, sans-serif', fontWeight: 600 }}
+                fontFamily: 'Outfit, sans-serif', fontWeight: 600
+              }}
             >
               <EyeOff size={13} /> Volver
             </button>
@@ -1446,225 +1459,225 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                 </button>
               </div>
 
-            {inputMode === 'file' ? (
-              <div>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  accept=".pdf,.docx,.doc,.txt"
-                  style={{ display: 'none' }}
-                />
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    border: '2px dashed rgba(0, 180, 216, 0.4)',
-                    borderRadius: '16px',
-                    padding: '44px 24px',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    background: 'rgba(11, 37, 69, 0.6)',
-                    transition: 'all 0.25s ease',
-                    marginBottom: '20px',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#00B4D8';
-                    e.currentTarget.style.background = 'rgba(19, 64, 116, 0.5)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'rgba(0, 180, 216, 0.4)';
-                    e.currentTarget.style.background = 'rgba(11, 37, 69, 0.6)';
-                  }}
-                >
-                  <UploadCloud size={46} color="#00B4D8" style={{ margin: '0 auto 14px' }} />
-                  <h3 style={{ color: '#F1F5F9', fontSize: '1.2rem', fontWeight: 700, marginBottom: '6px' }}>
-                    {documentName || 'Haz clic aquí para seleccionar tu archivo'}
-                  </h3>
-                  <p style={{ color: '#94A3B8', fontSize: '0.88rem' }}>
-                    Soporta formatos PDF, DOCX o archivos de texto plano (.txt)
-                  </p>
-                </div>
+              {inputMode === 'file' ? (
+                <div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept=".pdf,.docx,.doc,.txt"
+                    style={{ display: 'none' }}
+                  />
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      border: '2px dashed rgba(0, 180, 216, 0.4)',
+                      borderRadius: '16px',
+                      padding: '44px 24px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      background: 'rgba(11, 37, 69, 0.6)',
+                      transition: 'all 0.25s ease',
+                      marginBottom: '20px',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#00B4D8';
+                      e.currentTarget.style.background = 'rgba(19, 64, 116, 0.5)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(0, 180, 216, 0.4)';
+                      e.currentTarget.style.background = 'rgba(11, 37, 69, 0.6)';
+                    }}
+                  >
+                    <UploadCloud size={46} color="#00B4D8" style={{ margin: '0 auto 14px' }} />
+                    <h3 style={{ color: '#F1F5F9', fontSize: '1.2rem', fontWeight: 700, marginBottom: '6px' }}>
+                      {documentName || 'Haz clic aquí para seleccionar tu archivo'}
+                    </h3>
+                    <p style={{ color: '#94A3B8', fontSize: '0.88rem' }}>
+                      Soporta formatos PDF, DOCX o archivos de texto plano (.txt)
+                    </p>
+                  </div>
 
-                {uploadStats && (
-                  <div style={{
-                    display: 'flex',
-                    gap: '20px',
-                    background: 'rgba(15, 23, 42, 0.7)',
-                    padding: '16px 20px',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(0, 180, 216, 0.25)',
-                    marginBottom: '24px',
-                    flexWrap: 'wrap'
-                  }}>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 600 }}>Páginas:</span>
-                      <strong style={{ display: 'block', color: '#F8FAFC', fontSize: '1.15rem' }}>{uploadStats.paginas}</strong>
+                  {uploadStats && (
+                    <div style={{
+                      display: 'flex',
+                      gap: '20px',
+                      background: 'rgba(15, 23, 42, 0.7)',
+                      padding: '16px 20px',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(0, 180, 216, 0.25)',
+                      marginBottom: '24px',
+                      flexWrap: 'wrap'
+                    }}>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 600 }}>Páginas:</span>
+                        <strong style={{ display: 'block', color: '#F8FAFC', fontSize: '1.15rem' }}>{uploadStats.paginas}</strong>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 600 }}>Palabras:</span>
+                        <strong style={{ display: 'block', color: '#F8FAFC', fontSize: '1.15rem' }}>{uploadStats.palabras.toLocaleString()}</strong>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 600 }}>Caracteres:</span>
+                        <strong style={{ display: 'block', color: '#F8FAFC', fontSize: '1.15rem' }}>{uploadStats.caracteres.toLocaleString()}</strong>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 600 }}>Motor:</span>
+                        <strong style={{ display: 'block', color: '#8AC926', fontSize: '1.15rem' }}>{uploadStats.motor}</strong>
+                      </div>
                     </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 600 }}>Palabras:</span>
-                      <strong style={{ display: 'block', color: '#F8FAFC', fontSize: '1.15rem' }}>{uploadStats.palabras.toLocaleString()}</strong>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 600 }}>Caracteres:</span>
-                      <strong style={{ display: 'block', color: '#F8FAFC', fontSize: '1.15rem' }}>{uploadStats.caracteres.toLocaleString()}</strong>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 600 }}>Motor:</span>
-                      <strong style={{ display: 'block', color: '#8AC926', fontSize: '1.15rem' }}>{uploadStats.motor}</strong>
+                  )}
+                </div>
+              ) : (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ color: '#94A3B8', fontSize: '0.92rem', fontWeight: 600 }}>
+                      Contenido del Documento o Proyecto:
+                    </label>
+                    <div style={{ fontSize: '0.78rem', color: '#00B4D8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Mic size={14} />
+                      <span>Dictado por voz habilitado</span>
                     </div>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div style={{ marginBottom: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <label style={{ color: '#94A3B8', fontSize: '0.92rem', fontWeight: 600 }}>
-                    Contenido del Documento o Proyecto:
-                  </label>
-                  <div style={{ fontSize: '0.78rem', color: '#00B4D8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Mic size={14} />
-                    <span>Dictado por voz habilitado</span>
-                  </div>
-                </div>
 
-                {/* Asistente de Voz: Dictado de Documento */}
-                <div style={{ marginBottom: '14px' }}>
-                  <AgentVoiceModule
-                    agentId="distribuidor"
-                    agentLabel="Agente Distribuidor"
-                    primaryColor="#00B4D8"
-                    sesionId={fase1Data?.sesion_id || null}
-                    speechHook={speechHook}
-                    onDictadoText={handleDictadoVoz}
-                    compact={true}
+                  {/* Asistente de Voz: Dictado de Documento */}
+                  <div style={{ marginBottom: '14px' }}>
+                    <AgentVoiceModule
+                      agentId="distribuidor"
+                      agentLabel="Agente Distribuidor"
+                      primaryColor="#00B4D8"
+                      sesionId={fase1Data?.sesion_id || null}
+                      speechHook={speechHook}
+                      onDictadoText={handleDictadoVoz}
+                      compact={true}
+                    />
+                  </div>
+                  <textarea
+                    value={documentText}
+                    onChange={(e) => updateActiveSession({ documentText: e.target.value })}
+                    placeholder="Pegue aquí el texto completo del proyecto de ley o solicitud..."
+                    rows={9}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      border: '1px solid rgba(0, 180, 216, 0.3)',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      color: '#F1F5F9',
+                      fontFamily: 'monospace',
+                      fontSize: '0.9rem',
+                      lineHeight: 1.5,
+                      outline: 'none',
+                    }}
                   />
                 </div>
-                <textarea
-                  value={documentText}
-                  onChange={(e) => updateActiveSession({ documentText: e.target.value })}
-                  placeholder="Pegue aquí el texto completo del proyecto de ley o solicitud..."
-                  rows={9}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid rgba(0, 180, 216, 0.3)',
-                    borderRadius: '12px',
-                    padding: '16px',
-                    color: '#F1F5F9',
-                    fontFamily: 'monospace',
-                    fontSize: '0.9rem',
-                    lineHeight: 1.5,
-                    outline: 'none',
-                  }}
-                />
-              </div>
-            )}
+              )}
 
-            {/* Datos del Autor / Iniciativa Legislativa */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '16px',
-              background: 'rgba(15, 23, 42, 0.6)',
-              padding: '16px',
-              borderRadius: '12px',
-              border: '1px solid rgba(0, 180, 216, 0.2)',
-              marginBottom: '24px'
-            }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#94A3B8', fontSize: '0.8rem', fontWeight: 600 }}>
-                  Email del Autor (Notificaciones):
-                </label>
-                <input
-                  type="email"
-                  placeholder="autor@senado.gob.bo"
-                  value={activeSession.emailAutor || ''}
-                  onChange={(e) => updateActiveSession({ emailAutor: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(11, 37, 69, 0.8)',
-                    border: '1px solid rgba(0, 180, 216, 0.3)',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                    color: '#F1F5F9',
-                    fontSize: '0.85rem',
-                    outline: 'none',
-                  }}
-                />
+              {/* Datos del Autor / Iniciativa Legislativa */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '16px',
+                background: 'rgba(15, 23, 42, 0.6)',
+                padding: '16px',
+                borderRadius: '12px',
+                border: '1px solid rgba(0, 180, 216, 0.2)',
+                marginBottom: '24px'
+              }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#94A3B8', fontSize: '0.8rem', fontWeight: 600 }}>
+                    Email del Autor (Notificaciones):
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="autor@senado.gob.bo"
+                    value={activeSession.emailAutor || ''}
+                    onChange={(e) => updateActiveSession({ emailAutor: e.target.value })}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(11, 37, 69, 0.8)',
+                      border: '1px solid rgba(0, 180, 216, 0.3)',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      color: '#F1F5F9',
+                      fontSize: '0.85rem',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#94A3B8', fontSize: '0.8rem', fontWeight: 600 }}>
+                    Nombre del Presentante:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Sen. Mario Choque"
+                    value={activeSession.nombreAutor || ''}
+                    onChange={(e) => updateActiveSession({ nombreAutor: e.target.value })}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(11, 37, 69, 0.8)',
+                      border: '1px solid rgba(0, 180, 216, 0.3)',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      color: '#F1F5F9',
+                      fontSize: '0.85rem',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#94A3B8', fontSize: '0.8rem', fontWeight: 600 }}>
+                    Origen / Tipo de Iniciativa:
+                  </label>
+                  <select
+                    value={activeSession.tipoIniciativa || 'Senado'}
+                    onChange={(e) => updateActiveSession({ tipoIniciativa: e.target.value })}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(11, 37, 69, 0.8)',
+                      border: '1px solid rgba(0, 180, 216, 0.3)',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      color: '#F1F5F9',
+                      fontSize: '0.85rem',
+                      outline: 'none',
+                    }}
+                  >
+                    <option value="Senado">Cámara de Senadores</option>
+                    <option value="Diputados">Cámara de Diputados</option>
+                    <option value="Ejecutivo">Órgano Ejecutivo</option>
+                    <option value="Ciudadana">Iniciativa Ciudadana</option>
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#94A3B8', fontSize: '0.8rem', fontWeight: 600 }}>
-                  Nombre del Presentante:
-                </label>
-                <input
-                  type="text"
-                  placeholder="Sen. Mario Choque"
-                  value={activeSession.nombreAutor || ''}
-                  onChange={(e) => updateActiveSession({ nombreAutor: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(11, 37, 69, 0.8)',
-                    border: '1px solid rgba(0, 180, 216, 0.3)',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                    color: '#F1F5F9',
-                    fontSize: '0.85rem',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', color: '#94A3B8', fontSize: '0.8rem', fontWeight: 600 }}>
-                  Origen / Tipo de Iniciativa:
-                </label>
-                <select
-                  value={activeSession.tipoIniciativa || 'Senado'}
-                  onChange={(e) => updateActiveSession({ tipoIniciativa: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(11, 37, 69, 0.8)',
-                    border: '1px solid rgba(0, 180, 216, 0.3)',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                    color: '#F1F5F9',
-                    fontSize: '0.85rem',
-                    outline: 'none',
-                  }}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <button
+                  onClick={handleIniciarFase1}
+                  disabled={isProcessing || !documentText.trim()}
+                  className="btn-primary"
+                  style={{ fontSize: '1rem', padding: '14px 28px' }}
                 >
-                  <option value="Senado">Cámara de Senadores</option>
-                  <option value="Diputados">Cámara de Diputados</option>
-                  <option value="Ejecutivo">Órgano Ejecutivo</option>
-                  <option value="Ciudadana">Iniciativa Ciudadana</option>
-                </select>
+                  {isProcessing ? (
+                    <>
+                      <Cpu size={20} className="pulse-active" />
+                      <span>Analizando con Agente Distribuidor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={20} />
+                      <span>Iniciar Clasificación (Fase 1)</span>
+                      <ArrowRight size={18} />
+                    </>
+                  )}
+                </button>
               </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                onClick={handleIniciarFase1}
-                disabled={isProcessing || !documentText.trim()}
-                className="btn-primary"
-                style={{ fontSize: '1rem', padding: '14px 28px' }}
-              >
-                {isProcessing ? (
-                  <>
-                    <Cpu size={20} className="pulse-active" />
-                    <span>Analizando con Agente Distribuidor...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={20} />
-                    <span>Iniciar Clasificación (Fase 1)</span>
-                    <ArrowRight size={18} />
-                  </>
-                )}
-              </button>
             </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* ── STEP 1: FASE 1 EN EJECUCIÓN ── */}
@@ -1703,127 +1716,144 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente Distribuidor"
-          role="Clasificación Institucional del Documento"
-          theme="cyan"
-          status="completed"
-          phaseLabel="Fase 1: Clasificación"
-          badgeText="Control Humano Requerido"
-          thinkingText="Clasificación inicial completada con éxito"
-          image="/robots/banner/disribuidor.png"
-          justificacion="Principio de orden y debido proceso parlamentario: cada expediente debe canalizarse por su vía procedimental correcta (Registro Legislativo, Atención Ciudadana o Correspondencia Oficial)."
-          onViewPrev={() => updateActiveSession({ pipelineStep: 2, inspectedAgentId: 'distribuidor' })}
-          prevLabel="Ver Clasificación del Distribuidor"
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div style={{
-              background: 'rgba(244, 162, 97, 0.15)',
-              border: '1px solid rgba(244,162,97,0.5)',
-              borderRadius: '50%',
-              width: '40px',
-              height: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <AlertTriangle size={22} color="#F4A261" />
-            </div>
-            <div>
-              <h4 style={{ fontSize: '1.25rem', color: '#F4A261', fontWeight: 800, margin: 0 }}>
-                PUNTO DE CONTROL HUMANO
-              </h4>
-              <p style={{ color: '#CBD5E1', fontSize: '0.85rem', margin: 0 }}>
-                El Agente Distribuidor ha emitido su recomendación. Puede confirmar la categoría sugerida o reasignarla manualmente antes de activar la Fase 2.
-              </p>
-            </div>
-          </div>
-
-
-          <div style={{
-            background: 'rgba(11, 37, 69, 0.75)',
-            padding: '24px',
-            borderRadius: '14px',
-            border: '1.5px solid rgba(0, 180, 216, 0.35)',
-            marginBottom: '24px',
-          }}>
-            <div style={{ fontSize: '0.85rem', color: '#38BDF8', marginBottom: '8px' }}>Categoría Sugerida por el Agente:</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <span className="badge badge-blue" style={{ fontSize: '1rem', padding: '6px 14px' }}>
-                {fase1Data.categoria}
-              </span>
-              <span style={{ fontSize: '0.85rem', color: '#CBD5E1' }}>
-                Agente Destino: <strong style={{ color: '#00B4D8' }}>{fase1Data.agente_destino_nombre}</strong>
-              </span>
-            </div>
-
-            <div style={{ fontSize: '0.85rem', color: '#38BDF8', marginBottom: '8px' }}>
-              Ajustar Categoría si es necesario:
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-              {[
-                { id: 'AGENTE_REGISTRO_LEGISLATIVO', label: 'Registro Legislativo (Proyecto de Ley)', icon: Scale },
-                { id: 'AGENTE_ATENCION_CIUDADANA', label: 'Atención Ciudadana (Petición/Reclamo)', icon: Users },
-                { id: 'AGENTE_GESTION_CORRESPONDENCIA', label: 'Gestión de Correspondencia (Oficio)', icon: Mail },
-              ].map((cat) => {
-                const Icon = cat.icon;
-                const isSel = selectedCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => updateActiveSession({ selectedCategory: cat.id })}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      padding: '12px 20px',
-                      borderRadius: '12px',
-                      border: isSel ? '2px solid #00B4D8' : '1px solid rgba(0, 180, 216, 0.25)',
-                      background: isSel ? 'rgba(0, 180, 216, 0.22)' : 'rgba(11, 37, 69, 0.65)',
-                      color: isSel ? '#FFFFFF' : '#CBD5E1',
-                      boxShadow: isSel ? '0 0 16px rgba(0, 180, 216, 0.35)' : 'none',
-                      cursor: 'pointer',
-                      fontWeight: isSel ? 700 : 500,
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    <Icon size={18} color={isSel ? '#00B4D8' : '#94A3B8'} />
-                    <span>{cat.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Módulo de voz: Agente Distribuidor (Lectura y conversación) */}
-          <div style={{ marginBottom: '20px' }}>
-            <AgentVoiceModule
-              agentId="distribuidor"
-              agentLabel="Agente Distribuidor"
-              primaryColor="#00B4D8"
-              sesionId={fase1Data?.sesion_id || null}
-              resultData={fase1Data}
-              speechHook={speechHook}
-            />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
-            <button className="btn-secondary" onClick={handleReset}>
-              <RotateCcw size={16} />
-              <span>Cancelar y Reiniciar</span>
-            </button>
-
-            <button
-              onClick={handleEjecutarComision}
-              disabled={isProcessing}
-              className="btn-primary"
-              style={{ fontSize: '1rem', padding: '14px 28px' }}
+              agentName="Agente Distribuidor"
+              role="Clasificación Institucional del Documento"
+              theme="cyan"
+              status="completed"
+              phaseLabel="Fase 1: Clasificación"
+              badgeText="Control Humano Requerido"
+              thinkingText="Clasificación inicial completada con éxito"
+              image="/robots/logos/agente_distribuidor.jpeg"
+              justificacion="Principio de orden y debido proceso parlamentario: cada expediente debe canalizarse por su vía procedimental correcta (Registro Legislativo, Atención Ciudadana o Correspondencia Oficial)."
+              onViewPrev={() => updateActiveSession({ pipelineStep: 2, inspectedAgentId: 'distribuidor' })}
+              prevLabel="Ver Clasificación del Distribuidor"
             >
-              <Check size={20} />
-              <span>Confirmar y Ejecutar Comisión</span>
-              <ArrowRight size={18} />
-            </button>
-          </div>
-        </AgentResultCard>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div style={{
+                  background: 'rgba(244, 162, 97, 0.15)',
+                  border: '1px solid rgba(244,162,97,0.5)',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <AlertTriangle size={22} color="#F4A261" />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '1.25rem', color: '#F4A261', fontWeight: 800, margin: 0 }}>
+                    PUNTO DE CONTROL HUMANO
+                  </h4>
+                  <p style={{ color: '#CBD5E1', fontSize: '0.85rem', margin: 0 }}>
+                    El Agente Distribuidor ha emitido su recomendación. Puede confirmar la categoría sugerida o reasignarla manualmente antes de activar la Fase 2.
+                  </p>
+                </div>
+              </div>
+
+
+              <div style={{
+                background: 'rgba(11, 37, 69, 0.75)',
+                padding: '24px',
+                borderRadius: '14px',
+                border: '1.5px solid rgba(0, 180, 216, 0.35)',
+                marginBottom: '24px',
+              }}>
+                <div style={{ fontSize: '0.85rem', color: '#38BDF8', marginBottom: '8px' }}>Categoría Sugerida por el Agente:</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  <span className="badge badge-blue" style={{ fontSize: '1rem', padding: '6px 14px' }}>
+                    {fase1Data.categoria}
+                  </span>
+                  <span style={{ fontSize: '0.85rem', color: '#CBD5E1' }}>
+                    Agente Destino: <strong style={{ color: '#00B4D8' }}>{fase1Data.agente_destino_nombre}</strong>
+                  </span>
+                </div>
+
+                <div style={{ fontSize: '0.85rem', color: '#38BDF8', marginBottom: '8px' }}>
+                  Ajustar Categoría si es necesario:
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                  {[
+                    { id: 'AGENTE_REGISTRO_LEGISLATIVO', label: 'Registro Legislativo (Proyecto de Ley)', icon: Scale, logo: '/robots/logos/agente_distribuidor.jpeg' },
+                    { id: 'AGENTE_ATENCION_CIUDADANA', label: 'Atención Ciudadana (Petición/Reclamo)', icon: Users, logo: '/robots/logos/agente_ciudadania.jpeg' },
+                    { id: 'AGENTE_GESTION_CORRESPONDENCIA', label: 'Gestión de Correspondencia (Oficio)', icon: Mail, logo: '/robots/logos/agente_comodin.jpeg' },
+                  ].map((cat) => {
+                    const Icon = cat.icon;
+                    const isSel = selectedCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => updateActiveSession({ selectedCategory: cat.id })}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '10px 18px',
+                          borderRadius: '12px',
+                          border: isSel ? '2px solid #00B4D8' : '1px solid rgba(0, 180, 216, 0.25)',
+                          background: isSel ? 'rgba(0, 180, 216, 0.22)' : 'rgba(11, 37, 69, 0.65)',
+                          color: isSel ? '#FFFFFF' : '#CBD5E1',
+                          boxShadow: isSel ? '0 0 16px rgba(0, 180, 216, 0.35)' : 'none',
+                          cursor: 'pointer',
+                          fontWeight: isSel ? 700 : 500,
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <div style={{
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          border: `1.5px solid ${isSel ? '#00B4D8' : 'rgba(148, 163, 184, 0.3)'}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          background: '#0B2545'
+                        }}>
+                          {cat.logo ? (
+                            <img src={cat.logo} alt={cat.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <Icon size={16} color={isSel ? '#00B4D8' : '#94A3B8'} />
+                          )}
+                        </div>
+                        <span>{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Módulo de voz: Agente Distribuidor (Lectura y conversación) */}
+              <div style={{ marginBottom: '20px' }}>
+                <AgentVoiceModule
+                  agentId="distribuidor"
+                  agentLabel="Agente Distribuidor"
+                  primaryColor="#00B4D8"
+                  sesionId={fase1Data?.sesion_id || null}
+                  resultData={fase1Data}
+                  speechHook={speechHook}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+                <button className="btn-secondary" onClick={handleReset}>
+                  <RotateCcw size={16} />
+                  <span>Cancelar y Reiniciar</span>
+                </button>
+
+                <button
+                  onClick={handleEjecutarComision}
+                  disabled={isProcessing}
+                  className="btn-primary"
+                  style={{ fontSize: '1rem', padding: '14px 28px' }}
+                >
+                  <Check size={20} />
+                  <span>Confirmar y Ejecutar Comisión</span>
+                  <ArrowRight size={18} />
+                </button>
+              </div>
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -1864,156 +1894,156 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente Comisión Legislativa"
-          role="Asignación Temática & Miembros Parlamentarios"
-          theme="blue"
-          status="completed"
-          phaseLabel="Fase 2: Asignación"
-          thinkingText="Dictamen de comisión parlamentaria emitido"
-          image="/robots/logos/verificadorconstitucional.jpg"
-          justificacion="Art. 158 CPE y Reglamento Camaral: Distribución por competencia y especialidad temática a las comisiones parlamentarias y a sus autoridades para su tratamiento de mérito."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'distribuidor' })}
-          prevLabel="Ver Clasificación (Distribuidor)"
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Building2 size={32} color="#60a5fa" />
-              <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>Comisión Parlamentaria Asignada</h3>
-            </div>
-            <button className="btn-secondary" onClick={handleReset}>
-              <RotateCcw size={16} />
-              <span>Nuevo Trámite</span>
-            </button>
-          </div>
-
-          <div style={{
-            background: 'rgba(29, 78, 216, 0.2)',
-            padding: '20px',
-            borderRadius: '14px',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            marginBottom: '24px'
-          }}>
-            <div style={{ fontSize: '0.9rem', color: '#bfdbfe', marginBottom: '4px' }}>Comisión Principal Recomendada:</div>
-            <div style={{ fontSize: '1.4rem', color: '#60a5fa', fontWeight: 800, marginBottom: '6px' }}>
-              {comisionData.comision_principal}
-            </div>
-            {comisionData.comision_secundaria && (
-              <div style={{ fontSize: '0.9rem', color: '#bfdbfe' }}>
-                Comisión Secundaria: <strong style={{ color: '#ffffff' }}>{comisionData.comision_secundaria}</strong>
-              </div>
-            )}
-            <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-              <span className="badge badge-gold">Prioridad: {comisionData.prioridad || 'Media'}</span>
-              <span className="badge badge-blue">Complejidad: {comisionData.complejidad || 'Media'}</span>
-            </div>
-          </div>
-
-          {comisionData.resumen && (
-            <div style={{
-              background: 'rgba(3, 20, 16, 0.6)',
-              padding: '20px',
-              borderRadius: '14px',
-              border: '1px solid rgba(16, 185, 129, 0.2)',
-              marginBottom: '24px',
-            }}>
-              <h4 style={{ fontSize: '1rem', color: '#34d399', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                <BookOpen size={18} />
-                Resumen Ejecutivo del Bot
-              </h4>
-              <p style={{ color: '#f0fdf4', fontSize: '0.92rem', lineHeight: 1.6, marginTop: '8px', marginBottom: 0 }}>{comisionData.resumen}</p>
-            </div>
-          )}
-
-          {/* Miembros de la Comisión Asignada */}
-          <div style={{
-            background: 'rgba(15, 23, 42, 0.6)',
-            padding: '20px',
-            borderRadius: '14px',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            marginBottom: '24px'
-          }}>
-            <h4 style={{ fontSize: '1.05rem', color: '#60a5fa', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-              <Users size={20} />
-              Miembros Parlamentarios Asignados (Destinatarios Oficiales)
-            </h4>
-            {comisionData.miembros && comisionData.miembros.length > 0 ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', marginTop: '12px' }}>
-                {comisionData.miembros.map((m, idx) => (
-                  <div key={idx} style={{
-                    background: 'rgba(30, 41, 59, 0.7)',
-                    padding: '12px 16px',
-                    borderRadius: '10px',
-                    border: '1px solid rgba(148, 163, 184, 0.2)'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.92rem' }}>{m.nombre_completo}</span>
-                      <span className="badge badge-gold">{m.cargo}</span>
-                    </div>
-                    <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '4px' }}>
-                      Cámara: <strong style={{ color: '#cbd5e1' }}>{m.tipo_camara}</strong> {m.partido_politico ? `| ${m.partido_politico}` : ''}
-                    </div>
-                    {m.email && (
-                      <div style={{ fontSize: '0.82rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Mail size={14} />
-                        <span>{m.email}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ fontSize: '0.88rem', color: '#94a3b8', fontStyle: 'italic', marginTop: '8px' }}>
-                No hay parlamentarios registrados aún para esta comisión.
-              </div>
-            )}
-          </div>
-
-          {/* Módulo de voz: Agente Comisión Legislativa */}
-          <div style={{ marginTop: '20px', marginBottom: '20px' }}>
-            <AgentVoiceModule
-              agentId="comision"
-              agentLabel="Agente Comisión Legislativa"
-              primaryColor="#38BDF8"
-              sesionId={fase1Data?.sesion_id || null}
-              resultData={comisionData}
-              speechHook={speechHook}
-            />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px', gap: '14px', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.85rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Zap size={14} color="#00B4D8" /> Ejecución simultánea en paralelo
-            </span>
-            <button
-              onClick={handleEjecutarAuditoriaParalela}
-              disabled={isProcessing}
-              className="btn-primary"
-              style={{
-                fontSize: '1.05rem',
-                padding: '14px 28px',
-                background: 'linear-gradient(135deg, #00B4D8 0%, #134074 100%)',
-                boxShadow: '0 4px 18px rgba(0, 180, 216, 0.4)',
-                border: '1px solid rgba(0, 180, 216, 0.6)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px'
-              }}
+              agentName="Agente Comisión Legislativa"
+              role="Asignación Temática & Miembros Parlamentarios"
+              theme="blue"
+              status="completed"
+              phaseLabel="Fase 2: Asignación"
+              thinkingText="Dictamen de comisión parlamentaria emitido"
+              image="/robots/logos/agente_comision.jpeg"
+              justificacion="Art. 158 CPE y Reglamento Camaral: Distribución por competencia y especialidad temática a las comisiones parlamentarias y a sus autoridades para su tratamiento de mérito."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'distribuidor' })}
+              prevLabel="Ver Clasificación (Distribuidor)"
             >
-              {isProcessing ? (
-                <>
-                  <Cpu size={22} className="pulse-active" />
-                  <span>Ejecutando Auditoría Paralela (CPE + Leyes)...</span>
-                </>
-              ) : (
-                <>
-                  <Zap size={20} color="#8AC926" />
-                  <span>Iniciar Auditoría Paralela (CPE + Leyes)</span>
-                  <ArrowRight size={18} />
-                </>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Building2 size={32} color="#60a5fa" />
+                  <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>Comisión Parlamentaria Asignada</h3>
+                </div>
+                <button className="btn-secondary" onClick={handleReset}>
+                  <RotateCcw size={16} />
+                  <span>Nuevo Trámite</span>
+                </button>
+              </div>
+
+              <div style={{
+                background: 'rgba(29, 78, 216, 0.2)',
+                padding: '20px',
+                borderRadius: '14px',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                marginBottom: '24px'
+              }}>
+                <div style={{ fontSize: '0.9rem', color: '#bfdbfe', marginBottom: '4px' }}>Comisión Principal Recomendada:</div>
+                <div style={{ fontSize: '1.4rem', color: '#60a5fa', fontWeight: 800, marginBottom: '6px' }}>
+                  {comisionData.comision_principal}
+                </div>
+                {comisionData.comision_secundaria && (
+                  <div style={{ fontSize: '0.9rem', color: '#bfdbfe' }}>
+                    Comisión Secundaria: <strong style={{ color: '#ffffff' }}>{comisionData.comision_secundaria}</strong>
+                  </div>
+                )}
+                <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+                  <span className="badge badge-gold">Prioridad: {comisionData.prioridad || 'Media'}</span>
+                  <span className="badge badge-blue">Complejidad: {comisionData.complejidad || 'Media'}</span>
+                </div>
+              </div>
+
+              {comisionData.resumen && (
+                <div style={{
+                  background: 'rgba(3, 20, 16, 0.6)',
+                  padding: '20px',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  marginBottom: '24px',
+                }}>
+                  <h4 style={{ fontSize: '1rem', color: '#34d399', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <BookOpen size={18} />
+                    Resumen Ejecutivo del Bot
+                  </h4>
+                  <p style={{ color: '#f0fdf4', fontSize: '0.92rem', lineHeight: 1.6, marginTop: '8px', marginBottom: 0 }}>{comisionData.resumen}</p>
+                </div>
               )}
-            </button>
-          </div>
-        </AgentResultCard>
+
+              {/* Miembros de la Comisión Asignada */}
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.6)',
+                padding: '20px',
+                borderRadius: '14px',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                marginBottom: '24px'
+              }}>
+                <h4 style={{ fontSize: '1.05rem', color: '#60a5fa', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                  <Users size={20} />
+                  Miembros Parlamentarios Asignados (Destinatarios Oficiales)
+                </h4>
+                {comisionData.miembros && comisionData.miembros.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', marginTop: '12px' }}>
+                    {comisionData.miembros.map((m, idx) => (
+                      <div key={idx} style={{
+                        background: 'rgba(30, 41, 59, 0.7)',
+                        padding: '12px 16px',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(148, 163, 184, 0.2)'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.92rem' }}>{m.nombre_completo}</span>
+                          <span className="badge badge-gold">{m.cargo}</span>
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '4px' }}>
+                          Cámara: <strong style={{ color: '#cbd5e1' }}>{m.tipo_camara}</strong> {m.partido_politico ? `| ${m.partido_politico}` : ''}
+                        </div>
+                        {m.email && (
+                          <div style={{ fontSize: '0.82rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Mail size={14} />
+                            <span>{m.email}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '0.88rem', color: '#94a3b8', fontStyle: 'italic', marginTop: '8px' }}>
+                    No hay parlamentarios registrados aún para esta comisión.
+                  </div>
+                )}
+              </div>
+
+              {/* Módulo de voz: Agente Comisión Legislativa */}
+              <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+                <AgentVoiceModule
+                  agentId="comision"
+                  agentLabel="Agente Comisión Legislativa"
+                  primaryColor="#38BDF8"
+                  sesionId={fase1Data?.sesion_id || null}
+                  resultData={comisionData}
+                  speechHook={speechHook}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px', gap: '14px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.85rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Zap size={14} color="#00B4D8" /> Ejecución simultánea en paralelo
+                </span>
+                <button
+                  onClick={handleEjecutarAuditoriaParalela}
+                  disabled={isProcessing}
+                  className="btn-primary"
+                  style={{
+                    fontSize: '1.05rem',
+                    padding: '14px 28px',
+                    background: 'linear-gradient(135deg, #00B4D8 0%, #134074 100%)',
+                    boxShadow: '0 4px 18px rgba(0, 180, 216, 0.4)',
+                    border: '1px solid rgba(0, 180, 216, 0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}
+                >
+                  {isProcessing ? (
+                    <>
+                      <Cpu size={22} className="pulse-active" />
+                      <span>Ejecutando Auditoría Paralela (CPE + Leyes)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={20} color="#8AC926" />
+                      <span>Iniciar Auditoría Paralela (CPE + Leyes)</span>
+                      <ArrowRight size={18} />
+                    </>
+                  )}
+                </button>
+              </div>
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -2030,266 +2060,265 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente Verificador Constitucional"
-          role="Auditoría de Conformidad contra la CPE Bolivia 2009"
-          theme="green"
-          status="completed"
-          phaseLabel="Fase 2: CPE Bolivia"
-          thinkingText="Dictamen Constitucional emitido"
-          badgeText={dictamenData.valido ? 'CPE Conforme' : 'CPE Observado'}
-          image="/robots/logos/verificadorconstitucional.jpg"
-          justificacion="Art. 410 CPE: Principio de Supremacía Constitucional. El proyecto debe cotejarse exhaustivamente con los mandatos de la CPE 2009 para impedir normas contrarias a los derechos y garantías constitucionales."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'comision' })}
-          prevLabel="Ver Asignación de Comisión"
-        >
-          <div style={{
-            background: dictamenData.valido
-              ? 'linear-gradient(135deg, rgba(6,78,59,0.9), rgba(4,120,87,0.7))'
-              : 'linear-gradient(135deg, rgba(127,29,29,0.9), rgba(185,28,28,0.7))',
-            padding: '24px 28px',
-            borderRadius: '16px',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px',
-            marginBottom: '24px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '50%', padding: '12px', display: 'flex' }}>
-                <Scale size={36} color={dictamenData.valido ? '#34d399' : '#f87171'} />
+              agentName="Agente Verificador Constitucional"
+              role="Auditoría de Conformidad contra la CPE Bolivia 2009"
+              theme="green"
+              status="completed"
+              phaseLabel="Fase 2: CPE Bolivia"
+              thinkingText="Dictamen Constitucional emitido"
+              badgeText={dictamenData.valido ? 'CPE Conforme' : 'CPE Observado'}
+              image="/robots/logos/agente_constitucional.jpeg"
+              justificacion="Art. 410 CPE: Principio de Supremacía Constitucional. El proyecto debe cotejarse exhaustivamente con los mandatos de la CPE 2009 para impedir normas contrarias a los derechos y garantías constitucionales."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'comision' })}
+              prevLabel="Ver Asignación de Comisión"
+            >
+              <div style={{
+                background: dictamenData.valido
+                  ? 'linear-gradient(135deg, rgba(6,78,59,0.9), rgba(4,120,87,0.7))'
+                  : 'linear-gradient(135deg, rgba(127,29,29,0.9), rgba(185,28,28,0.7))',
+                padding: '24px 28px',
+                borderRadius: '16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px',
+                marginBottom: '24px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '50%', padding: '12px', display: 'flex' }}>
+                    <Scale size={36} color={dictamenData.valido ? '#34d399' : '#f87171'} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                      Resultado de Auditoría Constitucional
+                    </div>
+                    <h2 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
+                      {dictamenData.valido ? '✅ CONFORME CON LA CONSTITUCIÓN' : '⚠️ OBSERVACIONES CONSTITUCIONALES'}
+                    </h2>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 18px', borderRadius: '10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: dictamenData.valido ? '#34d399' : '#fbbf24' }}>
+                      {dictamenData.confianza || 95}%
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Confianza</div>
+                  </div>
+                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 18px', borderRadius: '10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#f87171' }}>
+                      {dictamenData.num_contradicciones || dictamenData.contradicciones?.length || 0}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Obs. CPE</div>
+                  </div>
+                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 18px', borderRadius: '10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#34d399' }}>
+                      {(dictamenData.articulos_a_favor?.length || dictamenData.articulos_consultados?.length || 0)}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Normas Revisadas</div>
+                  </div>
+                </div>
               </div>
+
               <div>
-                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '4px' }}>
-                  Resultado de Auditoría Constitucional
+                {/* Severidad */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>Severidad Máxima:</span>
+                  <span className={`badge ${dictamenData.severidad_maxima === 'bloqueante' ? 'badge-red' :
+                      dictamenData.severidad_maxima === 'grave' ? 'badge-gold' :
+                        dictamenData.severidad_maxima === 'leve' ? 'badge-blue' : 'badge-green'
+                    }`} style={{ fontSize: '0.85rem', padding: '5px 14px' }}>
+                    {dictamenData.severidad_maxima || 'ninguna'}
+                  </span>
                 </div>
-                <h2 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                  {dictamenData.valido ? '✅ CONFORME CON LA CONSTITUCIÓN' : '⚠️ OBSERVACIONES CONSTITUCIONALES'}
-                </h2>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 18px', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: dictamenData.valido ? '#34d399' : '#fbbf24' }}>
-                  {dictamenData.confianza || 95}%
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Confianza</div>
-              </div>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 18px', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#f87171' }}>
-                  {dictamenData.num_contradicciones || dictamenData.contradicciones?.length || 0}
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Obs. CPE</div>
-              </div>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 18px', borderRadius: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#34d399' }}>
-                  {(dictamenData.articulos_a_favor?.length || dictamenData.articulos_consultados?.length || 0)}
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Normas Revisadas</div>
-              </div>
-            </div>
-          </div>
 
-          <div>
-            {/* Severidad */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>Severidad Máxima:</span>
-              <span className={`badge ${
-                dictamenData.severidad_maxima === 'bloqueante' ? 'badge-red' :
-                dictamenData.severidad_maxima === 'grave' ? 'badge-gold' :
-                dictamenData.severidad_maxima === 'leve' ? 'badge-blue' : 'badge-green'
-              }`} style={{ fontSize: '0.85rem', padding: '5px 14px' }}>
-                {dictamenData.severidad_maxima || 'ninguna'}
-              </span>
-            </div>
-
-            {/* ── SECCIÓN A FAVOR ── */}
-            {(() => {
-              const aFavor = dictamenData.articulos_a_favor?.length > 0
-                ? dictamenData.articulos_a_favor
-                : (dictamenData.articulos_consultados || []);
-              return aFavor.length > 0 && (
-                <div style={{ marginBottom: '32px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid rgba(16,185,129,0.25)' }}>
-                    <div style={{ width: '4px', height: '24px', background: '#10b981', borderRadius: '2px' }} />
-                    <h3 style={{ fontSize: '1.05rem', color: '#34d399', margin: 0, fontWeight: 700 }}>
-                      Artículos CPE — RESPALDO A FAVOR ({aFavor.length})
-                    </h3>
-                    <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', marginLeft: 'auto' }}>
-                      Fuente: public.articulos_constitucion
-                    </span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
-                    {aFavor.map((art, idx) => (
-                      <div key={idx} style={{
-                        background: 'rgba(6, 30, 20, 0.85)',
-                        border: '1px solid rgba(16, 185, 129, 0.3)',
-                        borderRadius: '12px',
-                        padding: '16px',
-                        position: 'relative',
-                        overflow: 'hidden'
-                      }}>
-                        <div style={{ position: 'absolute', top: 0, left: 0, width: '3px', height: '100%', background: '#10b981', borderRadius: '12px 0 0 12px' }} />
-                        <div style={{ paddingLeft: '8px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                            <span style={{ color: '#34d399', fontWeight: 700, fontSize: '0.92rem' }}>
-                              Art. {art.numero}
-                            </span>
-                            <span style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)', padding: '2px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700 }}>
-                              A FAVOR
-                            </span>
-                          </div>
-                          {art.titulo && (
-                            <div style={{ color: '#a7f3d0', fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px' }}>
-                              {art.titulo}
-                            </div>
-                          )}
-                          <div style={{ color: 'rgba(167,243,208,0.75)', fontSize: '0.8rem', lineHeight: 1.55, borderTop: '1px solid rgba(16,185,129,0.1)', paddingTop: '8px' }}>
-                            {art.extracto || art.fundamento || 'Artículo de la CPE verificado como conforme.'}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* ── SECCIÓN EN CONTRA ── */}
-            <div style={{ marginBottom: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid rgba(239,68,68,0.25)' }}>
-                <div style={{ width: '4px', height: '24px', background: '#ef4444', borderRadius: '2px' }} />
-                <h3 style={{ fontSize: '1.05rem', color: '#f87171', margin: 0, fontWeight: 700 }}>
-                  Párrafos Observados — INFRINGEN LA CPE ({dictamenData.contradicciones?.length || 0})
-                </h3>
-              </div>
-
-              {dictamenData.contradicciones?.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                  {dictamenData.contradicciones.map((c, idx) => (
-                    <div key={idx} style={{
-                      background: 'rgba(30, 5, 5, 0.8)',
-                      border: '1px solid rgba(239, 68, 68, 0.4)',
-                      borderRadius: '14px',
-                      overflow: 'hidden',
-                    }}>
-                      <div style={{ background: 'rgba(239,68,68,0.15)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(239,68,68,0.2)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <ShieldAlert size={18} color="#f87171" />
-                          <span style={{ fontWeight: 700, color: '#fca5a5', fontSize: '0.92rem' }}>
-                            OBSERVACIÓN #{idx + 1} — Párrafo del Proyecto: {c.articulo_proyecto}
-                          </span>
-                        </div>
-                        <span className={`badge ${c.severidad === 'bloqueante' ? 'badge-red' : c.severidad === 'grave' ? 'badge-gold' : 'badge-blue'}`}>
-                          {c.severidad || 'bloqueante'}
+                {/* ── SECCIÓN A FAVOR ── */}
+                {(() => {
+                  const aFavor = dictamenData.articulos_a_favor?.length > 0
+                    ? dictamenData.articulos_a_favor
+                    : (dictamenData.articulos_consultados || []);
+                  return aFavor.length > 0 && (
+                    <div style={{ marginBottom: '32px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid rgba(16,185,129,0.25)' }}>
+                        <div style={{ width: '4px', height: '24px', background: '#10b981', borderRadius: '2px' }} />
+                        <h3 style={{ fontSize: '1.05rem', color: '#34d399', margin: 0, fontWeight: 700 }}>
+                          Artículos CPE — RESPALDO A FAVOR ({aFavor.length})
+                        </h3>
+                        <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', marginLeft: 'auto' }}>
+                          Fuente: public.articulos_constitucion
                         </span>
                       </div>
-                      
-                      <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        {c.fragmento_proyecto && (
-                          <div>
-                            <div style={{ fontSize: '0.72rem', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px', fontWeight: 600 }}>
-                              📄 Texto del Proyecto que Genera la Contradicción:
-                            </div>
-                            <div style={{ background: 'rgba(0,0,0,0.4)', padding: '12px 16px', borderRadius: '8px', color: '#fed7aa', fontSize: '0.87rem', fontStyle: 'italic', lineHeight: 1.6, borderLeft: '3px solid #ef4444' }}>
-                              "{c.fragmento_proyecto}"
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
+                        {aFavor.map((art, idx) => (
+                          <div key={idx} style={{
+                            background: 'rgba(6, 30, 20, 0.85)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            position: 'relative',
+                            overflow: 'hidden'
+                          }}>
+                            <div style={{ position: 'absolute', top: 0, left: 0, width: '3px', height: '100%', background: '#10b981', borderRadius: '12px 0 0 12px' }} />
+                            <div style={{ paddingLeft: '8px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                <span style={{ color: '#34d399', fontWeight: 700, fontSize: '0.92rem' }}>
+                                  Art. {art.numero}
+                                </span>
+                                <span style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)', padding: '2px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700 }}>
+                                  A FAVOR
+                                </span>
+                              </div>
+                              {art.titulo && (
+                                <div style={{ color: '#a7f3d0', fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px' }}>
+                                  {art.titulo}
+                                </div>
+                              )}
+                              <div style={{ color: 'rgba(167,243,208,0.75)', fontSize: '0.8rem', lineHeight: 1.55, borderTop: '1px solid rgba(16,185,129,0.1)', paddingTop: '8px' }}>
+                                {art.extracto || art.fundamento || 'Artículo de la CPE verificado como conforme.'}
+                              </div>
                             </div>
                           </div>
-                        )}
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
-                        <div>
-                          <div style={{ fontSize: '0.72rem', color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px', fontWeight: 600 }}>
-                            ⚖️ Norma Constitucional Infringida (CPE):
-                          </div>
-                          <div style={{ background: 'rgba(15, 30, 60, 0.7)', padding: '12px 16px', borderRadius: '8px', borderLeft: '3px solid #38bdf8' }}>
-                            <div style={{ color: '#38bdf8', fontWeight: 700, fontSize: '0.9rem', marginBottom: '6px' }}>
-                              {c.articulo_constitucional}
+                {/* ── SECCIÓN EN CONTRA ── */}
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid rgba(239,68,68,0.25)' }}>
+                    <div style={{ width: '4px', height: '24px', background: '#ef4444', borderRadius: '2px' }} />
+                    <h3 style={{ fontSize: '1.05rem', color: '#f87171', margin: 0, fontWeight: 700 }}>
+                      Párrafos Observados — INFRINGEN LA CPE ({dictamenData.contradicciones?.length || 0})
+                    </h3>
+                  </div>
+
+                  {dictamenData.contradicciones?.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                      {dictamenData.contradicciones.map((c, idx) => (
+                        <div key={idx} style={{
+                          background: 'rgba(30, 5, 5, 0.8)',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          borderRadius: '14px',
+                          overflow: 'hidden',
+                        }}>
+                          <div style={{ background: 'rgba(239,68,68,0.15)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(239,68,68,0.2)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <ShieldAlert size={18} color="#f87171" />
+                              <span style={{ fontWeight: 700, color: '#fca5a5', fontSize: '0.92rem' }}>
+                                OBSERVACIÓN #{idx + 1} — Párrafo del Proyecto: {c.articulo_proyecto}
+                              </span>
                             </div>
-                            {c.texto_constitucional_verificado && (
-                              <div style={{ color: '#e2e8f0', fontSize: '0.84rem', lineHeight: 1.6 }}>
-                                {c.texto_constitucional_verificado}
+                            <span className={`badge ${c.severidad === 'bloqueante' ? 'badge-red' : c.severidad === 'grave' ? 'badge-gold' : 'badge-blue'}`}>
+                              {c.severidad || 'bloqueante'}
+                            </span>
+                          </div>
+
+                          <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            {c.fragmento_proyecto && (
+                              <div>
+                                <div style={{ fontSize: '0.72rem', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px', fontWeight: 600 }}>
+                                  📄 Texto del Proyecto que Genera la Contradicción:
+                                </div>
+                                <div style={{ background: 'rgba(0,0,0,0.4)', padding: '12px 16px', borderRadius: '8px', color: '#fed7aa', fontSize: '0.87rem', fontStyle: 'italic', lineHeight: 1.6, borderLeft: '3px solid #ef4444' }}>
+                                  "{c.fragmento_proyecto}"
+                                </div>
+                              </div>
+                            )}
+
+                            <div>
+                              <div style={{ fontSize: '0.72rem', color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px', fontWeight: 600 }}>
+                                ⚖️ Norma Constitucional Infringida (CPE):
+                              </div>
+                              <div style={{ background: 'rgba(15, 30, 60, 0.7)', padding: '12px 16px', borderRadius: '8px', borderLeft: '3px solid #38bdf8' }}>
+                                <div style={{ color: '#38bdf8', fontWeight: 700, fontSize: '0.9rem', marginBottom: '6px' }}>
+                                  {c.articulo_constitucional}
+                                </div>
+                                {c.texto_constitucional_verificado && (
+                                  <div style={{ color: '#e2e8f0', fontSize: '0.84rem', lineHeight: 1.6 }}>
+                                    {c.texto_constitucional_verificado}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {c.fundamento && (
+                              <div>
+                                <div style={{ fontSize: '0.72rem', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px', fontWeight: 600 }}>
+                                  📋 Fundamentación Jurídica:
+                                </div>
+                                <div style={{ color: '#fef3c7', fontSize: '0.87rem', lineHeight: 1.65 }}>
+                                  {c.fundamento}
+                                </div>
                               </div>
                             )}
                           </div>
                         </div>
-
-                        {c.fundamento && (
-                          <div>
-                            <div style={{ fontSize: '0.72rem', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px', fontWeight: 600 }}>
-                              📋 Fundamentación Jurídica:
-                            </div>
-                            <div style={{ color: '#fef3c7', fontSize: '0.87rem', lineHeight: 1.65 }}>
-                              {c.fundamento}
-                            </div>
-                          </div>
-                        )}
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{
+                      background: 'rgba(6, 78, 59, 0.25)',
+                      border: '1px solid rgba(16,185,129,0.3)',
+                      borderRadius: '12px',
+                      padding: '20px 24px',
+                      display: 'flex', alignItems: 'center', gap: '14px'
+                    }}>
+                      <CheckCircle2 size={28} color="#34d399" />
+                      <div>
+                        <div style={{ color: '#34d399', fontWeight: 700, fontSize: '0.95rem' }}>
+                          Sin contradicciones constitucionales detectadas
+                        </div>
+                        <div style={{ color: 'rgba(167,243,208,0.7)', fontSize: '0.83rem', marginTop: '4px' }}>
+                          El proyecto es plenamente compatible con la Constitución Política del Estado.
+                        </div>
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
-              ) : (
-                <div style={{
-                  background: 'rgba(6, 78, 59, 0.25)',
-                  border: '1px solid rgba(16,185,129,0.3)',
-                  borderRadius: '12px',
-                  padding: '20px 24px',
-                  display: 'flex', alignItems: 'center', gap: '14px'
-                }}>
-                  <CheckCircle2 size={28} color="#34d399" />
-                  <div>
-                    <div style={{ color: '#34d399', fontWeight: 700, fontSize: '0.95rem' }}>
-                      Sin contradicciones constitucionales detectadas
-                    </div>
-                    <div style={{ color: 'rgba(167,243,208,0.7)', fontSize: '0.83rem', marginTop: '4px' }}>
-                      El proyecto es plenamente compatible con la Constitución Política del Estado.
-                    </div>
-                  </div>
+
+                {/* Botón continuar */}
+                {/* Módulo de voz: Lectura de Observaciones Constitucionales */}
+
+                <div style={{ marginTop: '24px', marginBottom: '16px' }}>
+
+                  <AgentVoiceModule
+
+                    agentId="constitucional"
+
+                    agentLabel="Agente Verificador Constitucional"
+
+                    primaryColor="#2563EB"
+
+                    sesionId={fase1Data?.sesion_id || null}
+
+                    resultData={dictamenData}
+
+                    speechHook={speechHook}
+
+                  />
+
                 </div>
-              )}
-            </div>
 
-            {/* Botón continuar */}
-            {/* Módulo de voz: Lectura de Observaciones Constitucionales */}
-
-            <div style={{ marginTop: '24px', marginBottom: '16px' }}>
-
-              <AgentVoiceModule
-
-                agentId="constitucional"
-
-                agentLabel="Agente Verificador Constitucional"
-
-                primaryColor="#2563EB"
-
-                sesionId={fase1Data?.sesion_id || null}
-
-                resultData={dictamenData}
-
-                speechHook={speechHook}
-
-              />
-
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '28px' }}>
-              <button
-                onClick={handleEjecutarConsistencia}
-                disabled={isProcessing}
-                className="btn-primary"
-                style={{ fontSize: '1.05rem', padding: '14px 30px' }}
-              >
-                {isProcessing ? (
-                  <>
-                    <Cpu size={20} className="pulse-active" />
-                    <span>Ejecutando Agente de Consistencia...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check size={20} />
-                    <span>Continuar: Consistencia Normativa</span>
-                    <ArrowRight size={18} />
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </AgentResultCard>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '28px' }}>
+                  <button
+                    onClick={handleEjecutarConsistencia}
+                    disabled={isProcessing}
+                    className="btn-primary"
+                    style={{ fontSize: '1.05rem', padding: '14px 30px' }}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Cpu size={20} className="pulse-active" />
+                        <span>Ejecutando Agente de Consistencia...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check size={20} />
+                        <span>Continuar: Consistencia Normativa</span>
+                        <ArrowRight size={18} />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -2306,515 +2335,516 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente de Consistencia Normativa"
-          role="Auditoría Semántica Vectorial (pgvector)"
-          theme="gold"
-          status="completed"
-          phaseLabel="Fase 2: Consistencia Vectorial"
-          thinkingText="Auditoría semántica de leyes vigentes emitida"
-          image="/robots/logos/consistencianormativa.jpg"
-          justificacion="Seguridad Jurídica y Principio de No Contradicción: Búsqueda vectorial semántica pgvector contra leyes y códigos vigentes para prevenir derogaciones tácitas y antinomias normativas."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'constitucional' })}
-          prevLabel="Ver Dictamen Constitucional"
-        >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '50%', padding: '12px', display: 'flex' }}>
-                  <BookOpen size={32} color="#fbbf24" />
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '4px' }}>
-                    Agente de Consistencia Normativa — Leyes Vigentes Bolivia
-                  </div>
-                  <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                    Auditoría contra el Ordenamiento Legal Vigente
-                  </h3>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px 16px', borderRadius: '10px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fbbf24' }}>
-                    {consistenciaData?.total_hallazgos || consistenciaData?.analisis?.length || 0}
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>Hallazgos</div>
-                </div>
-                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px 16px', borderRadius: '10px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 800, color:
-                    consistenciaData?.nivel_riesgo_global === 'ALTO' ? '#ef4444' :
-                    consistenciaData?.nivel_riesgo_global === 'MEDIO' ? '#f59e0b' :
-                    '#34d399'
-                  }}>
-                    {consistenciaData?.nivel_riesgo_global || 'OK'}
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>Riesgo Global</div>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              {/* Resumen por tipo */}
-              {consistenciaData?.resumen_por_tipo && Object.keys(consistenciaData.resumen_por_tipo).length > 0 && (
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px', padding: '14px 18px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(251,191,36,0.15)' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', alignSelf: 'center', marginRight: '4px' }}>Clasificación:</span>
-                  {Object.entries(consistenciaData.resumen_por_tipo).map(([tipo, count]) => (
-                    <span key={tipo} style={{
-                      padding: '4px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700,
-                      background: tipo === 'contradiccion' ? 'rgba(239,68,68,0.2)' : tipo === 'repeticion' ? 'rgba(251,191,36,0.15)' : 'rgba(16,185,129,0.15)',
-                      color: tipo === 'contradiccion' ? '#f87171' : tipo === 'repeticion' ? '#fbbf24' : '#34d399',
-                      border: `1px solid ${tipo === 'contradiccion' ? 'rgba(239,68,68,0.3)' : tipo === 'repeticion' ? 'rgba(251,191,36,0.25)' : 'rgba(16,185,129,0.25)'}`,
-                    }}>
-                      {tipo.replace('_', ' ').toUpperCase()}: {count}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Hallazgos detallados */}
-              {consistenciaData?.analisis?.length > 0 ? (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid rgba(251,191,36,0.2)' }}>
-                    <div style={{ width: '4px', height: '20px', background: '#fbbf24', borderRadius: '2px' }} />
-                    <h4 style={{ fontSize: '1rem', color: '#fbbf24', margin: 0, fontWeight: 700 }}>
-                      Hallazgos con Leyes Vigentes ({consistenciaData.analisis.length})
-                    </h4>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {consistenciaData.analisis.map((item, idx) => {
-                      const esContradiccion = item.tipo_relacion === 'contradiccion';
-                      const esRepeticion = item.tipo_relacion === 'repeticion';
-                      const borde = esContradiccion ? '#ef4444' : esRepeticion ? '#f59e0b' : '#10b981';
-                      const bgCard = esContradiccion ? 'rgba(30,5,5,0.75)' : esRepeticion ? 'rgba(30,20,0,0.75)' : 'rgba(4,20,14,0.75)';
-                      const badgeClass = esContradiccion ? 'badge-red' : esRepeticion ? 'badge-gold' : 'badge-green';
-                      return (
-                        <div key={idx} style={{
-                          background: bgCard,
-                          border: `1px solid ${borde}40`,
-                          borderRadius: '14px',
-                          overflow: 'hidden',
-                        }}>
-                          <div style={{ background: `${borde}18`, padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${borde}25` }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <span style={{ color: borde, fontWeight: 700, fontSize: '0.9rem' }}>
-                                📜 {item.norma}
-                              </span>
-                              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem' }}>
-                                Art. {item.numero_articulo}
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                              <span className={`badge ${badgeClass}`} style={{ fontSize: '0.75rem' }}>
-                                {item.tipo_relacion?.replace('_', ' ')?.toUpperCase()}
-                              </span>
-                              <span style={{ background: 'rgba(56,189,248,0.1)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.25)', padding: '2px 8px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 600 }}>
-                                {Math.round(item.similitud * 100)}% similitud
-                              </span>
-                            </div>
-                          </div>
-
-                          <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            <div>
-                              <div style={{ fontSize: '0.7rem', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px', fontWeight: 600 }}>
-                                Análisis Jurídico:
-                              </div>
-                              <div style={{ color: '#fef3c7', fontSize: '0.85rem', lineHeight: 1.6 }}>
-                                {item.justificacion}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div style={{
-                  background: 'rgba(6, 30, 10, 0.5)',
-                  border: '1px solid rgba(16,185,129,0.25)',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  display: 'flex', alignItems: 'center', gap: '14px'
-                }}>
-                  <CheckCircle2 size={28} color="#8AC926" />
-                  <div>
-                    <div style={{ color: '#8AC926', fontWeight: 700, fontSize: '0.95rem' }}>
-                      Sin incompatibilidades normativas graves detectadas
-                    </div>
-                    <div style={{ color: 'rgba(203, 213, 225, 0.75)', fontSize: '0.82rem', marginTop: '2px' }}>
-                      El corpus normativo vigente no registra conflictos con el proyecto analizado.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ── CATÁLOGO DE NORMATIVAS VIGENTES INDEXADAS (NEON PGVECTOR) ── */}
-              <div style={{
-                marginTop: '32px',
-                background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(20, 35, 60, 0.90) 100%)',
-                border: '1.5px solid rgba(251, 191, 36, 0.35)',
-                borderRadius: '16px',
-                padding: '22px',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.45)'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '14px',
-                  marginBottom: '18px',
-                  borderBottom: '1px solid rgba(251, 191, 36, 0.2)',
-                  paddingBottom: '14px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ background: 'rgba(251, 191, 36, 0.15)', borderRadius: '10px', padding: '10px', display: 'flex' }}>
-                      <Database size={24} color="#fbbf24" />
+              agentName="Agente de Consistencia Normativa"
+              role="Auditoría Semántica Vectorial (pgvector)"
+              theme="gold"
+              status="completed"
+              phaseLabel="Fase 2: Consistencia Vectorial"
+              thinkingText="Auditoría semántica de leyes vigentes emitida"
+              image="/robots/logos/agente_consistencia.jpeg"
+              justificacion="Seguridad Jurídica y Principio de No Contradicción: Búsqueda vectorial semántica pgvector contra leyes y códigos vigentes para prevenir derogaciones tácitas y antinomias normativas."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'constitucional' })}
+              prevLabel="Ver Dictamen Constitucional"
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '50%', padding: '12px', display: 'flex' }}>
+                      <BookOpen size={32} color="#fbbf24" />
                     </div>
                     <div>
-                      <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#ffffff' }}>
-                        Corpus Normativo Vigente Indexado en la Base de Datos
-                      </h4>
-                      <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>
-                        Normas bolivianas cargadas con embeddings (2048 dimensiones) para auditoría de antinomias.
-                      </p>
+                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                        Agente de Consistencia Normativa — Leyes Vigentes Bolivia
+                      </div>
+                      <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
+                        Auditoría contra el Ordenamiento Legal Vigente
+                      </h3>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.82rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)', padding: '5px 12px', borderRadius: '20px', fontWeight: 700 }}>
-                      {normativasList.length} Normativas en Neon
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowSubirNormativaModal(!showSubirNormativaModal)}
-                      style={{
-                        background: showSubirNormativaModal ? 'rgba(239, 68, 68, 0.2)' : 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)',
-                        color: showSubirNormativaModal ? '#fca5a5' : '#0B2545',
-                        border: showSubirNormativaModal ? '1px solid #ef4444' : 'none',
-                        padding: '8px 16px',
-                        borderRadius: '10px',
-                        fontWeight: 800,
-                        fontSize: '0.86rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        boxShadow: '0 4px 14px rgba(251, 191, 36, 0.35)',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      {showSubirNormativaModal ? <X size={16} /> : <Plus size={16} />}
-                      <span>{showSubirNormativaModal ? 'Cerrar Formulario' : 'Subir Otra Normativa'}</span>
-                    </button>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px 16px', borderRadius: '10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fbbf24' }}>
+                        {consistenciaData?.total_hallazgos || consistenciaData?.analisis?.length || 0}
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>Hallazgos</div>
+                    </div>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px 16px', borderRadius: '10px', textAlign: 'center' }}>
+                      <div style={{
+                        fontSize: '1.1rem', fontWeight: 800, color:
+                          consistenciaData?.nivel_riesgo_global === 'ALTO' ? '#ef4444' :
+                            consistenciaData?.nivel_riesgo_global === 'MEDIO' ? '#f59e0b' :
+                              '#34d399'
+                      }}>
+                        {consistenciaData?.nivel_riesgo_global || 'OK'}
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>Riesgo Global</div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Formulario Expandible para Subir y Procesar con LLM */}
-                {showSubirNormativaModal && (
-                  <form onSubmit={handleSubirNormativa} style={{
-                    background: 'rgba(15, 23, 42, 0.95)',
-                    border: '1.5px solid rgba(56, 189, 248, 0.4)',
-                    borderRadius: '14px',
-                    padding: '20px',
-                    marginBottom: '22px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                      <Sparkles size={20} color="#38bdf8" />
-                      <h5 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#38bdf8' }}>
-                        Cargar Nueva Normativa y Procesar con LLM (NVIDIA NIM)
-                      </h5>
+                <div>
+                  {/* Resumen por tipo */}
+                  {consistenciaData?.resumen_por_tipo && Object.keys(consistenciaData.resumen_por_tipo).length > 0 && (
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px', padding: '14px 18px', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid rgba(251,191,36,0.15)' }}>
+                      <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', alignSelf: 'center', marginRight: '4px' }}>Clasificación:</span>
+                      {Object.entries(consistenciaData.resumen_por_tipo).map(([tipo, count]) => (
+                        <span key={tipo} style={{
+                          padding: '4px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700,
+                          background: tipo === 'contradiccion' ? 'rgba(239,68,68,0.2)' : tipo === 'repeticion' ? 'rgba(251,191,36,0.15)' : 'rgba(16,185,129,0.15)',
+                          color: tipo === 'contradiccion' ? '#f87171' : tipo === 'repeticion' ? '#fbbf24' : '#34d399',
+                          border: `1px solid ${tipo === 'contradiccion' ? 'rgba(239,68,68,0.3)' : tipo === 'repeticion' ? 'rgba(251,191,36,0.25)' : 'rgba(16,185,129,0.25)'}`,
+                        }}>
+                          {tipo.replace('_', ' ').toUpperCase()}: {count}
+                        </span>
+                      ))}
                     </div>
+                  )}
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginBottom: '14px' }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
-                          Nombre Oficial de la Norma *:
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Ej: Ley N° 348 Integral para Mujeres / Ley 1333"
-                          value={normativaNombre}
-                          onChange={(e) => setNormativaNombre(e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '9px 12px',
-                            borderRadius: '8px',
-                            background: 'rgba(15, 23, 42, 0.9)',
-                            border: '1px solid rgba(56, 189, 248, 0.35)',
-                            color: '#ffffff',
-                            fontSize: '0.84rem',
-                            outline: 'none',
-                            boxSizing: 'border-box'
-                          }}
-                        />
+                  {/* Hallazgos detallados */}
+                  {consistenciaData?.analisis?.length > 0 ? (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid rgba(251,191,36,0.2)' }}>
+                        <div style={{ width: '4px', height: '20px', background: '#fbbf24', borderRadius: '2px' }} />
+                        <h4 style={{ fontSize: '1rem', color: '#fbbf24', margin: 0, fontWeight: 700 }}>
+                          Hallazgos con Leyes Vigentes ({consistenciaData.analisis.length})
+                        </h4>
                       </div>
 
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
-                          Tipo de Norma:
-                        </label>
-                        <select
-                          value={normativaTipo}
-                          onChange={(e) => setNormativaTipo(e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '9px 12px',
-                            borderRadius: '8px',
-                            background: '#0F172A',
-                            border: '1px solid rgba(56, 189, 248, 0.35)',
-                            color: '#ffffff',
-                            fontSize: '0.84rem',
-                            outline: 'none',
-                            boxSizing: 'border-box'
-                          }}
-                        >
-                          <option value="Ley">Ley Nacional</option>
-                          <option value="Código">Código Orgánico / Sustantivo</option>
-                          <option value="Decreto Supremo">Decreto Supremo</option>
-                          <option value="Resolución">Resolución Ministerial / Administrativa</option>
-                        </select>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        {consistenciaData.analisis.map((item, idx) => {
+                          const esContradiccion = item.tipo_relacion === 'contradiccion';
+                          const esRepeticion = item.tipo_relacion === 'repeticion';
+                          const borde = esContradiccion ? '#ef4444' : esRepeticion ? '#f59e0b' : '#10b981';
+                          const bgCard = esContradiccion ? 'rgba(30,5,5,0.75)' : esRepeticion ? 'rgba(30,20,0,0.75)' : 'rgba(4,20,14,0.75)';
+                          const badgeClass = esContradiccion ? 'badge-red' : esRepeticion ? 'badge-gold' : 'badge-green';
+                          return (
+                            <div key={idx} style={{
+                              background: bgCard,
+                              border: `1px solid ${borde}40`,
+                              borderRadius: '14px',
+                              overflow: 'hidden',
+                            }}>
+                              <div style={{ background: `${borde}18`, padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${borde}25` }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <span style={{ color: borde, fontWeight: 700, fontSize: '0.9rem' }}>
+                                    📜 {item.norma}
+                                  </span>
+                                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem' }}>
+                                    Art. {item.numero_articulo}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                  <span className={`badge ${badgeClass}`} style={{ fontSize: '0.75rem' }}>
+                                    {item.tipo_relacion?.replace('_', ' ')?.toUpperCase()}
+                                  </span>
+                                  <span style={{ background: 'rgba(56,189,248,0.1)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.25)', padding: '2px 8px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 600 }}>
+                                    {Math.round(item.similitud * 100)}% similitud
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <div>
+                                  <div style={{ fontSize: '0.7rem', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px', fontWeight: 600 }}>
+                                    Análisis Jurídico:
+                                  </div>
+                                  <div style={{ color: '#fef3c7', fontSize: '0.85rem', lineHeight: 1.6 }}>
+                                    {item.justificacion}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
-                          Número de Norma (Opcional):
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Ej: 348 / 1333"
-                          value={normativaNumero}
-                          onChange={(e) => setNormativaNumero(e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '9px 12px',
-                            borderRadius: '8px',
-                            background: 'rgba(15, 23, 42, 0.9)',
-                            border: '1px solid rgba(56, 189, 248, 0.35)',
-                            color: '#ffffff',
-                            fontSize: '0.84rem',
-                            outline: 'none',
-                            boxSizing: 'border-box'
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#fbbf24', fontWeight: 700, marginBottom: '6px' }}>
-                          📁 Adjuntar Archivo (PDF o TXT):
-                        </label>
-                        <input
-                          type="file"
-                          accept=".pdf,.txt,.docx"
-                          onChange={(e) => setNormativaFile(e.target.files?.[0] || null)}
-                          style={{
-                            width: '100%',
-                            padding: '8px',
-                            borderRadius: '8px',
-                            background: 'rgba(15, 23, 42, 0.85)',
-                            border: '1px solid rgba(251, 191, 36, 0.35)',
-                            color: '#e2e8f0',
-                            fontSize: '0.82rem',
-                            boxSizing: 'border-box'
-                          }}
-                        />
-                      </div>
-
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#fbbf24', fontWeight: 700, marginBottom: '6px' }}>
-                          O pegar texto de artículos directamente:
-                        </label>
-                        <textarea
-                          rows={2}
-                          placeholder="ARTÍCULO 1.- (OBJETO)..."
-                          value={normativaTexto}
-                          onChange={(e) => setNormativaTexto(e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '8px 12px',
-                            borderRadius: '8px',
-                            background: 'rgba(15, 23, 42, 0.9)',
-                            border: '1px solid rgba(251, 191, 36, 0.35)',
-                            color: '#ffffff',
-                            fontSize: '0.82rem',
-                            outline: 'none',
-                            boxSizing: 'border-box'
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {normativaUploadStatus && (
-                      <div style={{
-                        padding: '12px 16px',
-                        borderRadius: '10px',
-                        marginBottom: '16px',
-                        background: normativaUploadStatus.success ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                        border: `1px solid ${normativaUploadStatus.success ? '#10b981' : '#ef4444'}`,
-                        color: normativaUploadStatus.success ? '#34d399' : '#f87171',
-                        fontSize: '0.84rem'
-                      }}>
-                        <div><strong>{normativaUploadStatus.success ? '✅ Éxito:' : '❌ Error:'}</strong> {normativaUploadStatus.msg}</div>
-                        {normativaUploadStatus.resumen && (
-                          <div style={{ marginTop: '6px', fontSize: '0.8rem', color: '#e2e8f0' }}>
-                            <em>Resumen IA:</em> {normativaUploadStatus.resumen}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setShowSubirNormativaModal(false)}
-                        className="btn-secondary"
-                        style={{ padding: '9px 18px', fontSize: '0.85rem' }}
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isUploadingNormativa}
-                        className="btn-primary"
-                        style={{ padding: '9px 24px', fontSize: '0.88rem' }}
-                      >
-                        {isUploadingNormativa ? (
-                          <>
-                            <Cpu size={16} className="pulse-active" />
-                            <span>Procesando con LLM & Indexando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles size={16} />
-                            <span>⚡ Procesar con LLM y Registrar en BD</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* Grid de Normativas Cargadas */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
-                  {normativasList.length === 0 ? (
-                    <div style={{ color: '#94a3b8', fontSize: '0.85rem', padding: '16px', textAlign: 'center', gridColumn: '1 / -1' }}>
-                      {isLoadingNormativas ? 'Cargando catálogo normativo desde Neon...' : 'No hay normativas registradas en la base de datos.'}
                     </div>
                   ) : (
-                    normativasList.map((norma, idx) => (
-                      <div key={idx} style={{
-                        background: 'rgba(15, 23, 42, 0.85)',
-                        border: '1px solid rgba(148, 163, 184, 0.22)',
-                        borderRadius: '12px',
-                        padding: '16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        gap: '12px'
-                      }}>
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontSize: '1.2rem' }}>📜</span>
-                              <h5 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: '#ffffff' }}>
-                                {norma.documento}
-                              </h5>
-                            </div>
-                            <span style={{
-                              background: 'rgba(56, 189, 248, 0.15)',
-                              color: '#38bdf8',
-                              border: '1px solid rgba(56, 189, 248, 0.3)',
-                              borderRadius: '20px',
-                              padding: '2px 8px',
-                              fontSize: '0.72rem',
-                              fontWeight: 700,
-                              whiteSpace: 'nowrap'
-                            }}>
-                              {norma.num_articulos} artículos
-                            </span>
-                          </div>
-
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                            <span style={{ fontSize: '0.7rem', padding: '2px 7px', borderRadius: '4px', background: 'rgba(251, 191, 36, 0.12)', color: '#fbbf24', fontWeight: 600 }}>
-                              {norma.tipo_documento?.toUpperCase()} {norma.numero_norma ? `#${norma.numero_norma}` : ''}
-                            </span>
-                            {norma.materia && (
-                              <span style={{ fontSize: '0.7rem', padding: '2px 7px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.12)', color: '#34d399', fontWeight: 600 }}>
-                                {norma.materia}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Resumen IA */}
-                          <div style={{
-                            background: 'rgba(0, 0, 0, 0.35)',
-                            border: '1px solid rgba(255, 255, 255, 0.08)',
-                            borderRadius: '8px',
-                            padding: '10px 12px',
-                            fontSize: '0.82rem',
-                            color: '#e2e8f0',
-                            lineHeight: 1.55
-                          }}>
-                            <div style={{ fontSize: '0.68rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <Sparkles size={11} /> Resumen Generado por IA (LLM):
-                            </div>
-                            {norma.resumen}
-                          </div>
+                    <div style={{
+                      background: 'rgba(6, 30, 10, 0.5)',
+                      border: '1px solid rgba(16,185,129,0.25)',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      display: 'flex', alignItems: 'center', gap: '14px'
+                    }}>
+                      <CheckCircle2 size={28} color="#8AC926" />
+                      <div>
+                        <div style={{ color: '#8AC926', fontWeight: 700, fontSize: '0.95rem' }}>
+                          Sin incompatibilidades normativas graves detectadas
                         </div>
-
-                        <div style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
-                          <span>Estado: Vigente en BD</span>
-                          <span>{norma.ultima_actualizacion ? new Date(norma.ultima_actualizacion).toLocaleDateString('es-BO') : 'Indexada'}</span>
+                        <div style={{ color: 'rgba(203, 213, 225, 0.75)', fontSize: '0.82rem', marginTop: '2px' }}>
+                          El corpus normativo vigente no registra conflictos con el proyecto analizado.
                         </div>
                       </div>
-                    ))
+                    </div>
+                  )}
+
+                  {/* ── CATÁLOGO DE NORMATIVAS VIGENTES INDEXADAS (NEON PGVECTOR) ── */}
+                  <div style={{
+                    marginTop: '32px',
+                    background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(20, 35, 60, 0.90) 100%)',
+                    border: '1.5px solid rgba(251, 191, 36, 0.35)',
+                    borderRadius: '16px',
+                    padding: '22px',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.45)'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '14px',
+                      marginBottom: '18px',
+                      borderBottom: '1px solid rgba(251, 191, 36, 0.2)',
+                      paddingBottom: '14px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ background: 'rgba(251, 191, 36, 0.15)', borderRadius: '10px', padding: '10px', display: 'flex' }}>
+                          <Database size={24} color="#fbbf24" />
+                        </div>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#ffffff' }}>
+                            Corpus Normativo Vigente Indexado en la Base de Datos
+                          </h4>
+                          <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>
+                            Normas bolivianas cargadas con embeddings (2048 dimensiones) para auditoría de antinomias.
+                          </p>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.82rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)', padding: '5px 12px', borderRadius: '20px', fontWeight: 700 }}>
+                          {normativasList.length} Normativas en Neon
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowSubirNormativaModal(!showSubirNormativaModal)}
+                          style={{
+                            background: showSubirNormativaModal ? 'rgba(239, 68, 68, 0.2)' : 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)',
+                            color: showSubirNormativaModal ? '#fca5a5' : '#0B2545',
+                            border: showSubirNormativaModal ? '1px solid #ef4444' : 'none',
+                            padding: '8px 16px',
+                            borderRadius: '10px',
+                            fontWeight: 800,
+                            fontSize: '0.86rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 14px rgba(251, 191, 36, 0.35)',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          {showSubirNormativaModal ? <X size={16} /> : <Plus size={16} />}
+                          <span>{showSubirNormativaModal ? 'Cerrar Formulario' : 'Subir Otra Normativa'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Formulario Expandible para Subir y Procesar con LLM */}
+                    {showSubirNormativaModal && (
+                      <form onSubmit={handleSubirNormativa} style={{
+                        background: 'rgba(15, 23, 42, 0.95)',
+                        border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                        borderRadius: '14px',
+                        padding: '20px',
+                        marginBottom: '22px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                          <Sparkles size={20} color="#38bdf8" />
+                          <h5 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#38bdf8' }}>
+                            Cargar Nueva Normativa y Procesar con LLM (NVIDIA NIM)
+                          </h5>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
+                              Nombre Oficial de la Norma *:
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="Ej: Ley N° 348 Integral para Mujeres / Ley 1333"
+                              value={normativaNombre}
+                              onChange={(e) => setNormativaNombre(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '9px 12px',
+                                borderRadius: '8px',
+                                background: 'rgba(15, 23, 42, 0.9)',
+                                border: '1px solid rgba(56, 189, 248, 0.35)',
+                                color: '#ffffff',
+                                fontSize: '0.84rem',
+                                outline: 'none',
+                                boxSizing: 'border-box'
+                              }}
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
+                              Tipo de Norma:
+                            </label>
+                            <select
+                              value={normativaTipo}
+                              onChange={(e) => setNormativaTipo(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '9px 12px',
+                                borderRadius: '8px',
+                                background: '#0F172A',
+                                border: '1px solid rgba(56, 189, 248, 0.35)',
+                                color: '#ffffff',
+                                fontSize: '0.84rem',
+                                outline: 'none',
+                                boxSizing: 'border-box'
+                              }}
+                            >
+                              <option value="Ley">Ley Nacional</option>
+                              <option value="Código">Código Orgánico / Sustantivo</option>
+                              <option value="Decreto Supremo">Decreto Supremo</option>
+                              <option value="Resolución">Resolución Ministerial / Administrativa</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
+                              Número de Norma (Opcional):
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Ej: 348 / 1333"
+                              value={normativaNumero}
+                              onChange={(e) => setNormativaNumero(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '9px 12px',
+                                borderRadius: '8px',
+                                background: 'rgba(15, 23, 42, 0.9)',
+                                border: '1px solid rgba(56, 189, 248, 0.35)',
+                                color: '#ffffff',
+                                fontSize: '0.84rem',
+                                outline: 'none',
+                                boxSizing: 'border-box'
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', color: '#fbbf24', fontWeight: 700, marginBottom: '6px' }}>
+                              📁 Adjuntar Archivo (PDF o TXT):
+                            </label>
+                            <input
+                              type="file"
+                              accept=".pdf,.txt,.docx"
+                              onChange={(e) => setNormativaFile(e.target.files?.[0] || null)}
+                              style={{
+                                width: '100%',
+                                padding: '8px',
+                                borderRadius: '8px',
+                                background: 'rgba(15, 23, 42, 0.85)',
+                                border: '1px solid rgba(251, 191, 36, 0.35)',
+                                color: '#e2e8f0',
+                                fontSize: '0.82rem',
+                                boxSizing: 'border-box'
+                              }}
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', color: '#fbbf24', fontWeight: 700, marginBottom: '6px' }}>
+                              O pegar texto de artículos directamente:
+                            </label>
+                            <textarea
+                              rows={2}
+                              placeholder="ARTÍCULO 1.- (OBJETO)..."
+                              value={normativaTexto}
+                              onChange={(e) => setNormativaTexto(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                background: 'rgba(15, 23, 42, 0.9)',
+                                border: '1px solid rgba(251, 191, 36, 0.35)',
+                                color: '#ffffff',
+                                fontSize: '0.82rem',
+                                outline: 'none',
+                                boxSizing: 'border-box'
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {normativaUploadStatus && (
+                          <div style={{
+                            padding: '12px 16px',
+                            borderRadius: '10px',
+                            marginBottom: '16px',
+                            background: normativaUploadStatus.success ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            border: `1px solid ${normativaUploadStatus.success ? '#10b981' : '#ef4444'}`,
+                            color: normativaUploadStatus.success ? '#34d399' : '#f87171',
+                            fontSize: '0.84rem'
+                          }}>
+                            <div><strong>{normativaUploadStatus.success ? '✅ Éxito:' : '❌ Error:'}</strong> {normativaUploadStatus.msg}</div>
+                            {normativaUploadStatus.resumen && (
+                              <div style={{ marginTop: '6px', fontSize: '0.8rem', color: '#e2e8f0' }}>
+                                <em>Resumen IA:</em> {normativaUploadStatus.resumen}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowSubirNormativaModal(false)}
+                            className="btn-secondary"
+                            style={{ padding: '9px 18px', fontSize: '0.85rem' }}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isUploadingNormativa}
+                            className="btn-primary"
+                            style={{ padding: '9px 24px', fontSize: '0.88rem' }}
+                          >
+                            {isUploadingNormativa ? (
+                              <>
+                                <Cpu size={16} className="pulse-active" />
+                                <span>Procesando con LLM & Indexando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles size={16} />
+                                <span>⚡ Procesar con LLM y Registrar en BD</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {/* Grid de Normativas Cargadas */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                      {normativasList.length === 0 ? (
+                        <div style={{ color: '#94a3b8', fontSize: '0.85rem', padding: '16px', textAlign: 'center', gridColumn: '1 / -1' }}>
+                          {isLoadingNormativas ? 'Cargando catálogo normativo desde Neon...' : 'No hay normativas registradas en la base de datos.'}
+                        </div>
+                      ) : (
+                        normativasList.map((norma, idx) => (
+                          <div key={idx} style={{
+                            background: 'rgba(15, 23, 42, 0.85)',
+                            border: '1px solid rgba(148, 163, 184, 0.22)',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            gap: '12px'
+                          }}>
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontSize: '1.2rem' }}>📜</span>
+                                  <h5 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: '#ffffff' }}>
+                                    {norma.documento}
+                                  </h5>
+                                </div>
+                                <span style={{
+                                  background: 'rgba(56, 189, 248, 0.15)',
+                                  color: '#38bdf8',
+                                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                                  borderRadius: '20px',
+                                  padding: '2px 8px',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  {norma.num_articulos} artículos
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                                <span style={{ fontSize: '0.7rem', padding: '2px 7px', borderRadius: '4px', background: 'rgba(251, 191, 36, 0.12)', color: '#fbbf24', fontWeight: 600 }}>
+                                  {norma.tipo_documento?.toUpperCase()} {norma.numero_norma ? `#${norma.numero_norma}` : ''}
+                                </span>
+                                {norma.materia && (
+                                  <span style={{ fontSize: '0.7rem', padding: '2px 7px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.12)', color: '#34d399', fontWeight: 600 }}>
+                                    {norma.materia}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Resumen IA */}
+                              <div style={{
+                                background: 'rgba(0, 0, 0, 0.35)',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                borderRadius: '8px',
+                                padding: '10px 12px',
+                                fontSize: '0.82rem',
+                                color: '#e2e8f0',
+                                lineHeight: 1.55
+                              }}>
+                                <div style={{ fontSize: '0.68rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <Sparkles size={11} /> Resumen Generado por IA (LLM):
+                                </div>
+                                {norma.resumen}
+                              </div>
+                            </div>
+
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                              <span>Estado: Vigente en BD</span>
+                              <span>{norma.ultima_actualizacion ? new Date(norma.ultima_actualizacion).toLocaleDateString('es-BO') : 'Indexada'}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Botón Acción Siguiente: FUSIONADO EN CONCENTRADOR, EMISOR Y NOTIFICADOR */}
+                  {selectedCategory === 'AGENTE_REGISTRO_LEGISLATIVO' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '28px' }}>
+                      {/* Módulo de voz: Lectura de Hallazgos Normativos */}
+                      <div style={{ width: '100%' }}>
+                        <AgentVoiceModule
+                          agentId="consistencia"
+                          agentLabel="Agente de Consistencia Normativa"
+                          primaryColor="#fbbf24"
+                          sesionId={fase1Data?.sesion_id || null}
+                          resultData={consistenciaData}
+                          speechHook={speechHook}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={handleConcentrador}
+                          disabled={isProcessing}
+                          className="btn-primary"
+                          style={{ fontSize: '1.05rem', padding: '14px 30px' }}
+                        >
+                          {isProcessing ? (
+                            <>
+                              <Cpu size={20} className="pulse-active" />
+                              <span>Consolidando, Emitiendo PDF & Despachando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Merge size={20} />
+                              <span>Consolidar Expediente, Emitir Dictamen PDF y Notificar</span>
+                              <ArrowRight size={18} />
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
-
-              {/* Botón Acción Siguiente: FUSIONADO EN CONCENTRADOR, EMISOR Y NOTIFICADOR */}
-              {selectedCategory === 'AGENTE_REGISTRO_LEGISLATIVO' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '28px' }}>
-                  {/* Módulo de voz: Lectura de Hallazgos Normativos */}
-                  <div style={{ width: '100%' }}>
-                    <AgentVoiceModule
-                      agentId="consistencia"
-                      agentLabel="Agente de Consistencia Normativa"
-                      primaryColor="#fbbf24"
-                      sesionId={fase1Data?.sesion_id || null}
-                      resultData={consistenciaData}
-                      speechHook={speechHook}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px', flexWrap: 'wrap' }}>
-                    <button
-                      onClick={handleConcentrador}
-                      disabled={isProcessing}
-                      className="btn-primary"
-                      style={{ fontSize: '1.05rem', padding: '14px 30px' }}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Cpu size={20} className="pulse-active" />
-                          <span>Consolidando, Emitiendo PDF & Despachando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Merge size={20} />
-                          <span>Consolidar Expediente, Emitir Dictamen PDF y Notificar</span>
-                          <ArrowRight size={18} />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </AgentResultCard>
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -2831,239 +2861,239 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente Concentrador y Emisor"
-          role="Compilación de Dictámenes & Generación PDF Oficial"
-          theme="blue"
-          status="completed"
-          phaseLabel="Fase 3: Redacción & PDF"
-          thinkingText="Informe consolidado de auditoría generado en PDF"
-          image="/robots/banner/emisor.png"
-          justificacion="Publicidad, transparencia y rigor técnico: Consolida y sintetiza todos los dictámenes en un informe oficial y formaliza el reporte PDF para el plenario de la Asamblea."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'consistencia' })}
-          prevLabel="Ver Consistencia Normativa"
-        >
-          <FileCheck size={56} color="#00B4D8" style={{ margin: '0 auto 16px', display: 'block' }} />
-          <h3 style={{ fontSize: '1.6rem', color: '#ffffff', fontWeight: 800, marginBottom: '12px', textAlign: 'center' }}>
-            Informe Consolidado Generado
-          </h3>
-          <p style={{ color: '#94A3B8', fontSize: '1rem', maxWidth: '700px', margin: '0 auto 24px', textAlign: 'center' }}>
-            El Agente Emisor ha generado el dictamen técnico-jurídico formal. Ahora puede notificar a los miembros parlamentarios de la comisión.
-          </p>
-          
-          {/* ── SECCIÓN DE DESPACHO A GMAIL / CÁMARAS CON MENSAJE EXTRA (VOZ/TECLADO) ── */}
-          <div style={{
-            maxWidth: '680px',
-            margin: '0 auto 24px auto',
-            background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 42, 74, 0.90) 100%)',
-            border: '1.5px solid rgba(56, 189, 248, 0.35)',
-            borderRadius: '16px',
-            padding: '20px',
-            boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
-            textAlign: 'left'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', borderBottom: '1px solid rgba(148,163,184,0.15)', paddingBottom: '10px' }}>
-              <Mail size={22} color="#38bdf8" />
-              <div>
-                <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#ffffff' }}>
-                  Despacho Institucional a Gmail / Comisión con Mensaje Extra
-                </h4>
-                <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
-                  Escriba o dicte por voz observaciones que se incrustarán de manera destacada en el correo formal para las autoridades.
-                </p>
-              </div>
-            </div>
+              agentName="Agente Concentrador y Emisor"
+              role="Compilación de Dictámenes & Generación PDF Oficial"
+              theme="blue"
+              status="completed"
+              phaseLabel="Fase 3: Redacción & PDF"
+              thinkingText="Informe consolidado de auditoría generado en PDF"
+              image="/robots/logos/concentrador.jpeg"
+              justificacion="Publicidad, transparencia y rigor técnico: Consolida y sintetiza todos los dictámenes en un informe oficial y formaliza el reporte PDF para el plenario de la Asamblea."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'consistencia' })}
+              prevLabel="Ver Consistencia Normativa"
+            >
+              <FileCheck size={56} color="#00B4D8" style={{ margin: '0 auto 16px', display: 'block' }} />
+              <h3 style={{ fontSize: '1.6rem', color: '#ffffff', fontWeight: 800, marginBottom: '12px', textAlign: 'center' }}>
+                Informe Consolidado Generado
+              </h3>
+              <p style={{ color: '#94A3B8', fontSize: '1rem', maxWidth: '700px', margin: '0 auto 24px', textAlign: 'center' }}>
+                El Agente Emisor ha generado el dictamen técnico-jurídico formal. Ahora puede notificar a los miembros parlamentarios de la comisión.
+              </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', marginBottom: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
-                  ✉️ Correo Destino / Gmail (Opcional):
-                </label>
-                <input
-                  type="email"
-                  placeholder="ejemplo: comision.constitucion@gmail.com"
-                  value={customEmail || ''}
-                  onChange={(e) => updateActiveSession({ customEmail: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    background: 'rgba(15, 23, 42, 0.85)',
-                    border: '1px solid rgba(56, 189, 248, 0.35)',
-                    color: '#ffffff',
-                    fontSize: '0.84rem',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
+              {/* ── SECCIÓN DE DESPACHO A GMAIL / CÁMARAS CON MENSAJE EXTRA (VOZ/TECLADO) ── */}
+              <div style={{
+                maxWidth: '680px',
+                margin: '0 auto 24px auto',
+                background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 42, 74, 0.90) 100%)',
+                border: '1.5px solid rgba(56, 189, 248, 0.35)',
+                borderRadius: '16px',
+                padding: '20px',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
+                textAlign: 'left'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', borderBottom: '1px solid rgba(148,163,184,0.15)', paddingBottom: '10px' }}>
+                  <Mail size={22} color="#38bdf8" />
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#ffffff' }}>
+                      Despacho Institucional a Gmail / Comisión con Mensaje Extra
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                      Escriba o dicte por voz observaciones que se incrustarán de manera destacada en el correo formal para las autoridades.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', marginBottom: '14px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
+                      ✉️ Correo Destino / Gmail (Opcional):
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="ejemplo: comision.constitucion@gmail.com"
+                      value={customEmail || ''}
+                      onChange={(e) => updateActiveSession({ customEmail: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        borderRadius: '8px',
+                        background: 'rgba(15, 23, 42, 0.85)',
+                        border: '1px solid rgba(56, 189, 248, 0.35)',
+                        color: '#ffffff',
+                        fontSize: '0.84rem',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
+                      📌 Asunto Institucional:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Asunto formal del dictamen..."
+                      value={customEmailSubject || ''}
+                      onChange={(e) => updateActiveSession({ customEmailSubject: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        borderRadius: '8px',
+                        background: 'rgba(15, 23, 42, 0.85)',
+                        border: '1px solid rgba(56, 189, 248, 0.35)',
+                        color: '#ffffff',
+                        fontSize: '0.84rem',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '0.78rem', color: '#fbbf24', fontWeight: 700 }}>
+                      📝 Mensaje Extra / Observaciones del Remitente:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                          alert('Reconocimiento de voz no disponible en este navegador.');
+                          return;
+                        }
+                        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                        const rec = new SR();
+                        rec.lang = 'es-BO';
+                        rec.onresult = (ev) => {
+                          const text = ev.results[0][0].transcript;
+                          updateActiveSession({
+                            extraEmailMessage: (extraEmailMessage ? extraEmailMessage + ' ' : '') + text
+                          });
+                        };
+                        rec.start();
+                      }}
+                      style={{
+                        background: 'rgba(245, 158, 11, 0.18)',
+                        border: '1px solid rgba(245, 158, 11, 0.4)',
+                        borderRadius: '6px',
+                        color: '#fbbf24',
+                        padding: '4px 10px',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Mic size={13} />
+                      <span>Dictar por Voz (Audio a Texto)</span>
+                    </button>
+                  </div>
+
+                  <textarea
+                    rows={3}
+                    placeholder="Escriba mediante teclado o dicte con el micrófono observaciones adicionales para los miembros de la comisión y cámaras..."
+                    value={extraEmailMessage || ''}
+                    onChange={(e) => updateActiveSession({ extraEmailMessage: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      background: 'rgba(15, 23, 42, 0.9)',
+                      border: '1px solid rgba(245, 158, 11, 0.35)',
+                      color: '#ffffff',
+                      fontSize: '0.84rem',
+                      outline: 'none',
+                      resize: 'vertical',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 700, marginBottom: '6px' }}>
-                  📌 Asunto Institucional:
-                </label>
-                <input
-                  type="text"
-                  placeholder="Asunto formal del dictamen..."
-                  value={customEmailSubject || ''}
-                  onChange={(e) => updateActiveSession({ customEmailSubject: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    background: 'rgba(15, 23, 42, 0.85)',
-                    border: '1px solid rgba(56, 189, 248, 0.35)',
-                    color: '#ffffff',
-                    fontSize: '0.84rem',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              </div>
-            </div>
+              {/* Módulo de voz: Lectura de Informe y Dictado de Observaciones para Notificar */}
 
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ fontSize: '0.78rem', color: '#fbbf24', fontWeight: 700 }}>
-                  📝 Mensaje Extra / Observaciones del Remitente:
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                      alert('Reconocimiento de voz no disponible en este navegador.');
-                      return;
+
+              <div style={{ maxWidth: '640px', margin: '0 auto 24px auto' }}>
+
+
+                <AgentVoiceModule
+
+
+                  agentId="emisor"
+
+
+                  agentLabel="Agente Concentrador y Emisor"
+
+
+                  primaryColor="#0284C7"
+
+
+                  sesionId={fase1Data?.sesion_id || null}
+
+
+                  resultData={pdfResult}
+
+
+                  speechHook={speechHook}
+
+
+                  emailDestino={customEmail || activeSession.emailAutor}
+
+
+                  onVoiceAction={(action) => {
+
+
+                    if (action?.type === 'notificacion_enviada') {
+
+
+                      appendLog('emisor', 'VOZ', `Observación enviada por voz: "${(action.texto || '').substring(0, 80)}"`);
+
+
                     }
-                    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-                    const rec = new SR();
-                    rec.lang = 'es-BO';
-                    rec.onresult = (ev) => {
-                      const text = ev.results[0][0].transcript;
-                      updateActiveSession({
-                        extraEmailMessage: (extraEmailMessage ? extraEmailMessage + ' ' : '') + text
-                      });
-                    };
-                    rec.start();
+
+
                   }}
-                  style={{
-                    background: 'rgba(245, 158, 11, 0.18)',
-                    border: '1px solid rgba(245, 158, 11, 0.4)',
-                    borderRadius: '6px',
-                    color: '#fbbf24',
-                    padding: '4px 10px',
-                    fontSize: '0.74rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
+
+
+                />
+
+
+              </div>
+
+
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <a
+                  href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfResult.filename}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-secondary"
+                  style={{ fontSize: '1rem', padding: '13px 24px', textDecoration: 'none' }}
                 >
-                  <Mic size={13} />
-                  <span>Dictar por Voz (Audio a Texto)</span>
+                  <Download size={20} />
+                  <span>Descargar PDF</span>
+                </a>
+                <button
+                  onClick={handleNotificar}
+                  disabled={isProcessing}
+                  className="btn-primary"
+                  style={{ fontSize: '1rem', padding: '13px 26px' }}
+                >
+                  {isProcessing ? (
+                    <><Cpu size={20} className="pulse-active" /><span>Redactando y Enviando...</span></>
+                  ) : (
+                    <><Mail size={20} /><span>Notificar a Comisión (5to Agente)</span><ArrowRight size={18} /></>
+                  )}
+                </button>
+                <button className="btn-secondary" onClick={handleReset} style={{ fontSize: '1rem', padding: '13px 24px' }}>
+                  <RotateCcw size={20} />
+                  <span>Nuevo Análisis</span>
                 </button>
               </div>
-
-              <textarea
-                rows={3}
-                placeholder="Escriba mediante teclado o dicte con el micrófono observaciones adicionales para los miembros de la comisión y cámaras..."
-                value={extraEmailMessage || ''}
-                onChange={(e) => updateActiveSession({ extraEmailMessage: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
-                  background: 'rgba(15, 23, 42, 0.9)',
-                  border: '1px solid rgba(245, 158, 11, 0.35)',
-                  color: '#ffffff',
-                  fontSize: '0.84rem',
-                  outline: 'none',
-                  resize: 'vertical',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-          </div>
-          
-          {/* Módulo de voz: Lectura de Informe y Dictado de Observaciones para Notificar */}
-
-          
-          <div style={{ maxWidth: '640px', margin: '0 auto 24px auto' }}>
-
-          
-            <AgentVoiceModule
-
-          
-              agentId="emisor"
-
-          
-              agentLabel="Agente Concentrador y Emisor"
-
-          
-              primaryColor="#0284C7"
-
-          
-              sesionId={fase1Data?.sesion_id || null}
-
-          
-              resultData={pdfResult}
-
-          
-              speechHook={speechHook}
-
-          
-              emailDestino={customEmail || activeSession.emailAutor}
-
-          
-              onVoiceAction={(action) => {
-
-          
-                if (action?.type === 'notificacion_enviada') {
-
-          
-                  appendLog('emisor', 'VOZ', `Observación enviada por voz: "${(action.texto || '').substring(0, 80)}"`);
-
-          
-                }
-
-          
-              }}
-
-          
-            />
-
-          
-          </div>
-
-          
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <a 
-              href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfResult.filename}`}
-              target="_blank" 
-              rel="noreferrer"
-              className="btn-secondary"
-              style={{ fontSize: '1rem', padding: '13px 24px', textDecoration: 'none' }}
-            >
-              <Download size={20} />
-              <span>Descargar PDF</span>
-            </a>
-            <button
-              onClick={handleNotificar}
-              disabled={isProcessing}
-              className="btn-primary"
-              style={{ fontSize: '1rem', padding: '13px 26px' }}
-            >
-              {isProcessing ? (
-                <><Cpu size={20} className="pulse-active" /><span>Redactando y Enviando...</span></>
-              ) : (
-                <><Mail size={20} /><span>Notificar a Comisión (5to Agente)</span><ArrowRight size={18} /></>
-              )}
-            </button>
-            <button className="btn-secondary" onClick={handleReset} style={{ fontSize: '1rem', padding: '13px 24px' }}>
-              <RotateCcw size={20} />
-              <span>Nuevo Análisis</span>
-            </button>
-          </div>
-        </AgentResultCard>
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -3080,164 +3110,164 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente Notificador de Comisión"
-          role="Despachador de Correo HTML Institucional"
-          theme="violet"
-          status="completed"
-          phaseLabel="Fase 3: Notificación Oficial"
-          thinkingText="Correo electrónico HTML despachado con éxito"
-          image="/robots/banner/emisor.png"
-          justificacion="Debida notificación y publicidad parlamentaria: Despacha la comunicación oficial en formato HTML formal a los correos electrónicos institucionales de los miembros asignados."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'emisor' })}
-          prevLabel="Ver PDF Generado (Emisor)"
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Mail size={32} color="#a78bfa" />
-                <h3 style={{ fontSize: '1.45rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                  📨 Correo HTML Formal Generado
-                </h3>
-              </div>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <div style={{ background: 'rgba(0,0,0,0.35)', padding: '8px 14px', borderRadius: '10px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#a78bfa' }}>
-                    {notificadorData.total_destinatarios || 0}
+              agentName="Agente Notificador de Comisión"
+              role="Despachador de Correo HTML Institucional"
+              theme="violet"
+              status="completed"
+              phaseLabel="Fase 3: Notificación Oficial"
+              thinkingText="Correo electrónico HTML despachado con éxito"
+              image="/robots/logos/agente_comodin.jpeg"
+              justificacion="Debida notificación y publicidad parlamentaria: Despacha la comunicación oficial en formato HTML formal a los correos electrónicos institucionales de los miembros asignados."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'emisor' })}
+              prevLabel="Ver PDF Generado (Emisor)"
+            >
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Mail size={32} color="#a78bfa" />
+                    <h3 style={{ fontSize: '1.45rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
+                      📨 Correo HTML Formal Generado
+                    </h3>
                   </div>
-                  <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>Destinatarios</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Metadatos del despacho */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '24px' }}>
-              <div className="process-step completed">
-                <div className="process-step-number">✓</div>
-                <div>
-                  <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Comisión Notificada</div>
-                  <div style={{ fontWeight: 700, color: '#e8edf5', fontSize: '0.95rem', marginTop: '2px' }}>
-                    {notificadorData.comision || 'Comisión Legislativa'}
-                  </div>
-                </div>
-              </div>
-              <div className="process-step completed">
-                <div className="process-step-number">✓</div>
-                <div>
-                  <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Asunto del Correo</div>
-                  <div style={{ fontWeight: 600, color: '#94a3b8', fontSize: '0.84rem', marginTop: '2px', lineHeight: 1.4 }}>
-                    {notificadorData.asunto}
-                  </div>
-                </div>
-              </div>
-              <div className="process-step completed">
-                <div className="process-step-number">✓</div>
-                <div>
-                  <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Fecha de Despacho</div>
-                  <div style={{ fontWeight: 700, color: '#e8edf5', fontSize: '0.9rem', marginTop: '2px' }}>
-                    {notificadorData.fecha_despacho ? new Date(notificadorData.fecha_despacho).toLocaleString('es-BO') : '—'}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Destinatarios */}
-            {notificadorData.miembros_notificados?.length > 0 && (
-              <div style={{ marginBottom: '24px' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
-                  👥 Miembros Destinatarios
-                </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {notificadorData.miembros_notificados.map((m, i) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: '8px',
-                      background: 'rgba(14,19,32,0.85)', padding: '8px 14px', borderRadius: '10px',
-                      border: '1px solid rgba(168,85,247,0.22)'
-                    }}>
-                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(168,85,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>
-                        👤
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <div style={{ background: 'rgba(0,0,0,0.35)', padding: '8px 14px', borderRadius: '10px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#a78bfa' }}>
+                        {notificadorData.total_destinatarios || 0}
                       </div>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#e8edf5' }}>{m.nombre_completo}</div>
-                        <div style={{ fontSize: '0.72rem', color: '#a78bfa' }}>{m.cargo} · {m.tipo_camara}</div>
-                        {m.email && <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{m.email}</div>}
+                      <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>Destinatarios</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metadatos del despacho */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+                  <div className="process-step completed">
+                    <div className="process-step-number">✓</div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Comisión Notificada</div>
+                      <div style={{ fontWeight: 700, color: '#e8edf5', fontSize: '0.95rem', marginTop: '2px' }}>
+                        {notificadorData.comision || 'Comisión Legislativa'}
                       </div>
                     </div>
-                  ))}
+                  </div>
+                  <div className="process-step completed">
+                    <div className="process-step-number">✓</div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Asunto del Correo</div>
+                      <div style={{ fontWeight: 600, color: '#94a3b8', fontSize: '0.84rem', marginTop: '2px', lineHeight: 1.4 }}>
+                        {notificadorData.asunto}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="process-step completed">
+                    <div className="process-step-number">✓</div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Fecha de Despacho</div>
+                      <div style={{ fontWeight: 700, color: '#e8edf5', fontSize: '0.9rem', marginTop: '2px' }}>
+                        {notificadorData.fecha_despacho ? new Date(notificadorData.fecha_despacho).toLocaleString('es-BO') : '—'}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {/* Vista previa del correo HTML */}
-            <div style={{ marginBottom: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  📧 Vista Previa del Correo HTML Institucional
-                </div>
-                <button
-                  onClick={() => updateActiveSession({ showEmailPreview: !showEmailPreview })}
-                  className="btn-secondary"
-                  style={{ padding: '6px 14px', fontSize: '0.8rem' }}
-                >
-                  {showEmailPreview ? 'Ocultar Vista Previa' : 'Mostrar Vista Previa'}
-                </button>
-              </div>
-              {showEmailPreview && notificadorData.html_preview && (
-                <div className="email-preview-frame" style={{ maxHeight: '600px', overflowY: 'auto' }}>
-                  <iframe
-                    srcDoc={notificadorData.html_preview}
-                    title="Vista previa del correo institucional"
-                    style={{ width: '100%', height: '580px', border: 'none', display: 'block' }}
-                    sandbox="allow-same-origin"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Acciones finales */}
-            <div className="glow-divider" />
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
-              {/* Botón para avanzar a la siguiente etapa legislativa: Comisión Constitución Fondo */}
-              <button
-                onClick={handleConstitucionFondo}
-                disabled={isProcessing}
-                className="btn-primary"
-                style={{
-                  fontSize: '1rem',
-                  padding: '13px 26px'
-                }}
-              >
-                {isProcessing ? (
-                  <><Cpu size={20} className="pulse-active" /><span>Iniciando Análisis de Fondo...</span></>
-                ) : (
-                  <><BookOpen size={20} /><span>Continuar: Comisión Constitución (Fondo)</span><ArrowRight size={18} /></>
+                {/* Destinatarios */}
+                {notificadorData.miembros_notificados?.length > 0 && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
+                      👥 Miembros Destinatarios
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {notificadorData.miembros_notificados.map((m, i) => (
+                        <div key={i} style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          background: 'rgba(14,19,32,0.85)', padding: '8px 14px', borderRadius: '10px',
+                          border: '1px solid rgba(168,85,247,0.22)'
+                        }}>
+                          <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(168,85,247,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>
+                            👤
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#e8edf5' }}>{m.nombre_completo}</div>
+                            <div style={{ fontSize: '0.72rem', color: '#a78bfa' }}>{m.cargo} · {m.tipo_camara}</div>
+                            {m.email && <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{m.email}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </button>
 
-              {pdfResult?.filename && (
-                <a
-                  href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfResult.filename}`}
-                  target="_blank" rel="noreferrer"
-                  className="btn-secondary"
-                  style={{ fontSize: '1rem', padding: '13px 24px', textDecoration: 'none' }}
-                >
-                  <Download size={20} />
-                  <span>Descargar PDF</span>
-                </a>
-              )}
-              {onNavigateExpedientes && (
-                <button className="btn-success" onClick={onNavigateExpedientes}
-                  style={{ fontSize: '1rem', padding: '13px 24px' }}>
-                  <ExternalLink size={20} />
-                  <span>Ver Expedientes</span>
-                </button>
-              )}
-              <button className="btn-secondary" onClick={handleReset} style={{ fontSize: '1rem', padding: '13px 24px' }}>
-                <RotateCcw size={20} />
-                <span>Nuevo Análisis</span>
-              </button>
-            </div>
-          </div>
-        </AgentResultCard>
+                {/* Vista previa del correo HTML */}
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      📧 Vista Previa del Correo HTML Institucional
+                    </div>
+                    <button
+                      onClick={() => updateActiveSession({ showEmailPreview: !showEmailPreview })}
+                      className="btn-secondary"
+                      style={{ padding: '6px 14px', fontSize: '0.8rem' }}
+                    >
+                      {showEmailPreview ? 'Ocultar Vista Previa' : 'Mostrar Vista Previa'}
+                    </button>
+                  </div>
+                  {showEmailPreview && notificadorData.html_preview && (
+                    <div className="email-preview-frame" style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                      <iframe
+                        srcDoc={notificadorData.html_preview}
+                        title="Vista previa del correo institucional"
+                        style={{ width: '100%', height: '580px', border: 'none', display: 'block' }}
+                        sandbox="allow-same-origin"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Acciones finales */}
+                <div className="glow-divider" />
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                  {/* Botón para avanzar a la siguiente etapa legislativa: Comisión Constitución Fondo */}
+                  <button
+                    onClick={handleConstitucionFondo}
+                    disabled={isProcessing}
+                    className="btn-primary"
+                    style={{
+                      fontSize: '1rem',
+                      padding: '13px 26px'
+                    }}
+                  >
+                    {isProcessing ? (
+                      <><Cpu size={20} className="pulse-active" /><span>Iniciando Análisis de Fondo...</span></>
+                    ) : (
+                      <><BookOpen size={20} /><span>Continuar: Comisión Constitución (Fondo)</span><ArrowRight size={18} /></>
+                    )}
+                  </button>
+
+                  {pdfResult?.filename && (
+                    <a
+                      href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfResult.filename}`}
+                      target="_blank" rel="noreferrer"
+                      className="btn-secondary"
+                      style={{ fontSize: '1rem', padding: '13px 24px', textDecoration: 'none' }}
+                    >
+                      <Download size={20} />
+                      <span>Descargar PDF</span>
+                    </a>
+                  )}
+                  {onNavigateExpedientes && (
+                    <button className="btn-success" onClick={onNavigateExpedientes}
+                      style={{ fontSize: '1rem', padding: '13px 24px' }}>
+                      <ExternalLink size={20} />
+                      <span>Ver Expedientes</span>
+                    </button>
+                  )}
+                  <button className="btn-secondary" onClick={handleReset} style={{ fontSize: '1rem', padding: '13px 24px' }}>
+                    <RotateCcw size={20} />
+                    <span>Nuevo Análisis</span>
+                  </button>
+                </div>
+              </div>
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -3278,110 +3308,110 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Comisión Constitución (Fondo)"
-          role="Análisis Hermenéutico y Viabilidad Sustantiva"
-          theme="purple"
-          status="completed"
-          phaseLabel="Fase 4: Fondo CPE"
-          thinkingText="Dictamen sustantivo de constitucionalidad emitido"
-          image="/robots/logos/verificadorconstitucional.jpg"
-          justificacion="Art. 196 CPE: Control de constitucionalidad de fondo, precedentes del TCP y ponderación proporcional de derechos fundamentales."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'notificador' })}
-          prevLabel="Ver Notificación de Comisión"
-        >
-          {(() => {
-            const df = constitucionFondoData.dictamen_fondo || {};
-            const herm = df.analisis_hermeneutico || {};
-            return (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ background: 'rgba(168,85,247,0.2)', borderRadius: '50%', padding: '12px' }}>
-                      <BookOpen size={32} color="#c084fc" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                        Etapa 3 · Dictamen de Mérito Constitucional
+              agentName="Comisión Constitución (Fondo)"
+              role="Análisis Hermenéutico y Viabilidad Sustantiva"
+              theme="purple"
+              status="completed"
+              phaseLabel="Fase 4: Fondo CPE"
+              thinkingText="Dictamen sustantivo de constitucionalidad emitido"
+              image="/robots/logos/agente_constitucional.jpeg"
+              justificacion="Art. 196 CPE: Control de constitucionalidad de fondo, precedentes del TCP y ponderación proporcional de derechos fundamentales."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'notificador' })}
+              prevLabel="Ver Notificación de Comisión"
+            >
+              {(() => {
+                const df = constitucionFondoData.dictamen_fondo || {};
+                const herm = df.analisis_hermeneutico || {};
+                return (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ background: 'rgba(168,85,247,0.2)', borderRadius: '50%', padding: '12px' }}>
+                          <BookOpen size={32} color="#c084fc" />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                            Etapa 3 · Dictamen de Mérito Constitucional
+                          </div>
+                          <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
+                            Viabilidad Constitucional Sustantiva
+                          </h3>
+                        </div>
                       </div>
-                      <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                        Viabilidad Constitucional Sustantiva
-                      </h3>
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                        <span className="badge" style={{ background: 'rgba(168,85,247,0.25)', color: '#d8b4fe', border: '1px solid #a855f7' }}>
+                          {df.viabilidad_fondo || 'VIABLE'}
+                        </span>
+                        <span className="badge" style={{
+                          background: df.riesgo_constitucional === 'ALTO' ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)',
+                          color: df.riesgo_constitucional === 'ALTO' ? '#f87171' : '#34d399',
+                          border: `1px solid ${df.riesgo_constitucional === 'ALTO' ? '#ef4444' : '#10b981'}`
+                        }}>
+                          Riesgo: {df.riesgo_constitucional || 'BAJO'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    <span className="badge" style={{ background: 'rgba(168,85,247,0.25)', color: '#d8b4fe', border: '1px solid #a855f7' }}>
-                      {df.viabilidad_fondo || 'VIABLE'}
-                    </span>
-                    <span className="badge" style={{
-                      background: df.riesgo_constitucional === 'ALTO' ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)',
-                      color: df.riesgo_constitucional === 'ALTO' ? '#f87171' : '#34d399',
-                      border: `1px solid ${df.riesgo_constitucional === 'ALTO' ? '#ef4444' : '#10b981'}`
-                    }}>
-                      Riesgo: {df.riesgo_constitucional || 'BAJO'}
-                    </span>
-                  </div>
-                </div>
 
-                {/* Precedentes TC y Principios */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '20px' }}>
-                  <div style={{ background: 'rgba(14,19,32,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(168,85,247,0.25)' }}>
-                    <h4 style={{ color: '#c084fc', fontSize: '0.9rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      ⚖️ Principios Constitucionales
-                    </h4>
-                    <ul style={{ margin: 0, paddingLeft: '18px', color: '#e2e8f0', fontSize: '0.85rem', lineHeight: 1.6 }}>
-                      {(herm.principios_aplicables || []).map((p, i) => <li key={i}>{p}</li>)}
-                    </ul>
-                  </div>
+                    {/* Precedentes TC y Principios */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+                      <div style={{ background: 'rgba(14,19,32,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(168,85,247,0.25)' }}>
+                        <h4 style={{ color: '#c084fc', fontSize: '0.9rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          ⚖️ Principios Constitucionales
+                        </h4>
+                        <ul style={{ margin: 0, paddingLeft: '18px', color: '#e2e8f0', fontSize: '0.85rem', lineHeight: 1.6 }}>
+                          {(herm.principios_aplicables || []).map((p, i) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
 
-                  <div style={{ background: 'rgba(14,19,32,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(168,85,247,0.25)' }}>
-                    <h4 style={{ color: '#c084fc', fontSize: '0.9rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      🏛️ Precedentes TCP Relevantes
-                    </h4>
-                    <ul style={{ margin: 0, paddingLeft: '18px', color: '#e2e8f0', fontSize: '0.85rem', lineHeight: 1.6 }}>
-                      {(herm.precedentes_relevantes || []).map((p, i) => <li key={i}>{p}</li>)}
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Interpretación Sistemática */}
-                {herm.interpretacion_sistematica && (
-                  <div style={{ background: 'rgba(88,28,135,0.2)', border: '1px solid rgba(168,85,247,0.3)', padding: '16px', borderRadius: '12px', marginBottom: '20px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#c084fc', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>
-                      Interpretación Sistemática del Bloque Constitucional
+                      <div style={{ background: 'rgba(14,19,32,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(168,85,247,0.25)' }}>
+                        <h4 style={{ color: '#c084fc', fontSize: '0.9rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          🏛️ Precedentes TCP Relevantes
+                        </h4>
+                        <ul style={{ margin: 0, paddingLeft: '18px', color: '#e2e8f0', fontSize: '0.85rem', lineHeight: 1.6 }}>
+                          {(herm.precedentes_relevantes || []).map((p, i) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
                     </div>
-                    <p style={{ color: '#f3e8ff', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
-                      {herm.interpretacion_sistematica}
-                    </p>
-                  </div>
-                )}
 
-                {/* Recomendación */}
-                {df.recomendaciones && (
-                  <div style={{ background: 'rgba(14,22,42,0.7)', border: '1px solid rgba(251,191,36,0.3)', padding: '14px 18px', borderRadius: '12px', marginBottom: '24px' }}>
-                    <span style={{ color: '#fbbf24', fontWeight: 700, fontSize: '0.85rem' }}>💡 Recomendaciones de Técnica Legislativa: </span>
-                    <span style={{ color: '#fef3c7', fontSize: '0.85rem' }}>{df.recomendaciones}</span>
-                  </div>
-                )}
-
-                {/* Acción Siguiente */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
-                  <button
-                    onClick={handleConcentrador}
-                    disabled={isProcessing}
-                    className="btn-primary"
-                    style={{ fontSize: '1.05rem', padding: '14px 30px' }}
-                  >
-                    {isProcessing ? (
-                      <><Cpu size={20} className="pulse-active" /><span>Consolidando...</span></>
-                    ) : (
-                      <><Merge size={20} /><span>Continuar: Concentrador y Emisor (CrewAI)</span><ArrowRight size={18} /></>
+                    {/* Interpretación Sistemática */}
+                    {herm.interpretacion_sistematica && (
+                      <div style={{ background: 'rgba(88,28,135,0.2)', border: '1px solid rgba(168,85,247,0.3)', padding: '16px', borderRadius: '12px', marginBottom: '20px' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#c084fc', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>
+                          Interpretación Sistemática del Bloque Constitucional
+                        </div>
+                        <p style={{ color: '#f3e8ff', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
+                          {herm.interpretacion_sistematica}
+                        </p>
+                      </div>
                     )}
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-        </AgentResultCard>
+
+                    {/* Recomendación */}
+                    {df.recomendaciones && (
+                      <div style={{ background: 'rgba(14,22,42,0.7)', border: '1px solid rgba(251,191,36,0.3)', padding: '14px 18px', borderRadius: '12px', marginBottom: '24px' }}>
+                        <span style={{ color: '#fbbf24', fontWeight: 700, fontSize: '0.85rem' }}>💡 Recomendaciones de Técnica Legislativa: </span>
+                        <span style={{ color: '#fef3c7', fontSize: '0.85rem' }}>{df.recomendaciones}</span>
+                      </div>
+                    )}
+
+                    {/* Acción Siguiente */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
+                      <button
+                        onClick={handleConcentrador}
+                        disabled={isProcessing}
+                        className="btn-primary"
+                        style={{ fontSize: '1.05rem', padding: '14px 30px' }}
+                      >
+                        {isProcessing ? (
+                          <><Cpu size={20} className="pulse-active" /><span>Consolidando...</span></>
+                        ) : (
+                          <><Merge size={20} /><span>Continuar: Concentrador y Emisor (CrewAI)</span><ArrowRight size={18} /></>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -3398,209 +3428,209 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente Concentrador, Emisor y Notificador"
-          role="Síntesis de Expediente, Dictamen Formal en PDF & Despacho a Comisión"
-          theme="blue"
-          status="completed"
-          phaseLabel="Fase 3: Síntesis, Dictamen PDF & Despacho"
-          thinkingText="Expediente unificado consolidado, PDF formal generado y notificación despachada"
-          image="/robots/banner/emisor.png"
-          justificacion="Fe pública y debido proceso parlamentario: Consolida los dictámenes constitucionales y normativos, emite el reporte oficial con letra negra formal y despacha la notificación a los miembros de la comisión."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'consistencia' })}
-          prevLabel="Ver Consistencia Normativa"
-        >
-          {(() => {
-            const exp = concentradorData.expediente_consolidado || {};
-            const obsList = exp.observaciones_integradas || [];
-            const pdfFilename = pdfResult?.filename || concentradorData?.pdf?.filename || concentradorData?.pdf_filename || '';
-            const notifInfo = notificadorData || concentradorData?.notificacion_comision || {};
-            return (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ background: 'rgba(0,180,216,0.15)', borderRadius: '50%', padding: '12px' }}>
-                      <Merge size={32} color="#00B4D8" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                        Etapa 5 · Expediente Consolidado, Dictamen PDF & Notificación
-                      </div>
-                      <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                        Expediente Unificado y Despacho Formal
-                      </h3>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <span className="badge" style={{ background: 'rgba(0,180,216,0.15)', color: '#00B4D8', border: '1px solid #00B4D8' }}>
-                      {obsList.length} Observaciones
-                    </span>
-                    <span className="badge" style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid #38bdf8' }}>
-                      Riesgo: {exp.nivel_riesgo_general || 'MEDIO'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Resumen Ejecutivo */}
-                <div style={{ background: 'rgba(11,37,69,0.6)', border: '1px solid rgba(0,180,216,0.3)', padding: '18px', borderRadius: '12px', marginBottom: '20px' }}>
-                  <h4 style={{ color: '#00B4D8', fontSize: '0.9rem', marginBottom: '6px' }}>📋 Resumen Ejecutivo Consolidado</h4>
-                  <p style={{ color: '#d1fae5', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
-                    {exp.resumen_ejecutivo || 'Expediente consolidado con observaciones integradas de todos los agentes.'}
-                  </p>
-                </div>
-
-                {/* ── BLOQUE DE DICTAMEN FORMAL EN PDF (EMISOR INTEGRADO) ── */}
-                {pdfFilename && (
-                  <div style={{
-                    background: 'linear-gradient(145deg, rgba(15,23,42,0.9) 0%, rgba(20,35,60,0.85) 100%)',
-                    border: '1.5px solid rgba(56,189,248,0.35)',
-                    borderRadius: '12px',
-                    padding: '16px 20px',
-                    marginBottom: '20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '14px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <FileCheck size={28} color="#38bdf8" />
-                      <div>
-                        <div style={{ fontSize: '0.75rem', color: '#7dd3fc', fontWeight: 700, textTransform: 'uppercase' }}>
-                          Dictamen Formal Institucional Emitido (PDF Letra Negra)
+              agentName="Agente Concentrador, Emisor y Notificador"
+              role="Síntesis de Expediente, Dictamen Formal en PDF & Despacho a Comisión"
+              theme="blue"
+              status="completed"
+              phaseLabel="Fase 3: Síntesis, Dictamen PDF & Despacho"
+              thinkingText="Expediente unificado consolidado, PDF formal generado y notificación despachada"
+              image="/robots/logos/concentrador.jpeg"
+              justificacion="Fe pública y debido proceso parlamentario: Consolida los dictámenes constitucionales y normativos, emite el reporte oficial con letra negra formal y despacha la notificación a los miembros de la comisión."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'consistencia' })}
+              prevLabel="Ver Consistencia Normativa"
+            >
+              {(() => {
+                const exp = concentradorData.expediente_consolidado || {};
+                const obsList = exp.observaciones_integradas || [];
+                const pdfFilename = pdfResult?.filename || concentradorData?.pdf?.filename || concentradorData?.pdf_filename || '';
+                const notifInfo = notificadorData || concentradorData?.notificacion_comision || {};
+                return (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ background: 'rgba(0,180,216,0.15)', borderRadius: '50%', padding: '12px' }}>
+                          <Merge size={32} color="#00B4D8" />
                         </div>
-                        <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.9rem', marginTop: '2px' }}>
-                          {pdfFilename}
-                        </div>
-                      </div>
-                    </div>
-                    <a
-                      href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfFilename}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-secondary"
-                      style={{ fontSize: '0.88rem', padding: '9px 18px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
-                    >
-                      <Download size={16} />
-                      <span>Descargar Dictamen Formal (PDF)</span>
-                    </a>
-                  </div>
-                )}
-
-                {/* ── BLOQUE DE DESPACHO / NOTIFICACIÓN A COMISIÓN (NOTIFICADOR INTEGRADO) ── */}
-                {notifInfo && (
-                  <div style={{
-                    background: 'rgba(15,23,42,0.7)',
-                    border: '1px solid rgba(168,85,247,0.3)',
-                    borderRadius: '12px',
-                    padding: '16px 20px',
-                    marginBottom: '20px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <Mail size={22} color="#a78bfa" />
                         <div>
-                          <div style={{ color: '#ffffff', fontWeight: 800, fontSize: '0.92rem' }}>
-                            Notificación Oficial Despachada a la Comisión
+                          <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                            Etapa 5 · Expediente Consolidado, Dictamen PDF & Notificación
                           </div>
-                          <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
-                            {notifInfo.comision || comisionData?.comision_principal || 'Comisión Asignada'} · {notifInfo.total_destinatarios || (notifInfo.miembros_notificados?.length) || 1} destinatarios notificados
-                          </div>
+                          <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
+                            Expediente Unificado y Despacho Formal
+                          </h3>
                         </div>
                       </div>
-                      {notifInfo.html_preview && (
-                        <button
-                          type="button"
-                          onClick={() => updateActiveSession({ showEmailPreview: !showEmailPreview })}
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <span className="badge" style={{ background: 'rgba(0,180,216,0.15)', color: '#00B4D8', border: '1px solid #00B4D8' }}>
+                          {obsList.length} Observaciones
+                        </span>
+                        <span className="badge" style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid #38bdf8' }}>
+                          Riesgo: {exp.nivel_riesgo_general || 'MEDIO'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Resumen Ejecutivo */}
+                    <div style={{ background: 'rgba(11,37,69,0.6)', border: '1px solid rgba(0,180,216,0.3)', padding: '18px', borderRadius: '12px', marginBottom: '20px' }}>
+                      <h4 style={{ color: '#00B4D8', fontSize: '0.9rem', marginBottom: '6px' }}>📋 Resumen Ejecutivo Consolidado</h4>
+                      <p style={{ color: '#d1fae5', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
+                        {exp.resumen_ejecutivo || 'Expediente consolidado con observaciones integradas de todos los agentes.'}
+                      </p>
+                    </div>
+
+                    {/* ── BLOQUE DE DICTAMEN FORMAL EN PDF (EMISOR INTEGRADO) ── */}
+                    {pdfFilename && (
+                      <div style={{
+                        background: 'linear-gradient(145deg, rgba(15,23,42,0.9) 0%, rgba(20,35,60,0.85) 100%)',
+                        border: '1.5px solid rgba(56,189,248,0.35)',
+                        borderRadius: '12px',
+                        padding: '16px 20px',
+                        marginBottom: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '14px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <FileCheck size={28} color="#38bdf8" />
+                          <div>
+                            <div style={{ fontSize: '0.75rem', color: '#7dd3fc', fontWeight: 700, textTransform: 'uppercase' }}>
+                              Dictamen Formal Institucional Emitido (PDF Letra Negra)
+                            </div>
+                            <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.9rem', marginTop: '2px' }}>
+                              {pdfFilename}
+                            </div>
+                          </div>
+                        </div>
+                        <a
+                          href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfFilename}`}
+                          target="_blank"
+                          rel="noreferrer"
                           className="btn-secondary"
-                          style={{ padding: '6px 14px', fontSize: '0.78rem' }}
+                          style={{ fontSize: '0.88rem', padding: '9px 18px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
                         >
-                          {showEmailPreview ? 'Ocultar Correo' : 'Ver Vista Previa del Correo'}
-                        </button>
-                      )}
-                    </div>
-                    {showEmailPreview && notifInfo.html_preview && (
-                      <div style={{ marginTop: '12px', maxHeight: '420px', overflowY: 'auto', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.2)' }}>
-                        <iframe
-                          srcDoc={notifInfo.html_preview}
-                          title="Vista previa del correo de comisión"
-                          style={{ width: '100%', height: '400px', border: 'none', display: 'block' }}
-                          sandbox="allow-same-origin"
-                        />
+                          <Download size={16} />
+                          <span>Descargar Dictamen Formal (PDF)</span>
+                        </a>
                       </div>
                     )}
-                  </div>
-                )}
 
-                {/* Lista de Observaciones Integradas */}
-                {obsList.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>
-                      Observaciones Integradas con Trazabilidad:
-                    </div>
-                    {obsList.map((o, idx) => {
-                      const artLabel = o.articulo_afectado || o.articulo || '';
-                      const textoObs = o.cita_original || (typeof o.contenido === 'string' ? o.contenido : o.fundamento || (o.contenido ? JSON.stringify(o.contenido) : 'Observación técnica'));
-                      const fuenteLabel = o.agente_origen || o.fuente || (Array.isArray(o.fuentes) ? o.fuentes.join(', ') : 'Agente');
-                      return (
-                        <div key={idx} style={{
-                          background: 'rgba(15,23,42,0.7)',
-                          border: '1px solid rgba(148,163,184,0.2)',
-                          padding: '12px 16px',
-                          borderRadius: '10px',
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px'
-                        }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
-                              <span style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem' }}>
-                                [{o.tipo || 'OBS'}]
-                              </span>
-                              {artLabel && artLabel !== 'N/A' && (
-                                <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.82rem' }}>
-                                  {artLabel}
-                                </span>
-                              )}
-                              {o.riesgo && (
-                                <span className="badge" style={{
-                                  fontSize: '0.65rem', padding: '1px 6px',
-                                  background: (o.riesgo === 'bloqueante' || o.riesgo === 'grave') ? 'rgba(239,68,68,0.2)' : 'rgba(234,179,8,0.2)',
-                                  color: (o.riesgo === 'bloqueante' || o.riesgo === 'grave') ? '#f87171' : '#facc15'
-                                }}>
-                                  {o.riesgo}
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ color: '#94a3b8', fontSize: '0.82rem', lineHeight: 1.4 }}>
-                              {String(textoObs).slice(0, 200)}{String(textoObs).length > 200 ? '...' : ''}
+                    {/* ── BLOQUE DE DESPACHO / NOTIFICACIÓN A COMISIÓN (NOTIFICADOR INTEGRADO) ── */}
+                    {notifInfo && (
+                      <div style={{
+                        background: 'rgba(15,23,42,0.7)',
+                        border: '1px solid rgba(168,85,247,0.3)',
+                        borderRadius: '12px',
+                        padding: '16px 20px',
+                        marginBottom: '20px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Mail size={22} color="#a78bfa" />
+                            <div>
+                              <div style={{ color: '#ffffff', fontWeight: 800, fontSize: '0.92rem' }}>
+                                Notificación Oficial Despachada a la Comisión
+                              </div>
+                              <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
+                                {notifInfo.comision || comisionData?.comision_principal || 'Comisión Asignada'} · {notifInfo.total_destinatarios || (notifInfo.miembros_notificados?.length) || 1} destinatarios notificados
+                              </div>
                             </div>
                           </div>
-                          <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(56,189,248,0.15)', color: '#38bdf8', flexShrink: 0 }}>
-                            {fuenteLabel}
-                          </span>
+                          {notifInfo.html_preview && (
+                            <button
+                              type="button"
+                              onClick={() => updateActiveSession({ showEmailPreview: !showEmailPreview })}
+                              className="btn-secondary"
+                              style={{ padding: '6px 14px', fontSize: '0.78rem' }}
+                            >
+                              {showEmailPreview ? 'Ocultar Correo' : 'Ver Vista Previa del Correo'}
+                            </button>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Acción Siguiente */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
-                  <button
-                    onClick={handleSecretario}
-                    disabled={isProcessing}
-                    className="btn-primary"
-                    style={{ fontSize: '1.05rem', padding: '14px 30px' }}
-                  >
-                    {isProcessing ? (
-                      <><Cpu size={20} className="pulse-active" /><span>Registrando debate...</span></>
-                    ) : (
-                      <><MessagesSquare size={20} /><span>Continuar: Debate Parlamentario (Secretario)</span><ArrowRight size={18} /></>
+                        {showEmailPreview && notifInfo.html_preview && (
+                          <div style={{ marginTop: '12px', maxHeight: '420px', overflowY: 'auto', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.2)' }}>
+                            <iframe
+                              srcDoc={notifInfo.html_preview}
+                              title="Vista previa del correo de comisión"
+                              style={{ width: '100%', height: '400px', border: 'none', display: 'block' }}
+                              sandbox="allow-same-origin"
+                            />
+                          </div>
+                        )}
+                      </div>
                     )}
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-        </AgentResultCard>
+
+                    {/* Lista de Observaciones Integradas */}
+                    {obsList.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>
+                          Observaciones Integradas con Trazabilidad:
+                        </div>
+                        {obsList.map((o, idx) => {
+                          const artLabel = o.articulo_afectado || o.articulo || '';
+                          const textoObs = o.cita_original || (typeof o.contenido === 'string' ? o.contenido : o.fundamento || (o.contenido ? JSON.stringify(o.contenido) : 'Observación técnica'));
+                          const fuenteLabel = o.agente_origen || o.fuente || (Array.isArray(o.fuentes) ? o.fuentes.join(', ') : 'Agente');
+                          return (
+                            <div key={idx} style={{
+                              background: 'rgba(15,23,42,0.7)',
+                              border: '1px solid rgba(148,163,184,0.2)',
+                              padding: '12px 16px',
+                              borderRadius: '10px',
+                              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px'
+                            }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                                  <span style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem' }}>
+                                    [{o.tipo || 'OBS'}]
+                                  </span>
+                                  {artLabel && artLabel !== 'N/A' && (
+                                    <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '0.82rem' }}>
+                                      {artLabel}
+                                    </span>
+                                  )}
+                                  {o.riesgo && (
+                                    <span className="badge" style={{
+                                      fontSize: '0.65rem', padding: '1px 6px',
+                                      background: (o.riesgo === 'bloqueante' || o.riesgo === 'grave') ? 'rgba(239,68,68,0.2)' : 'rgba(234,179,8,0.2)',
+                                      color: (o.riesgo === 'bloqueante' || o.riesgo === 'grave') ? '#f87171' : '#facc15'
+                                    }}>
+                                      {o.riesgo}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ color: '#94a3b8', fontSize: '0.82rem', lineHeight: 1.4 }}>
+                                  {String(textoObs).slice(0, 200)}{String(textoObs).length > 200 ? '...' : ''}
+                                </div>
+                              </div>
+                              <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(56,189,248,0.15)', color: '#38bdf8', flexShrink: 0 }}>
+                                {fuenteLabel}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Acción Siguiente */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
+                      <button
+                        onClick={handleSecretario}
+                        disabled={isProcessing}
+                        className="btn-primary"
+                        style={{ fontSize: '1.05rem', padding: '14px 30px' }}
+                      >
+                        {isProcessing ? (
+                          <><Cpu size={20} className="pulse-active" /><span>Registrando debate...</span></>
+                        ) : (
+                          <><MessagesSquare size={20} /><span>Continuar: Debate Parlamentario (Secretario)</span><ArrowRight size={18} /></>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -3617,132 +3647,132 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente Secretario de Cámara"
-          role="Registro de Actas de Debate Parlamentario y Votaciones"
-          theme="blue"
-          status="completed"
-          phaseLabel="Fase 4: Debate Plenario"
-          thinkingText="Acta parlamentaria y votaciones nominales registradas"
-          image="/robots/logos/verificadorconstitucional.jpg"
-          justificacion="Transparencia y publicidad legislativa: Registro fidedigno de intervenciones de legisladores, votaciones en grande y detalle, y acuerdos tomados en plenario."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'concentrador_crew' })}
-          prevLabel="Ver Expediente Concentrador"
-        >
-          {(() => {
-            const acta = secretarioData.acta_debate || {};
-            const votaciones = acta.votaciones || [];
-            return (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ background: 'rgba(0,180,216,0.15)', borderRadius: '50%', padding: '12px' }}>
-                      <MessagesSquare size={32} color="#00B4D8" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                        Etapa 5 · Acta de Debate Parlamentario
-                      </div>
-                      <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                        {acta.camara || 'Cámara de Diputados'} — Sesión #{acta.sesion_numero || 1}
-                      </h3>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <span className="badge badge-blue">
-                      Fecha: {acta.fecha || new Date().toISOString().split('T')[0]}
-                    </span>
-                    <span className="badge badge-green">
-                      Estado: {acta.estado_siguiente || 'EN_TRAMITE_BICAMERAL'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Tabla de Votaciones */}
-                <div style={{ background: 'rgba(15,23,42,0.85)', padding: '18px', borderRadius: '12px', border: '1px solid rgba(0,180,216,0.25)', marginBottom: '20px' }}>
-                  <h4 style={{ color: '#00B4D8', fontSize: '0.95rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    🗳️ Resultados de Votación Nominal
-                  </h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
-                    {votaciones.map((v, idx) => (
-                      <div key={idx} style={{
-                        background: 'rgba(30,41,59,0.7)',
-                        padding: '14px',
-                        borderRadius: '10px',
-                        border: '1px solid rgba(148,163,184,0.2)'
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                          <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.9rem' }}>{v.articulo}</span>
-                          <span className="badge badge-green">{v.votacion}</span>
+              agentName="Agente Secretario de Cámara"
+              role="Registro de Actas de Debate Parlamentario y Votaciones"
+              theme="blue"
+              status="completed"
+              phaseLabel="Fase 4: Debate Plenario"
+              thinkingText="Acta parlamentaria y votaciones nominales registradas"
+              image="/robots/logos/agente_secretario.jpeg"
+              justificacion="Transparencia y publicidad legislativa: Registro fidedigno de intervenciones de legisladores, votaciones en grande y detalle, y acuerdos tomados en plenario."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'concentrador_crew' })}
+              prevLabel="Ver Expediente Concentrador"
+            >
+              {(() => {
+                const acta = secretarioData.acta_debate || {};
+                const votaciones = acta.votaciones || [];
+                return (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ background: 'rgba(0,180,216,0.15)', borderRadius: '50%', padding: '12px' }}>
+                          <MessagesSquare size={32} color="#00B4D8" />
                         </div>
-                        <div style={{ display: 'flex', gap: '12px', fontSize: '0.82rem', color: '#cbd5e1' }}>
-                          <span>A favor: <strong style={{ color: '#8AC926' }}>{v.favor}</strong></span>
-                          <span>En contra: <strong style={{ color: '#f87171' }}>{v.contra}</strong></span>
-                          <span>Abstención: <strong style={{ color: '#F4A261' }}>{v.abstenciones}</strong></span>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                            Etapa 5 · Acta de Debate Parlamentario
+                          </div>
+                          <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
+                            {acta.camara || 'Cámara de Diputados'} — Sesión #{acta.sesion_numero || 1}
+                          </h3>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Acuerdos */}
-                {acta.acuerdos && acta.acuerdos.length > 0 && (
-                  <div style={{ background: 'rgba(14,22,42,0.7)', padding: '14px 18px', borderRadius: '12px', border: '1px solid rgba(56,189,248,0.25)', marginBottom: '24px' }}>
-                    <div style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' }}>
-                      Acuerdos del Plenario:
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <span className="badge badge-blue">
+                          Fecha: {acta.fecha || new Date().toISOString().split('T')[0]}
+                        </span>
+                        <span className="badge badge-green">
+                          Estado: {acta.estado_siguiente || 'EN_TRAMITE_BICAMERAL'}
+                        </span>
+                      </div>
                     </div>
-                    <ul style={{ margin: 0, paddingLeft: '18px', color: '#e2e8f0', fontSize: '0.85rem' }}>
-                      {acta.acuerdos.map((a, i) => <li key={i}>{a}</li>)}
-                    </ul>
-                  </div>
-                )}
 
-                {/* Acción Siguiente */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
-                  {/* Módulo de voz: Secretario de Cámara (Lectura de Acta y Subir Correcciones) */}
+                    {/* Tabla de Votaciones */}
+                    <div style={{ background: 'rgba(15,23,42,0.85)', padding: '18px', borderRadius: '12px', border: '1px solid rgba(0,180,216,0.25)', marginBottom: '20px' }}>
+                      <h4 style={{ color: '#00B4D8', fontSize: '0.95rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        🗳️ Resultados de Votación Nominal
+                      </h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+                        {votaciones.map((v, idx) => (
+                          <div key={idx} style={{
+                            background: 'rgba(30,41,59,0.7)',
+                            padding: '14px',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(148,163,184,0.2)'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                              <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.9rem' }}>{v.articulo}</span>
+                              <span className="badge badge-green">{v.votacion}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '12px', fontSize: '0.82rem', color: '#cbd5e1' }}>
+                              <span>A favor: <strong style={{ color: '#8AC926' }}>{v.favor}</strong></span>
+                              <span>En contra: <strong style={{ color: '#f87171' }}>{v.contra}</strong></span>
+                              <span>Abstención: <strong style={{ color: '#F4A261' }}>{v.abstenciones}</strong></span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
 
-                  <div style={{ marginBottom: '24px', width: '100%' }}>
-
-                    <AgentVoiceModule
-
-                      agentId="secretario"
-
-                      agentLabel="Agente Secretario de Cámara"
-
-                      primaryColor="#1E40AF"
-
-                      sesionId={fase1Data?.sesion_id || null}
-
-                      resultData={secretarioData}
-
-                      speechHook={speechHook}
-
-                      onAgregarCorreccion={(corr) => {
-
-                        appendLog('secretario', 'CORRECCION', `Corrección registrada para ${corr.articulo}: ${corr.texto}`);
-
-                      }}
-
-                    />
-
-                  </div>
-
-                  <button
-                    onClick={handleBicameral}
-                    disabled={isProcessing}
-                    className="btn-primary"
-                    style={{ fontSize: '1.05rem', padding: '14px 30px' }}
-                  >
-                    {isProcessing ? (
-                      <><Cpu size={20} className="pulse-active" /><span>Comparando cámaras...</span></>
-                    ) : (
-                      <><GitBranch size={20} /><span>Continuar: Trámite Bicameral</span><ArrowRight size={18} /></>
+                    {/* Acuerdos */}
+                    {acta.acuerdos && acta.acuerdos.length > 0 && (
+                      <div style={{ background: 'rgba(14,22,42,0.7)', padding: '14px 18px', borderRadius: '12px', border: '1px solid rgba(56,189,248,0.25)', marginBottom: '24px' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' }}>
+                          Acuerdos del Plenario:
+                        </div>
+                        <ul style={{ margin: 0, paddingLeft: '18px', color: '#e2e8f0', fontSize: '0.85rem' }}>
+                          {acta.acuerdos.map((a, i) => <li key={i}>{a}</li>)}
+                        </ul>
+                      </div>
                     )}
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-        </AgentResultCard>
+
+                    {/* Acción Siguiente */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
+                      {/* Módulo de voz: Secretario de Cámara (Lectura de Acta y Subir Correcciones) */}
+
+                      <div style={{ marginBottom: '24px', width: '100%' }}>
+
+                        <AgentVoiceModule
+
+                          agentId="secretario"
+
+                          agentLabel="Agente Secretario de Cámara"
+
+                          primaryColor="#1E40AF"
+
+                          sesionId={fase1Data?.sesion_id || null}
+
+                          resultData={secretarioData}
+
+                          speechHook={speechHook}
+
+                          onAgregarCorreccion={(corr) => {
+
+                            appendLog('secretario', 'CORRECCION', `Corrección registrada para ${corr.articulo}: ${corr.texto}`);
+
+                          }}
+
+                        />
+
+                      </div>
+
+                      <button
+                        onClick={handleBicameral}
+                        disabled={isProcessing}
+                        className="btn-primary"
+                        style={{ fontSize: '1.05rem', padding: '14px 30px' }}
+                      >
+                        {isProcessing ? (
+                          <><Cpu size={20} className="pulse-active" /><span>Comparando cámaras...</span></>
+                        ) : (
+                          <><GitBranch size={20} /><span>Continuar: Trámite Bicameral</span><ArrowRight size={18} /></>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -3759,171 +3789,171 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente Comunicación Bicameral"
-          role="Coordinación y Reconciliación entre Cámaras Legislativas"
-          theme="sky"
-          status="completed"
-          phaseLabel="Fase 5: Bicameral"
-          thinkingText="Cotejo de versiones entre Cámaras completado"
-          image="/robots/banner/normativa.png"
-          justificacion="Art. 163 CPE: Reconciliación del trámite bicameral entre la Cámara de Origen y la Cámara Revisora para sanción legislativa."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'secretario' })}
-          prevLabel="Ver Acta de Debate (Secretario)"
-        >
-          {(() => {
-            const ciclo = bicameralData.ciclo_bicameral || {};
-            const requiereConferencia = (ciclo.ruta_siguiente || 'SANCION_DIRECTA') !== 'SANCION_DIRECTA';
-            return (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ background: 'rgba(14,165,233,0.2)', borderRadius: '50%', padding: '12px' }}>
-                      <GitBranch size={32} color="#38bdf8" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                        Etapa 6 · Trámite Bicameral
+              agentName="Agente Comunicación Bicameral"
+              role="Coordinación y Reconciliación entre Cámaras Legislativas"
+              theme="sky"
+              status="completed"
+              phaseLabel="Fase 5: Bicameral"
+              thinkingText="Cotejo de versiones entre Cámaras completado"
+              image="/robots/logos/agente_bicamaral.jpeg"
+              justificacion="Art. 163 CPE: Reconciliación del trámite bicameral entre la Cámara de Origen y la Cámara Revisora para sanción legislativa."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'secretario' })}
+              prevLabel="Ver Acta de Debate (Secretario)"
+            >
+              {(() => {
+                const ciclo = bicameralData.ciclo_bicameral || {};
+                const requiereConferencia = (ciclo.ruta_siguiente || 'SANCION_DIRECTA') !== 'SANCION_DIRECTA';
+                return (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ background: 'rgba(14,165,233,0.2)', borderRadius: '50%', padding: '12px' }}>
+                          <GitBranch size={32} color="#38bdf8" />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                            Etapa 6 · Trámite Bicameral
+                          </div>
+                          <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
+                            Reconciliación de Cámaras Legislativas
+                          </h3>
+                        </div>
                       </div>
-                      <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                        Reconciliación de Cámaras Legislativas
-                      </h3>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <span className="badge" style={{ background: 'rgba(14,165,233,0.2)', color: '#38bdf8', border: '1px solid #0ea5e9' }}>
+                          Cambios: {ciclo.clasificacion_cambios || 'MENORES'}
+                        </span>
+                        <span className={requiereConferencia ? 'badge badge-gold' : 'badge badge-green'}>
+                          Ruta: {ciclo.ruta_siguiente || 'SANCION_DIRECTA'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <span className="badge" style={{ background: 'rgba(14,165,233,0.2)', color: '#38bdf8', border: '1px solid #0ea5e9' }}>
-                      Cambios: {ciclo.clasificacion_cambios || 'MENORES'}
-                    </span>
-                    <span className={requiereConferencia ? 'badge badge-gold' : 'badge badge-green'}>
-                      Ruta: {ciclo.ruta_siguiente || 'SANCION_DIRECTA'}
-                    </span>
-                  </div>
-                </div>
 
-                <div style={{ background: 'rgba(12,74,110,0.25)', border: '1px solid rgba(14,165,233,0.3)', padding: '18px', borderRadius: '12px', marginBottom: '20px' }}>
-                  <h4 style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '6px' }}>🔍 Justificación Técnica del Trámite</h4>
-                  <p style={{ color: '#e0f2fe', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
-                    {ciclo.justificacion || 'Trámite bicameral completado. Las versiones de ambas cámaras convergen favorablemente.'}
-                  </p>
-                </div>
+                    <div style={{ background: 'rgba(12,74,110,0.25)', border: '1px solid rgba(14,165,233,0.3)', padding: '18px', borderRadius: '12px', marginBottom: '20px' }}>
+                      <h4 style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '6px' }}>🔍 Justificación Técnica del Trámite</h4>
+                      <p style={{ color: '#e0f2fe', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
+                        {ciclo.justificacion || 'Trámite bicameral completado. Las versiones de ambas cámaras convergen favorablemente.'}
+                      </p>
+                    </div>
 
-                {/* Confirmación de Aprobación — solo visible para Senador/Diputado */}
-                {(currentUser?.rol === 'Senador' || currentUser?.rol === 'Diputado') && (
-                  <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.35)', padding: '18px', borderRadius: '12px', marginBottom: '20px' }}>
-                    <h4 style={{ color: '#34d399', fontSize: '0.95rem', margin: '0 0 6px 0' }}>
-                      ✅ Confirmación de Aprobación — Cámara de {currentUser.rol}s
-                    </h4>
-                    <p style={{ color: '#d1fae5', fontSize: '0.85rem', lineHeight: 1.6, margin: '0 0 14px 0' }}>
-                      Al confirmar, se notificará por correo a todos los usuarios de la Cámara de{' '}
-                      {currentUser.rol === 'Senador' ? 'Diputados' : 'Senadores'}, adjuntando el PDF del
-                      proyecto de ley y el informe de constitucionalidad y consistencia normativa.
-                    </p>
+                    {/* Confirmación de Aprobación — solo visible para Senador/Diputado */}
+                    {(currentUser?.rol === 'Senador' || currentUser?.rol === 'Diputado') && (
+                      <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.35)', padding: '18px', borderRadius: '12px', marginBottom: '20px' }}>
+                        <h4 style={{ color: '#34d399', fontSize: '0.95rem', margin: '0 0 6px 0' }}>
+                          ✅ Confirmación de Aprobación — Cámara de {currentUser.rol}s
+                        </h4>
+                        <p style={{ color: '#d1fae5', fontSize: '0.85rem', lineHeight: 1.6, margin: '0 0 14px 0' }}>
+                          Al confirmar, se notificará por correo a todos los usuarios de la Cámara de{' '}
+                          {currentUser.rol === 'Senador' ? 'Diputados' : 'Senadores'}, adjuntando el PDF del
+                          proyecto de ley y el informe de constitucionalidad y consistencia normativa.
+                        </p>
 
-                    {!confirmacionBicameralData ? (
-                      <button
-                        onClick={handleConfirmarAprobacionBicameral}
-                        disabled={isProcessing}
-                        className="btn-primary"
-                        style={{ background: '#10B981', borderColor: '#10B981' }}
-                      >
-                        {isProcessing ? (
-                          <><Cpu size={18} className="pulse-active" /><span>Notificando...</span></>
-                        ) : (
-                          <><Mail size={18} /><span>Confirmamos la Aprobación</span></>
-                        )}
-                      </button>
-                    ) : (
-                      <div style={{
-                        background: confirmacionBicameralData.status === 'sin_destinatarios' ? 'rgba(244,162,97,0.15)' : 'rgba(16,185,129,0.15)',
-                        border: `1px solid ${confirmacionBicameralData.status === 'sin_destinatarios' ? 'rgba(244,162,97,0.4)' : 'rgba(16,185,129,0.4)'}`,
-                        borderRadius: '10px', padding: '14px 16px',
-                      }}>
-                        {confirmacionBicameralData.status === 'sin_destinatarios' ? (
-                          <p style={{ margin: 0, color: '#F4A261', fontSize: '0.85rem' }}>
-                            ⚠️ No hay usuarios con rol "{confirmacionBicameralData.camara_destino}" registrados para notificar.
-                          </p>
-                        ) : (
-                          <>
-                            <p style={{ margin: '0 0 6px 0', color: '#34d399', fontSize: '0.88rem', fontWeight: 700 }}>
-                              📧 Notificación enviada a la Cámara de {confirmacionBicameralData.camara_destino}s
-                            </p>
-                            <p style={{ margin: 0, color: '#d1fae5', fontSize: '0.82rem' }}>
-                              {confirmacionBicameralData.total_destinatarios} destinatario(s): {(confirmacionBicameralData.destinatarios || []).join(', ')}
-                            </p>
-                            {confirmacionBicameralData.envio?.metodo && (
-                              <p style={{ margin: '6px 0 0 0', color: '#a7f3d0', fontSize: '0.75rem' }}>
-                                Método de despacho: {confirmacionBicameralData.envio.metodo}
-                              </p>
+                        {!confirmacionBicameralData ? (
+                          <button
+                            onClick={handleConfirmarAprobacionBicameral}
+                            disabled={isProcessing}
+                            className="btn-primary"
+                            style={{ background: '#10B981', borderColor: '#10B981' }}
+                          >
+                            {isProcessing ? (
+                              <><Cpu size={18} className="pulse-active" /><span>Notificando...</span></>
+                            ) : (
+                              <><Mail size={18} /><span>Confirmamos la Aprobación</span></>
                             )}
-                          </>
+                          </button>
+                        ) : (
+                          <div style={{
+                            background: confirmacionBicameralData.status === 'sin_destinatarios' ? 'rgba(244,162,97,0.15)' : 'rgba(16,185,129,0.15)',
+                            border: `1px solid ${confirmacionBicameralData.status === 'sin_destinatarios' ? 'rgba(244,162,97,0.4)' : 'rgba(16,185,129,0.4)'}`,
+                            borderRadius: '10px', padding: '14px 16px',
+                          }}>
+                            {confirmacionBicameralData.status === 'sin_destinatarios' ? (
+                              <p style={{ margin: 0, color: '#F4A261', fontSize: '0.85rem' }}>
+                                ⚠️ No hay usuarios con rol "{confirmacionBicameralData.camara_destino}" registrados para notificar.
+                              </p>
+                            ) : (
+                              <>
+                                <p style={{ margin: '0 0 6px 0', color: '#34d399', fontSize: '0.88rem', fontWeight: 700 }}>
+                                  📧 Notificación enviada a la Cámara de {confirmacionBicameralData.camara_destino}s
+                                </p>
+                                <p style={{ margin: 0, color: '#d1fae5', fontSize: '0.82rem' }}>
+                                  {confirmacionBicameralData.total_destinatarios} destinatario(s): {(confirmacionBicameralData.destinatarios || []).join(', ')}
+                                </p>
+                                {confirmacionBicameralData.envio?.metodo && (
+                                  <p style={{ margin: '6px 0 0 0', color: '#a7f3d0', fontSize: '0.75rem' }}>
+                                    Método de despacho: {confirmacionBicameralData.envio.metodo}
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
+
+                    {/* Acción Siguiente: bloqueada si el trámite requiere Conferencia Bicameral */}
+                    {/* Módulo de voz: Comunicación Bicameral por Correo y Audio */}
+
+                    <div style={{ marginBottom: '24px' }}>
+
+                      <AgentVoiceModule
+
+                        agentId="bicameral"
+
+                        agentLabel="Agente Comunicación Bicameral"
+
+                        primaryColor="#7DD3FC"
+
+                        sesionId={fase1Data?.sesion_id || null}
+
+                        resultData={bicameralData}
+
+                        speechHook={speechHook}
+
+                        emailDestino={currentUser?.email || activeSession.emailAutor}
+
+                        onVoiceAction={(action) => {
+
+                          if (action?.type === 'notificacion_enviada') {
+
+                            appendLog('bicameral', 'AUDIO_CORREO', `Mensaje de audio y dictamen enviado a la Cámara Revisora.`);
+
+                          }
+
+                        }}
+
+                      />
+
+                    </div>
+
+                    {requiereConferencia ? (
+                      <div style={{ background: 'rgba(244,162,97,0.12)', border: '1px solid rgba(244,162,97,0.4)', padding: '18px', borderRadius: '12px' }}>
+                        <h4 style={{ color: '#F4A261', fontSize: '0.95rem', margin: '0 0 6px 0' }}>⚠️ Conferencia Bicameral Requerida</h4>
+                        <p style={{ color: '#FDE9D8', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
+                          Los cambios detectados son MAYORES. El proyecto no puede pasar a Veto/Promulgación
+                          hasta resolver la conferencia entre ambas cámaras (Art. 163 CPE).
+                        </p>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
+                        <button
+                          onClick={handleVetoPromulgacion}
+                          disabled={isProcessing}
+                          className="btn-primary"
+                          style={{ fontSize: '1.05rem', padding: '14px 30px' }}
+                        >
+                          {isProcessing ? (
+                            <><Cpu size={20} className="pulse-active" /><span>Evaluando veto...</span></>
+                          ) : (
+                            <><Gavel size={20} /><span>Continuar: Evaluación Veto / Promulgación</span><ArrowRight size={18} /></>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-
-                {/* Acción Siguiente: bloqueada si el trámite requiere Conferencia Bicameral */}
-                {/* Módulo de voz: Comunicación Bicameral por Correo y Audio */}
-
-                <div style={{ marginBottom: '24px' }}>
-
-                  <AgentVoiceModule
-
-                    agentId="bicameral"
-
-                    agentLabel="Agente Comunicación Bicameral"
-
-                    primaryColor="#7DD3FC"
-
-                    sesionId={fase1Data?.sesion_id || null}
-
-                    resultData={bicameralData}
-
-                    speechHook={speechHook}
-
-                    emailDestino={currentUser?.email || activeSession.emailAutor}
-
-                    onVoiceAction={(action) => {
-
-                      if (action?.type === 'notificacion_enviada') {
-
-                        appendLog('bicameral', 'AUDIO_CORREO', `Mensaje de audio y dictamen enviado a la Cámara Revisora.`);
-
-                      }
-
-                    }}
-
-                  />
-
-                </div>
-
-                {requiereConferencia ? (
-                  <div style={{ background: 'rgba(244,162,97,0.12)', border: '1px solid rgba(244,162,97,0.4)', padding: '18px', borderRadius: '12px' }}>
-                    <h4 style={{ color: '#F4A261', fontSize: '0.95rem', margin: '0 0 6px 0' }}>⚠️ Conferencia Bicameral Requerida</h4>
-                    <p style={{ color: '#FDE9D8', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
-                      Los cambios detectados son MAYORES. El proyecto no puede pasar a Veto/Promulgación
-                      hasta resolver la conferencia entre ambas cámaras (Art. 163 CPE).
-                    </p>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
-                    <button
-                      onClick={handleVetoPromulgacion}
-                      disabled={isProcessing}
-                      className="btn-primary"
-                      style={{ fontSize: '1.05rem', padding: '14px 30px' }}
-                    >
-                      {isProcessing ? (
-                        <><Cpu size={20} className="pulse-active" /><span>Evaluando veto...</span></>
-                      ) : (
-                        <><Gavel size={20} /><span>Continuar: Evaluación Veto / Promulgación</span><ArrowRight size={18} /></>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </AgentResultCard>
+                );
+              })()}
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -3940,309 +3970,309 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente Veto y Promulgación"
-          role="Evaluación Estratégica Multicriterio del Órgano Ejecutivo"
-          theme="blue"
-          status="completed"
-          phaseLabel="Fase 5: Decisión Ejecutiva"
-          thinkingText="Evaluación estratégica multicriterio emitida"
-          image="/robots/banner/normativa.png"
-          justificacion="Art. 163-167 CPE: Control político y constitucional previo a la promulgación presidencial. Dictamen sobre viabilidad política, legalidad, factibilidad y sostenibilidad."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'bicameral' })}
-          prevLabel="Ver Trámite Bicameral"
-        >
-          {(() => {
-            const ev = vetoPromulgacionData.evaluacion_veto || {};
-            const crit = ev.criterios || {};
-            const esPromulgar = ev.decision === 'PROMULGAR';
-            return (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ background: esPromulgar ? 'rgba(138,201,38,0.2)' : 'rgba(231,111,81,0.2)', borderRadius: '50%', padding: '12px' }}>
-                      <Gavel size={32} color={esPromulgar ? '#8AC926' : '#E76F51'} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                        Etapa 7 · Decisión Estratégica Ejecutiva
+              agentName="Agente Veto y Promulgación"
+              role="Evaluación Estratégica Multicriterio del Órgano Ejecutivo"
+              theme="blue"
+              status="completed"
+              phaseLabel="Fase 5: Decisión Ejecutiva"
+              thinkingText="Evaluación estratégica multicriterio emitida"
+              image="/robots/logos/agente_veto.jpeg"
+              justificacion="Art. 163-167 CPE: Control político y constitucional previo a la promulgación presidencial. Dictamen sobre viabilidad política, legalidad, factibilidad y sostenibilidad."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'bicameral' })}
+              prevLabel="Ver Trámite Bicameral"
+            >
+              {(() => {
+                const ev = vetoPromulgacionData.evaluacion_veto || {};
+                const crit = ev.criterios || {};
+                const esPromulgar = ev.decision === 'PROMULGAR';
+                return (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ background: esPromulgar ? 'rgba(138,201,38,0.2)' : 'rgba(231,111,81,0.2)', borderRadius: '50%', padding: '12px' }}>
+                          <Gavel size={32} color={esPromulgar ? '#8AC926' : '#E76F51'} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                            Etapa 7 · Decisión Estratégica Ejecutiva
+                          </div>
+                          <h3 style={{ fontSize: '1.5rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
+                            {esPromulgar ? '✅ Sanción Aprobada: Proceder a Promulgación' : `⚠️ Dictamen de Veto: ${ev.decision}`}
+                          </h3>
+                        </div>
                       </div>
-                      <h3 style={{ fontSize: '1.5rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                        {esPromulgar ? '✅ Sanción Aprobada: Proceder a Promulgación' : `⚠️ Dictamen de Veto: ${ev.decision}`}
-                      </h3>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <span className="badge badge-gold">
+                          Score Multicriterio: {ev.score_final || '7.5'}/10
+                        </span>
+                        <span className={`badge ${esPromulgar ? 'badge-green' : 'badge-red'}`}>
+                          {ev.decision || 'PROMULGAR'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <span className="badge badge-gold">
-                      Score Multicriterio: {ev.score_final || '7.5'}/10
-                    </span>
-                    <span className={`badge ${esPromulgar ? 'badge-green' : 'badge-red'}`}>
-                      {ev.decision || 'PROMULGAR'}
-                    </span>
-                  </div>
-                </div>
 
-                {/* 4 Criterios Estratégicos */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '14px', marginBottom: '20px' }}>
-                  <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(0,180,216,0.25)' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#00B4D8', fontWeight: 700, textTransform: 'uppercase' }}>Viabilidad Política</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.viabilidad_politica?.score || 8}/10</div>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.viabilidad_politica?.razon || 'Consenso alcanzado'}</div>
-                  </div>
+                    {/* 4 Criterios Estratégicos */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(0,180,216,0.25)' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#00B4D8', fontWeight: 700, textTransform: 'uppercase' }}>Viabilidad Política</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.viabilidad_politica?.score || 8}/10</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.viabilidad_politica?.razon || 'Consenso alcanzado'}</div>
+                      </div>
 
-                  <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(138,201,38,0.3)' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#8AC926', fontWeight: 700, textTransform: 'uppercase' }}>Legalidad Constitucional</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.legalidad_constitucional?.score || 9}/10</div>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.legalidad_constitucional?.razon || 'Conforme a CPE Art. 410'}</div>
-                  </div>
+                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(138,201,38,0.3)' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#8AC926', fontWeight: 700, textTransform: 'uppercase' }}>Legalidad Constitucional</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.legalidad_constitucional?.score || 9}/10</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.legalidad_constitucional?.razon || 'Conforme a CPE Art. 410'}</div>
+                      </div>
 
-                  <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(56,189,248,0.25)' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase' }}>Factibilidad Técnica</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.factibilidad_tecnica?.score || 7}/10</div>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.factibilidad_tecnica?.razon || 'Estructura técnica viable'}</div>
-                  </div>
+                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(56,189,248,0.25)' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase' }}>Factibilidad Técnica</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.factibilidad_tecnica?.score || 7}/10</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.factibilidad_tecnica?.razon || 'Estructura técnica viable'}</div>
+                      </div>
 
-                  <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(244,162,97,0.3)' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#F4A261', fontWeight: 700, textTransform: 'uppercase' }}>Sostenibilidad Fiscal</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.sostenibilidad_fiscal?.score || 7}/10</div>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.sostenibilidad_fiscal?.razon || 'Impacto presupuestario sostenible'}</div>
-                  </div>
-                </div>
+                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(244,162,97,0.3)' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#F4A261', fontWeight: 700, textTransform: 'uppercase' }}>Sostenibilidad Fiscal</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.sostenibilidad_fiscal?.score || 7}/10</div>
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.sostenibilidad_fiscal?.razon || 'Impacto presupuestario sostenible'}</div>
+                      </div>
+                    </div>
 
-                {/* Justificación */}
-                {ev.justificacion && (
-                  <div style={{ background: 'rgba(11,37,69,0.5)', border: '1px solid rgba(0,180,216,0.3)', padding: '16px', borderRadius: '12px', marginBottom: '24px' }}>
-                    <p style={{ color: '#e2e8f0', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
-                      {ev.justificacion}
-                    </p>
-                  </div>
-                )}
-                {/* ── CONSTANCIA OFICIAL DE VOTACIÓN PARLAMENTARIA (CONTROL DE VETO ART. 163-164 CPE) ── */}
-                <div style={{
-                  background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 42, 74, 0.90) 100%)',
-                  border: '1.5px solid rgba(56, 189, 248, 0.35)',
-                  borderRadius: '16px',
-                  padding: '20px',
-                  marginBottom: '24px',
-                  boxShadow: '0 8px 30px rgba(0,0,0,0.35)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '16px', borderBottom: '1px solid rgba(148,163,184,0.15)', paddingBottom: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <Scale size={22} color="#38bdf8" />
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#ffffff' }}>
-                          🗳️ Constancia Oficial de Votación Parlamentaria Bicameral
-                        </h4>
-                        <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
-                          Cómputo formal de votos y verificación de quórum de 2/3 para ratificación o allanamiento de veto (Art. 163-164 CPE).
+                    {/* Justificación */}
+                    {ev.justificacion && (
+                      <div style={{ background: 'rgba(11,37,69,0.5)', border: '1px solid rgba(0,180,216,0.3)', padding: '16px', borderRadius: '12px', marginBottom: '24px' }}>
+                        <p style={{ color: '#e2e8f0', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
+                          {ev.justificacion}
                         </p>
                       </div>
-                    </div>
-                    <span style={{
-                      background: 'rgba(16, 185, 129, 0.2)',
-                      border: '1px solid rgba(16, 185, 129, 0.4)',
-                      color: '#34d399',
-                      padding: '4px 12px',
-                      borderRadius: '20px',
-                      fontSize: '0.75rem',
-                      fontWeight: 800,
-                      textTransform: 'uppercase'
-                    }}>
-                      ✓ Quórum 2/3 Ratificado
-                    </span>
-                  </div>
-
-                  {/* Tabla de Votación por Cámaras */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-                    {/* Cámara de Diputados */}
-                    <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '14px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                        <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
-                          Cámara de Diputados (130 curules)
-                        </span>
-                        <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>67% votos presentes</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
-                        <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                          <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#34d399' }}>{votosBicameral?.dipFavor ?? 87}</div>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>A Favor</div>
-                        </div>
-                        <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                          <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f87171' }}>{votosBicameral?.dipContra ?? 35}</div>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>En Contra</div>
-                        </div>
-                        <div style={{ flex: 1, background: 'rgba(148, 163, 184, 0.15)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                          <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#cbd5e1' }}>{votosBicameral?.dipAbst ?? 8}</div>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>Abstención</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Cámara de Senadores */}
-                    <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '14px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                        <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
-                          Cámara de Senadores (36 curules)
-                        </span>
-                        <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>69.4% votos presentes</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
-                        <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                          <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#34d399' }}>{votosBicameral?.senFavor ?? 25}</div>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>A Favor</div>
-                        </div>
-                        <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                          <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f87171' }}>{votosBicameral?.senContra ?? 9}</div>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>En Contra</div>
-                        </div>
-                        <div style={{ flex: 1, background: 'rgba(148, 163, 184, 0.15)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                          <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#cbd5e1' }}>{votosBicameral?.senAbst ?? 2}</div>
-                          <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>Abstención</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Certificación Jurídica */}
-                  <div style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(148, 163, 184, 0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                    ⚖️ <strong>Acta de Cómputo Oficial:</strong> Conforme al Art. 163 numeral 10 de la CPE, habiéndose alcanzado la mayoría de dos tercios de los miembros presentes en ambas Cámaras, la Ley queda definitivamente sancionada y habilitada para su remisión al Presidente o promulgación directa por la Presidencia de la ALP.
-                  </div>
-                </div>
-
-                {/* Banner de Remisión al Presidente */}
-                <div style={{
-                  background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.35) 0%, rgba(15, 23, 42, 0.7) 100%)',
-                  border: '1.5px solid rgba(59, 130, 246, 0.4)',
-                  borderRadius: '12px',
-                  padding: '14px 18px',
-                  marginBottom: '20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '12px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <Building2 size={24} color="#60a5fa" />
-                    <div>
-                      <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.92rem' }}>
-                        {remitidoPresidente ? '✓ Autógrafa Remitida al Presidente del Estado' : 'Procedimiento Constitucional de Promulgación'}
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: '#93c5fd' }}>
-                        {remitidoPresidente ? 'Despachada a Casa Grande del Pueblo para promulgación oficial dentro de los 10 días hábiles.' : 'Remitir la ley sancionada al Presidente Constitucional del Estado Plurinacional.'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {!remitidoPresidente ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        updateActiveSession({ remitidoPresidente: true });
-                        appendLog('veto_promulgacion', 'PRESIDENCIA', 'Autógrafa de Ley remitida al Presidente del Estado para promulgación.');
-                      }}
-                      style={{
-                        background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                        border: 'none',
-                        borderRadius: '8px',
-                        color: '#ffffff',
-                        padding: '8px 18px',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
-                      }}
-                    >
-                      <Building2 size={15} />
-                      <span>Remitir al Presidente</span>
-                    </button>
-                  ) : (
-                    <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 800 }}>
-                      ✓ Estado: En Despacho Presidencial
-                    </span>
-                  )}
-                </div>
-
-                {/* Acción Siguiente */}
-                {/* Módulo de voz: Promulgación con Audio y Modificación por Voz */}
-                <div style={{ marginBottom: '24px', width: '100%' }}>
-                  <AgentVoiceModule
-                    agentId="veto_promulgacion"
-                    agentLabel="Agente Veto y Promulgación"
-                    primaryColor="#1E3A8A"
-                    sesionId={fase1Data?.sesion_id || null}
-                    resultData={vetoPromulgacionData}
-                    speechHook={speechHook}
-                    onModificarPromulgacion={(nuevaDec) => {
-                      updateActiveSession({
-                        vetoPromulgacionData: {
-                          ...vetoPromulgacionData,
-                          evaluacion_veto: {
-                            ...vetoPromulgacionData?.evaluacion_veto,
-                            decision: nuevaDec
-                          }
-                        }
-                      });
-                      appendLog('veto_promulgacion', 'MODIFICACION_VOZ', `Decisión modificada por voz a: ${nuevaDec}`);
-                    }}
-                  />
-                </div>
-
-                {/* Acción Siguiente — Ir a la Sección de Publicación de Gaceta */}
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '16px',
-                  marginTop: '16px',
-                  paddingTop: '20px',
-                  borderTop: '1px solid rgba(0, 180, 216, 0.25)'
-                }}>
-                  <button
-                    type="button"
-                    onClick={() => updateActiveSession({ inspectedAgentId: 'bicameral' })}
-                    className="btn-secondary"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '0.9rem' }}
-                  >
-                    <Eye size={16} />
-                    <span>Ver Evaluación Bicameral Previa</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handlePublicacion}
-                    disabled={isProcessing}
-                    className="btn-gaceta-oficial"
-                    style={{
-                      background: 'linear-gradient(135deg, #0284C7 0%, #00C2CB 100%)',
-                      fontSize: '1.08rem',
-                      padding: '14px 32px',
-                      fontWeight: 900,
-                      boxShadow: '0 6px 30px rgba(0, 194, 203, 0.5)',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Cpu size={20} className="pulse-active" />
-                        <span>Publicando y Asignando Ley en Gaceta...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Newspaper size={22} />
-                        <span>Ir a la Sección de Publicación de Gaceta</span>
-                        <ArrowRight size={20} />
-                      </>
                     )}
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-        </AgentResultCard>
+                    {/* ── CONSTANCIA OFICIAL DE VOTACIÓN PARLAMENTARIA (CONTROL DE VETO ART. 163-164 CPE) ── */}
+                    <div style={{
+                      background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 42, 74, 0.90) 100%)',
+                      border: '1.5px solid rgba(56, 189, 248, 0.35)',
+                      borderRadius: '16px',
+                      padding: '20px',
+                      marginBottom: '24px',
+                      boxShadow: '0 8px 30px rgba(0,0,0,0.35)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '16px', borderBottom: '1px solid rgba(148,163,184,0.15)', paddingBottom: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <Scale size={22} color="#38bdf8" />
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#ffffff' }}>
+                              🗳️ Constancia Oficial de Votación Parlamentaria Bicameral
+                            </h4>
+                            <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                              Cómputo formal de votos y verificación de quórum de 2/3 para ratificación o allanamiento de veto (Art. 163-164 CPE).
+                            </p>
+                          </div>
+                        </div>
+                        <span style={{
+                          background: 'rgba(16, 185, 129, 0.2)',
+                          border: '1px solid rgba(16, 185, 129, 0.4)',
+                          color: '#34d399',
+                          padding: '4px 12px',
+                          borderRadius: '20px',
+                          fontSize: '0.75rem',
+                          fontWeight: 800,
+                          textTransform: 'uppercase'
+                        }}>
+                          ✓ Quórum 2/3 Ratificado
+                        </span>
+                      </div>
+
+                      {/* Tabla de Votación por Cámaras */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                        {/* Cámara de Diputados */}
+                        <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '14px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
+                              Cámara de Diputados (130 curules)
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>67% votos presentes</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
+                            <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#34d399' }}>{votosBicameral?.dipFavor ?? 87}</div>
+                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>A Favor</div>
+                            </div>
+                            <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f87171' }}>{votosBicameral?.dipContra ?? 35}</div>
+                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>En Contra</div>
+                            </div>
+                            <div style={{ flex: 1, background: 'rgba(148, 163, 184, 0.15)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#cbd5e1' }}>{votosBicameral?.dipAbst ?? 8}</div>
+                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>Abstención</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Cámara de Senadores */}
+                        <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '14px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
+                              Cámara de Senadores (36 curules)
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>69.4% votos presentes</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
+                            <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#34d399' }}>{votosBicameral?.senFavor ?? 25}</div>
+                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>A Favor</div>
+                            </div>
+                            <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f87171' }}>{votosBicameral?.senContra ?? 9}</div>
+                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>En Contra</div>
+                            </div>
+                            <div style={{ flex: 1, background: 'rgba(148, 163, 184, 0.15)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#cbd5e1' }}>{votosBicameral?.senAbst ?? 2}</div>
+                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>Abstención</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Certificación Jurídica */}
+                      <div style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(148, 163, 184, 0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                        ⚖️ <strong>Acta de Cómputo Oficial:</strong> Conforme al Art. 163 numeral 10 de la CPE, habiéndose alcanzado la mayoría de dos tercios de los miembros presentes en ambas Cámaras, la Ley queda definitivamente sancionada y habilitada para su remisión al Presidente o promulgación directa por la Presidencia de la ALP.
+                      </div>
+                    </div>
+
+                    {/* Banner de Remisión al Presidente */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.35) 0%, rgba(15, 23, 42, 0.7) 100%)',
+                      border: '1.5px solid rgba(59, 130, 246, 0.4)',
+                      borderRadius: '12px',
+                      padding: '14px 18px',
+                      marginBottom: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '12px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Building2 size={24} color="#60a5fa" />
+                        <div>
+                          <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.92rem' }}>
+                            {remitidoPresidente ? '✓ Autógrafa Remitida al Presidente del Estado' : 'Procedimiento Constitucional de Promulgación'}
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: '#93c5fd' }}>
+                            {remitidoPresidente ? 'Despachada a Casa Grande del Pueblo para promulgación oficial dentro de los 10 días hábiles.' : 'Remitir la ley sancionada al Presidente Constitucional del Estado Plurinacional.'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {!remitidoPresidente ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateActiveSession({ remitidoPresidente: true });
+                            appendLog('veto_promulgacion', 'PRESIDENCIA', 'Autógrafa de Ley remitida al Presidente del Estado para promulgación.');
+                          }}
+                          style={{
+                            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                            border: 'none',
+                            borderRadius: '8px',
+                            color: '#ffffff',
+                            padding: '8px 18px',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
+                          }}
+                        >
+                          <Building2 size={15} />
+                          <span>Remitir al Presidente</span>
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 800 }}>
+                          ✓ Estado: En Despacho Presidencial
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Acción Siguiente */}
+                    {/* Módulo de voz: Promulgación con Audio y Modificación por Voz */}
+                    <div style={{ marginBottom: '24px', width: '100%' }}>
+                      <AgentVoiceModule
+                        agentId="veto_promulgacion"
+                        agentLabel="Agente Veto y Promulgación"
+                        primaryColor="#1E3A8A"
+                        sesionId={fase1Data?.sesion_id || null}
+                        resultData={vetoPromulgacionData}
+                        speechHook={speechHook}
+                        onModificarPromulgacion={(nuevaDec) => {
+                          updateActiveSession({
+                            vetoPromulgacionData: {
+                              ...vetoPromulgacionData,
+                              evaluacion_veto: {
+                                ...vetoPromulgacionData?.evaluacion_veto,
+                                decision: nuevaDec
+                              }
+                            }
+                          });
+                          appendLog('veto_promulgacion', 'MODIFICACION_VOZ', `Decisión modificada por voz a: ${nuevaDec}`);
+                        }}
+                      />
+                    </div>
+
+                    {/* Acción Siguiente — Ir a la Sección de Publicación de Gaceta */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '16px',
+                      marginTop: '16px',
+                      paddingTop: '20px',
+                      borderTop: '1px solid rgba(0, 180, 216, 0.25)'
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => updateActiveSession({ inspectedAgentId: 'bicameral' })}
+                        className="btn-secondary"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '0.9rem' }}
+                      >
+                        <Eye size={16} />
+                        <span>Ver Evaluación Bicameral Previa</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handlePublicacion}
+                        disabled={isProcessing}
+                        className="btn-gaceta-oficial"
+                        style={{
+                          background: 'linear-gradient(135deg, #0284C7 0%, #00C2CB 100%)',
+                          fontSize: '1.08rem',
+                          padding: '14px 32px',
+                          fontWeight: 900,
+                          boxShadow: '0 6px 30px rgba(0, 194, 203, 0.5)',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {isProcessing ? (
+                          <>
+                            <Cpu size={20} className="pulse-active" />
+                            <span>Publicando y Asignando Ley en Gaceta...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Newspaper size={22} />
+                            <span>Ir a la Sección de Publicación de Gaceta</span>
+                            <ArrowRight size={20} />
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -4260,315 +4290,315 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {renderAgentHeaderContainer()}
             <AgentResultCard
-          agentName="Agente de Publicación Oficial"
-          role="Registro Oficial y Promulgación en Gaceta / Boletín"
-          theme="blue"
-          status="completed"
-          phaseLabel="Fase 5: Promulgación & Vigencia"
-          thinkingText="Ley formalmente promulgada y registrada en el Boletín Oficial"
-          image="/robots/banner/disribuidor.png"
-          justificacion="Art. 164 CPE: Las leyes serán de cumplimiento obligatorio desde el día de su publicación en la Gaceta Oficial del Estado Plurinacional."
-          onViewPrev={() => updateActiveSession({ inspectedAgentId: 'veto_promulgacion' })}
-          prevLabel="Ver Evaluación de Veto/Promulgación"
-        >
-          {(() => {
-            const pub = publicacionData?.publicacion_oficial || {
-              numero_ley: 'Ley N° 1582 de Protección y Desarrollo Integral',
-              boletin_oficial: 'GAC-2026-BOL',
-              fecha_promulgacion: new Date().toISOString().slice(0, 10),
-              fecha_vigencia: 'Al día siguiente de su publicación',
-              estado_siguiente: 'LEY_VIGENTE',
-              titulo: fase1Data?.titulo || 'Proyecto de Ley Sancionado'
-            };
-            return (
-              <div>
-                {/* Banner de Éxito Legislativo */}
-                <div style={{
-                  background: 'linear-gradient(135deg, rgba(11,37,69,0.95), rgba(19,64,116,0.85))',
-                  border: '2px solid rgba(0,180,216,0.5)',
-                  padding: '28px',
-                  borderRadius: '16px',
-                  textAlign: 'center',
-                  marginBottom: '24px',
-                  boxShadow: '0 0 35px rgba(0,180,216,0.25)'
-                }}>
-                  <Sparkles size={52} color="#00B4D8" style={{ margin: '0 auto 12px' }} />
-                  <div style={{ fontSize: '0.85rem', color: '#7dd3fc', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 700 }}>
-                    Estado Plurinacional de Bolivia — Proceso Legislativo Concluido
-                  </div>
-                  <h2 style={{ fontSize: '2.2rem', color: '#ffffff', fontWeight: 900, margin: '8px 0 12px 0' }}>
-                    {pub.numero_ley || 'Ley Sancionada y Promulgada'}
-                  </h2>
-                  <p style={{ color: '#e0e7ff', fontSize: '1.05rem', maxWidth: '750px', margin: '0 auto' }}>
-                    {pub.titulo || 'Proyecto de Ley'}
-                  </p>
-                </div>
+              agentName="Agente de Publicación Oficial"
+              role="Registro Oficial y Promulgación en Gaceta / Boletín"
+              theme="blue"
+              status="completed"
+              phaseLabel="Fase 5: Promulgación & Vigencia"
+              thinkingText="Ley formalmente promulgada y registrada en el Boletín Oficial"
+              image="/robots/logos/agente_publicacion.jpeg"
+              justificacion="Art. 164 CPE: Las leyes serán de cumplimiento obligatorio desde el día de su publicación en la Gaceta Oficial del Estado Plurinacional."
+              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'veto_promulgacion' })}
+              prevLabel="Ver Evaluación de Veto/Promulgación"
+            >
+              {(() => {
+                const pub = publicacionData?.publicacion_oficial || {
+                  numero_ley: 'Ley N° 1582 de Protección y Desarrollo Integral',
+                  boletin_oficial: 'GAC-2026-BOL',
+                  fecha_promulgacion: new Date().toISOString().slice(0, 10),
+                  fecha_vigencia: 'Al día siguiente de su publicación',
+                  estado_siguiente: 'LEY_VIGENTE',
+                  titulo: fase1Data?.titulo || 'Proyecto de Ley Sancionado'
+                };
+                return (
+                  <div>
+                    {/* Banner de Éxito Legislativo */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, rgba(11,37,69,0.95), rgba(19,64,116,0.85))',
+                      border: '2px solid rgba(0,180,216,0.5)',
+                      padding: '28px',
+                      borderRadius: '16px',
+                      textAlign: 'center',
+                      marginBottom: '24px',
+                      boxShadow: '0 0 35px rgba(0,180,216,0.25)'
+                    }}>
+                      <Sparkles size={52} color="#00B4D8" style={{ margin: '0 auto 12px' }} />
+                      <div style={{ fontSize: '0.85rem', color: '#7dd3fc', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 700 }}>
+                        Estado Plurinacional de Bolivia — Proceso Legislativo Concluido
+                      </div>
+                      <h2 style={{ fontSize: '2.2rem', color: '#ffffff', fontWeight: 900, margin: '8px 0 12px 0' }}>
+                        {pub.numero_ley || 'Ley Sancionada y Promulgada'}
+                      </h2>
+                      <p style={{ color: '#e0e7ff', fontSize: '1.05rem', maxWidth: '750px', margin: '0 auto' }}>
+                        {pub.titulo || 'Proyecto de Ley'}
+                      </p>
+                    </div>
 
-                {/* Metadatos de la Ley Promulgada */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '24px' }}>
-                  <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(0,180,216,0.3)' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#00B4D8', textTransform: 'uppercase', fontWeight: 700 }}>Boletín / Gaceta</div>
-                    <div style={{ fontSize: '1.15rem', color: '#ffffff', fontWeight: 800, marginTop: '4px' }}>{pub.boletin_oficial || 'BOL-OFICIAL'}</div>
-                  </div>
+                    {/* Metadatos de la Ley Promulgada */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(0,180,216,0.3)' }}>
+                        <div style={{ fontSize: '0.72rem', color: '#00B4D8', textTransform: 'uppercase', fontWeight: 700 }}>Boletín / Gaceta</div>
+                        <div style={{ fontSize: '1.15rem', color: '#ffffff', fontWeight: 800, marginTop: '4px' }}>{pub.boletin_oficial || 'BOL-OFICIAL'}</div>
+                      </div>
 
-                  <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(138,201,38,0.3)' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#8AC926', textTransform: 'uppercase', fontWeight: 700 }}>Fecha Promulgación</div>
-                    <div style={{ fontSize: '1.15rem', color: '#ffffff', fontWeight: 800, marginTop: '4px' }}>{pub.fecha_promulgacion || '2026-09-05'}</div>
-                  </div>
+                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(138,201,38,0.3)' }}>
+                        <div style={{ fontSize: '0.72rem', color: '#8AC926', textTransform: 'uppercase', fontWeight: 700 }}>Fecha Promulgación</div>
+                        <div style={{ fontSize: '1.15rem', color: '#ffffff', fontWeight: 800, marginTop: '4px' }}>{pub.fecha_promulgacion || '2026-09-05'}</div>
+                      </div>
 
-                  <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(244,162,97,0.3)' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#F4A261', textTransform: 'uppercase', fontWeight: 700 }}>Entrada en Vigencia</div>
-                    <div style={{ fontSize: '1.15rem', color: '#ffffff', fontWeight: 800, marginTop: '4px' }}>{pub.fecha_vigencia || 'Al día siguiente'}</div>
-                  </div>
+                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(244,162,97,0.3)' }}>
+                        <div style={{ fontSize: '0.72rem', color: '#F4A261', textTransform: 'uppercase', fontWeight: 700 }}>Entrada en Vigencia</div>
+                        <div style={{ fontSize: '1.15rem', color: '#ffffff', fontWeight: 800, marginTop: '4px' }}>{pub.fecha_vigencia || 'Al día siguiente'}</div>
+                      </div>
 
-                  <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(56,189,248,0.3)' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700 }}>Estado Normativo</div>
-                    <div style={{ fontSize: '1.15rem', color: '#ffffff', fontWeight: 800, marginTop: '4px' }}>{pub.estado_siguiente || 'LEY_VIGENTE'}</div>
-                  </div>
-                </div>
-
-                {/* ── TARJETA: TEXTO FINAL CORREGIDO Y GACETA OFICIAL ── */}
-                <div style={{
-                  background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 42, 74, 0.90) 100%)',
-                  border: '1.5px solid rgba(0, 194, 203, 0.4)',
-                  borderRadius: '16px',
-                  padding: '20px',
-                  marginBottom: '24px',
-                  boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
-                  textAlign: 'left'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px', borderBottom: '1px solid rgba(148,163,184,0.15)', paddingBottom: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <FileCheck size={22} color="#00C2CB" />
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#ffffff' }}>
-                          Gaceta Oficial: Ley Final Sancionada con Observaciones Resueltas
-                        </h4>
-                        <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
-                          Texto legal definitivo que incorpora todas las enmiendas aplicadas por los agentes y el usuario.
-                        </p>
+                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(56,189,248,0.3)' }}>
+                        <div style={{ fontSize: '0.72rem', color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700 }}>Estado Normativo</div>
+                        <div style={{ fontSize: '1.15rem', color: '#ffffff', fontWeight: 800, marginTop: '4px' }}>{pub.estado_siguiente || 'LEY_VIGENTE'}</div>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const res = await api.getTextoConsolidado(fase1Data?.id_proyecto || 104);
-                          updateActiveSession({
-                            textoConsolidadoInfo: res,
-                            showTextoConsolidadoModal: true
-                          });
-                        } catch (e) {
-                          alert('Error al obtener texto consolidado: ' + e.message);
-                        }
-                      }}
-                      style={{
-                        background: 'rgba(0, 194, 203, 0.15)',
-                        border: '1px solid rgba(0, 194, 203, 0.4)',
-                        borderRadius: '8px',
-                        color: '#00C2CB',
-                        padding: '6px 14px',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
+
+                    {/* ── TARJETA: TEXTO FINAL CORREGIDO Y GACETA OFICIAL ── */}
+                    <div style={{
+                      background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 42, 74, 0.90) 100%)',
+                      border: '1.5px solid rgba(0, 194, 203, 0.4)',
+                      borderRadius: '16px',
+                      padding: '20px',
+                      marginBottom: '24px',
+                      boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
+                      textAlign: 'left'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px', borderBottom: '1px solid rgba(148,163,184,0.15)', paddingBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <FileCheck size={22} color="#00C2CB" />
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#ffffff' }}>
+                              Gaceta Oficial: Ley Final Sancionada con Observaciones Resueltas
+                            </h4>
+                            <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                              Texto legal definitivo que incorpora todas las enmiendas aplicadas por los agentes y el usuario.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const res = await api.getTextoConsolidado(fase1Data?.id_proyecto || 104);
+                              updateActiveSession({
+                                textoConsolidadoInfo: res,
+                                showTextoConsolidadoModal: true
+                              });
+                            } catch (e) {
+                              alert('Error al obtener texto consolidado: ' + e.message);
+                            }
+                          }}
+                          style={{
+                            background: 'rgba(0, 194, 203, 0.15)',
+                            border: '1px solid rgba(0, 194, 203, 0.4)',
+                            borderRadius: '8px',
+                            color: '#00C2CB',
+                            padding: '6px 14px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <Eye size={15} />
+                          <span>Ver Texto Final Corregido</span>
+                        </button>
+                      </div>
+
+                      {/* ── BOTONES DE ACCIÓN DE GACETA OFICIAL ── */}
+                      <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      <Eye size={15} />
-                      <span>Ver Texto Final Corregido</span>
-                    </button>
-                  </div>
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '14px',
+                        background: 'rgba(15, 23, 42, 0.7)',
+                        padding: '16px 20px',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(0, 194, 203, 0.3)'
+                      }}>
+                        <div style={{ flex: '1 1 300px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <span style={{
+                              background: 'rgba(16, 185, 129, 0.2)',
+                              border: '1px solid rgba(16, 185, 129, 0.5)',
+                              color: '#34d399',
+                              fontWeight: 800,
+                              fontSize: '0.72rem',
+                              padding: '2px 8px',
+                              borderRadius: '6px'
+                            }}>
+                              ✓ PUBLICACIÓN OFICIAL ACTIVA
+                            </span>
+                            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                              Edición: <strong>{pub.boletin_oficial || 'GAC-2026-BOL'}</strong>
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>
+                            Texto legal auténtico registrado con sello protocolar y fuerza obligatoria según el Art. 164 CPE.
+                          </div>
+                        </div>
 
-                  {/* ── BOTONES DE ACCIÓN DE GACETA OFICIAL ── */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '14px',
-                    background: 'rgba(15, 23, 42, 0.7)',
-                    padding: '16px 20px',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(0, 194, 203, 0.3)'
-                  }}>
-                    <div style={{ flex: '1 1 300px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <span style={{
-                          background: 'rgba(16, 185, 129, 0.2)',
-                          border: '1px solid rgba(16, 185, 129, 0.5)',
-                          color: '#34d399',
-                          fontWeight: 800,
-                          fontSize: '0.72rem',
-                          padding: '2px 8px',
-                          borderRadius: '6px'
-                        }}>
-                          ✓ PUBLICACIÓN OFICIAL ACTIVA
-                        </span>
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                          Edición: <strong>{pub.boletin_oficial || 'GAC-2026-BOL'}</strong>
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                          {/* BOTÓN DESTACADO: PUBLICAR EN LA GACETA OFICIAL */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await handlePublicacion();
+                            }}
+                            disabled={isProcessing}
+                            className="btn-gaceta-oficial"
+                            style={{
+                              background: 'linear-gradient(135deg, #0284C7 0%, #00C2CB 100%)',
+                              border: '1.5px solid rgba(56, 189, 248, 0.8)',
+                              boxShadow: '0 0 25px rgba(0, 194, 203, 0.5)',
+                              padding: '12px 24px',
+                              fontSize: '0.92rem',
+                              fontWeight: 900
+                            }}
+                          >
+                            {isProcessing ? (
+                              <>
+                                <Cpu size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                                <span>Sellando y Publicando en Gaceta...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Newspaper size={18} />
+                                <span>🏛️ Publicar Ley en la Gaceta Oficial</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* BOTÓN DESCARGAR PDF */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const res = await api.generarPdfGaceta(fase1Data?.id_proyecto || 104);
+                                if (res.data) {
+                                  updateActiveSession({ gacetaPdfData: res.data });
+                                  window.open(res.data.url_descarga, '_blank');
+                                }
+                              } catch (e) {
+                                alert('Error generando PDF de Gaceta: ' + e.message);
+                              }
+                            }}
+                            style={{
+                              background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)',
+                              border: 'none',
+                              borderRadius: '10px',
+                              color: '#ffffff',
+                              padding: '12px 20px',
+                              fontSize: '0.86rem',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              boxShadow: '0 4px 16px rgba(13, 148, 136, 0.35)'
+                            }}
+                          >
+                            <Download size={16} />
+                            <span>Descargar PDF Gaceta</span>
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>
-                        Texto legal auténtico registrado con sello protocolar y fuerza obligatoria según el Art. 164 CPE.
-                      </div>
+
+                      {gacetaPdfData && (
+                        <div style={{ marginTop: '12px', padding: '10px 16px', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', borderRadius: '8px', fontSize: '0.82rem', color: '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                          <span>✓ Documento oficial de Gaceta generado: <strong>{gacetaPdfData.filename}</strong></span>
+                          <a href={gacetaPdfData.url_descarga} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', fontWeight: 700, textDecoration: 'underline' }}>Abrir Documento Digital</a>
+                        </div>
+                      )}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      {/* BOTÓN DESTACADO: PUBLICAR EN LA GACETA OFICIAL */}
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await handlePublicacion();
-                        }}
-                        disabled={isProcessing}
-                        className="btn-gaceta-oficial"
-                        style={{
-                          background: 'linear-gradient(135deg, #0284C7 0%, #00C2CB 100%)',
-                          border: '1.5px solid rgba(56, 189, 248, 0.8)',
-                          boxShadow: '0 0 25px rgba(0, 194, 203, 0.5)',
-                          padding: '12px 24px',
-                          fontSize: '0.92rem',
-                          fontWeight: 900
-                        }}
-                      >
-                        {isProcessing ? (
-                          <>
-                            <Cpu size={18} style={{ animation: 'spin 1s linear infinite' }} />
-                            <span>Sellando y Publicando en Gaceta...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Newspaper size={18} />
-                            <span>🏛️ Publicar Ley en la Gaceta Oficial</span>
-                          </>
-                        )}
+                    {/* ── PANEL DE VOZ: LEER LEY FINAL ── */}
+                    <div style={{
+                      marginBottom: '24px',
+                      background: 'linear-gradient(135deg, rgba(0,194,203,0.12), rgba(0,194,203,0.04))',
+                      border: '2px solid rgba(0,194,203,0.35)',
+                      borderRadius: '16px',
+                      padding: '18px',
+                      boxShadow: '0 4px 24px rgba(0,194,203,0.15)',
+                    }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#00C2CB', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Newspaper size={13} /> Asistente de Voz — Gaceta Oficial
+                      </div>
+                      <AgentVoiceModule
+                        agentId="publicacion"
+                        agentLabel="Publicación Oficial — Gaceta"
+                        primaryColor="#00C2CB"
+                        sesionId={fase1Data?.sesion_id || null}
+                        resultData={publicacionData}
+                        speechHook={speechHook}
+                        compact={false}
+                      />
+                    </div>
+
+                    {/* ── MÓDULO INTERACTIVO CON AGENTE CREWAI: MENSAJE AL PRESIDENTE DEL SENADO ── */}
+                    <MensajeSenadoCrewPanel
+                      idProyecto={fase1Data?.id_proyecto || 104}
+                      sesionId={fase1Data?.sesion_id}
+                      numeroLey={pub.numero_ley || 'Ley Sancionada y Promulgada'}
+                      tituloProyecto={pub.titulo || fase1Data?.titulo || 'Proyecto de Ley'}
+                      boletinOficial={pub.boletin_oficial || 'GAC-2026-BOL'}
+                      defaultEmail={activeSession?.emailAutor || 'rebalicbecky2@gmail.com'}
+                      onSent={() => appendLog('Mensaje_Senado_Crew', 'COMPLETADO', 'Oficio remitido al Presidente del Senado con Token de Google')}
+                    />
+
+                    {/* ── CORRECCIONES FINALES DE LA GACETA (Secretario / Usuario) ── */}
+                    <GacetaCorreccionesSection
+                      idProyecto={fase1Data?.id_proyecto}
+                      sesionId={activeSession?.id}
+                      onCorreccionActualizada={() => appendLog('Gaceta_Correcciones', 'ACTUALIZADO', 'Corrección registrada en Gaceta')}
+                    />
+
+                    {/* ── ENVÍO DE CORREOS VALIDADO — PUBLICACIÓN EN GACETA ── */}
+                    <GacetaNotificacionEmailSection
+                      fase1Data={fase1Data}
+                      pub={pub}
+                      defaultEmail={activeSession?.emailAutor || 'rebalicbecky2@gmail.com'}
+                      onSent={(dest) => appendLog('Publicacion_Correo', 'COMPLETADO', `Correos de Gaceta enviados a: ${dest.join(', ')}`)}
+                    />
+
+                    {/* Acciones Finales */}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                      {pdfResult?.filename && (
+                        <a
+                          href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfResult.filename}`}
+                          target="_blank" rel="noreferrer"
+                          className="btn-secondary"
+                          style={{ fontSize: '1rem', padding: '13px 24px', textDecoration: 'none' }}
+                        >
+                          <Download size={20} />
+                          <span>Descargar Expediente PDF</span>
+                        </a>
+                      )}
+                      {onNavigateExpedientes && (
+                        <button className="btn-success" onClick={onNavigateExpedientes}
+                          style={{ fontSize: '1rem', padding: '13px 24px' }}>
+                          <ExternalLink size={20} />
+                          <span>Ver Expedientes Registrados</span>
+                        </button>
+                      )}
+                      <button className="btn-secondary" onClick={handleReset} style={{ fontSize: '1rem', padding: '13px 24px' }}>
+                        <RotateCcw size={20} />
+                        <span>Iniciar Nuevo Trámite</span>
                       </button>
 
-                      {/* BOTÓN DESCARGAR PDF */}
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const res = await api.generarPdfGaceta(fase1Data?.id_proyecto || 104);
-                            if (res.data) {
-                              updateActiveSession({ gacetaPdfData: res.data });
-                              window.open(res.data.url_descarga, '_blank');
-                            }
-                          } catch (e) {
-                            alert('Error generando PDF de Gaceta: ' + e.message);
-                          }
-                        }}
-                        style={{
-                          background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)',
-                          border: 'none',
-                          borderRadius: '10px',
-                          color: '#ffffff',
-                          padding: '12px 20px',
-                          fontSize: '0.86rem',
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          boxShadow: '0 4px 16px rgba(13, 148, 136, 0.35)'
-                        }}
-                      >
-                        <Download size={16} />
-                        <span>Descargar PDF Gaceta</span>
-                      </button>
                     </div>
                   </div>
+                );
 
-                  {gacetaPdfData && (
-                    <div style={{ marginTop: '12px', padding: '10px 16px', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', borderRadius: '8px', fontSize: '0.82rem', color: '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                      <span>✓ Documento oficial de Gaceta generado: <strong>{gacetaPdfData.filename}</strong></span>
-                      <a href={gacetaPdfData.url_descarga} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', fontWeight: 700, textDecoration: 'underline' }}>Abrir Documento Digital</a>
-                    </div>
-                  )}
-                </div>
-
-                {/* ── PANEL DE VOZ: LEER LEY FINAL ── */}
-                <div style={{
-                  marginBottom: '24px',
-                  background: 'linear-gradient(135deg, rgba(0,194,203,0.12), rgba(0,194,203,0.04))',
-                  border: '2px solid rgba(0,194,203,0.35)',
-                  borderRadius: '16px',
-                  padding: '18px',
-                  boxShadow: '0 4px 24px rgba(0,194,203,0.15)',
-                }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#00C2CB', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Newspaper size={13} /> Asistente de Voz — Gaceta Oficial
-                  </div>
-                  <AgentVoiceModule
-                    agentId="publicacion"
-                    agentLabel="Publicación Oficial — Gaceta"
-                    primaryColor="#00C2CB"
-                    sesionId={fase1Data?.sesion_id || null}
-                    resultData={publicacionData}
-                    speechHook={speechHook}
-                    compact={false}
-                  />
-                </div>
-
-                {/* ── MÓDULO INTERACTIVO CON AGENTE CREWAI: MENSAJE AL PRESIDENTE DEL SENADO ── */}
-                <MensajeSenadoCrewPanel
-                  idProyecto={fase1Data?.id_proyecto || 104}
-                  sesionId={fase1Data?.sesion_id}
-                  numeroLey={pub.numero_ley || 'Ley Sancionada y Promulgada'}
-                  tituloProyecto={pub.titulo || fase1Data?.titulo || 'Proyecto de Ley'}
-                  boletinOficial={pub.boletin_oficial || 'GAC-2026-BOL'}
-                  defaultEmail={activeSession?.emailAutor || 'rebalicbecky2@gmail.com'}
-                  onSent={() => appendLog('Mensaje_Senado_Crew', 'COMPLETADO', 'Oficio remitido al Presidente del Senado con Token de Google')}
-                />
-
-                {/* ── CORRECCIONES FINALES DE LA GACETA (Secretario / Usuario) ── */}
-                <GacetaCorreccionesSection
-                  idProyecto={fase1Data?.id_proyecto}
-                  sesionId={activeSession?.id}
-                  onCorreccionActualizada={() => appendLog('Gaceta_Correcciones', 'ACTUALIZADO', 'Corrección registrada en Gaceta')}
-                />
-
-                {/* ── ENVÍO DE CORREOS VALIDADO — PUBLICACIÓN EN GACETA ── */}
-                <GacetaNotificacionEmailSection
-                  fase1Data={fase1Data}
-                  pub={pub}
-                  defaultEmail={activeSession?.emailAutor || 'rebalicbecky2@gmail.com'}
-                  onSent={(dest) => appendLog('Publicacion_Correo', 'COMPLETADO', `Correos de Gaceta enviados a: ${dest.join(', ')}`)}
-                />
-
-                {/* Acciones Finales */}
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                  {pdfResult?.filename && (
-                    <a
-                      href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfResult.filename}`}
-                      target="_blank" rel="noreferrer"
-                      className="btn-secondary"
-                      style={{ fontSize: '1rem', padding: '13px 24px', textDecoration: 'none' }}
-                    >
-                      <Download size={20} />
-                      <span>Descargar Expediente PDF</span>
-                    </a>
-                  )}
-                  {onNavigateExpedientes && (
-                    <button className="btn-success" onClick={onNavigateExpedientes}
-                      style={{ fontSize: '1rem', padding: '13px 24px' }}>
-                      <ExternalLink size={20} />
-                      <span>Ver Expedientes Registrados</span>
-                    </button>
-                  )}
-                  <button className="btn-secondary" onClick={handleReset} style={{ fontSize: '1rem', padding: '13px 24px' }}>
-                    <RotateCcw size={20} />
-                    <span>Iniciar Nuevo Trámite</span>
-                  </button>
-
-                </div>
-              </div>
-            );
-
-          })()}
-        </AgentResultCard>
+              })()}
+            </AgentResultCard>
           </div>
         </div>
       )}
@@ -5160,5 +5190,5 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
         </div>
       )}
     </div>
-  );
+  ); 0
 }

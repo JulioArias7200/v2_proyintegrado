@@ -194,15 +194,20 @@ export default function MensajeSenadoCrewPanel({
           <div style={{
             width: '46px',
             height: '46px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.4) 0%, rgba(0, 194, 203, 0.25) 100%)',
-            border: '1.5px solid rgba(0, 194, 203, 0.5)',
+            borderRadius: '50%',
+            border: '2px solid rgba(0, 194, 203, 0.6)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 16px rgba(0, 194, 203, 0.3)'
+            boxShadow: '0 0 16px rgba(0, 194, 203, 0.35)',
+            overflow: 'hidden',
+            background: '#0B2545'
           }}>
-            <Bot size={24} color="#00C2CB" />
+            <img
+              src="/robots/logos/agente_publicacion.jpeg"
+              alt="Agente Publicación / CrewAI"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>

@@ -41,6 +41,24 @@ const AGENT_ICONS = {
   publicacion: Newspaper,
 };
 
+const AGENT_LOGOS = {
+  distribuidor:       '/robots/logos/agente_distribuidor.jpeg',
+  comision:           '/robots/logos/agente_comision.jpeg',
+  constitucional:     '/robots/logos/agente_constitucional.jpeg',
+  consistencia:       '/robots/logos/agente_consistencia.jpeg',
+  concentrador:       '/robots/logos/concentrador.jpeg',
+  emisor:             '/robots/logos/agente_comodin.jpeg',
+  notificador:        '/robots/logos/agente_comodin.jpeg',
+  constitucion_fondo: '/robots/logos/agente_constitucional.jpeg',
+  concentrador_crew:  '/robots/logos/concentrador.jpeg',
+  secretario:         '/robots/logos/agente_secretario.jpeg',
+  bicameral:          '/robots/logos/agente_bicamaral.jpeg',
+  veto_promulgacion:  '/robots/logos/agente_veto.jpeg',
+  publicacion:        '/robots/logos/agente_publicacion.jpeg',
+  ciudadania:         '/robots/logos/agente_ciudadania.jpeg',
+  comodin:            '/robots/logos/agente_comodin.jpeg',
+};
+
 export default function AllAgentsResultsModal({
   isOpen,
   onClose,
@@ -294,21 +312,27 @@ export default function AllAgentsResultsModal({
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '10px',
-                      background: isDone
-                        ? 'rgba(138, 201, 38, 0.15)'
-                        : isActive
-                          ? 'rgba(0, 180, 216, 0.2)'
-                          : 'rgba(100, 116, 139, 0.1)',
-                      border: `1.5px solid ${isDone ? '#8AC926' : isActive ? '#00B4D8' : 'rgba(100, 116, 139, 0.3)'}`,
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '50%',
+                      background: '#0F172A',
+                      border: `2px solid ${isDone ? '#8AC926' : isActive ? '#00B4D8' : 'rgba(100, 116, 139, 0.4)'}`,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: isDone ? '#8AC926' : isActive ? '#00B4D8' : '#64748B'
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                      boxShadow: isDone ? '0 0 12px rgba(138,201,38,0.35)' : isActive ? '0 0 12px rgba(0,180,216,0.35)' : 'none'
                     }}>
-                      <Icon size={18} />
+                      {AGENT_LOGOS[agent.id] ? (
+                        <img
+                          src={AGENT_LOGOS[agent.id]}
+                          alt={agent.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <Icon size={18} color={isDone ? '#8AC926' : isActive ? '#00B4D8' : '#64748B'} />
+                      )}
                     </div>
 
                     <div>

@@ -24,46 +24,57 @@ import {
 const AGENT_CHAT_CONFIG = {
   distribuidor: {
     canonico: "Distribuidor", icon: "📥", color: "#00B4D8",
+    logo: "/robots/logos/agente_distribuidor.jpeg",
     bienvenida: "Soy el Agente Distribuidor. Puedes dictarme el texto del proyecto, pedirme que lo clasifique o leerte la categoría asignada.",
   },
   comision: {
     canonico: "Comision", icon: "🏛️", color: "#7C3AED",
+    logo: "/robots/logos/agente_comision.jpeg",
     bienvenida: "Soy el Agente de Comisión. Puedo leerte la comisión asignada o modificar la asignación si me lo dictas.",
   },
   constitucional: {
     canonico: "VerificadorConstitucional", icon: "⚖️", color: "#F59E0B",
+    logo: "/robots/logos/agente_constitucional.jpeg",
     bienvenida: "Soy el Verificador Constitucional. Te leo las observaciones frente a la CPE y tomo nota de las que me dictes.",
   },
   consistencia: {
     canonico: "ConsistenciaNormativa", icon: "🔍", color: "#10B981",
+    logo: "/robots/logos/agente_consistencia.jpeg",
     bienvenida: "Soy el Agente de Consistencia Normativa. Te leo los hallazgos y conflictos con leyes vigentes; dicta tus notas cuando quieras.",
   },
   emisor: {
     canonico: "EmisorResultados", icon: "📄", color: "#EC4899",
+    logo: "/robots/logos/concentrador.jpeg",
     bienvenida: "Soy el Emisor de Resultados. Te leo el dictamen PDF y si me dictas observaciones las envío como notificación.",
   },
   notificador: {
     canonico: "NotificadorComision", icon: "📧", color: "#6366F1",
+    logo: "/robots/logos/agente_comodin.jpeg",
     bienvenida: "Soy el Notificador de Comisión. Puedo enviar los correos a la comisión o al autor, previa confirmación.",
   },
   secretario: {
     canonico: "SecretarioCamara", icon: "✍️", color: "#14B8A6",
+    logo: "/robots/logos/agente_secretario.jpeg",
     bienvenida: "Soy la Secretaría de Cámara. Dictame correcciones y te leo el acta y las votaciones para enviarlas al Bicameral.",
   },
   bicameral: {
     canonico: "Bicameral", icon: "🤝", color: "#F97316",
+    logo: "/robots/logos/agente_bicamaral.jpeg",
     bienvenida: "Soy el Agente Bicameral. Te leo la resolución de las cámaras y coordino la reconciliación del texto.",
   },
   veto_promulgacion: {
     canonico: "VetoPromulgacion", icon: "📜", color: "#EF4444",
+    logo: "/robots/logos/agente_veto.jpeg",
     bienvenida: "Soy el Agente de Veto y Promulgación. Te leo la evaluación del Ejecutivo y puedo registrar tu decisión.",
   },
   publicacion: {
     canonico: "Publicacion", icon: "📰", color: "#84CC16",
+    logo: "/robots/logos/agente_publicacion.jpeg",
     bienvenida: "Soy el Agente de Publicación. Te leo la ley final publicada en la Gaceta Oficial y su número de ley.",
   },
   orquestador: {
     canonico: "orquestador", icon: "💬", color: "#00B4D8",
+    logo: "/robots/logos/agente_distribuidor.jpeg",
     bienvenida: "Soy el Chat del Sistema. Hablo con todos los agentes de la mesa de partes: dime qué necesitas y lo derivo al agente correcto.",
   },
 };
@@ -269,7 +280,24 @@ export default function AgentChatPanel({
     }}>
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 22 }}>{cfg.icon}</span>
+        <div style={{
+          width: 32,
+          height: 32,
+          borderRadius: "50%",
+          overflow: "hidden",
+          border: `1.5px solid ${color}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          background: "#0B2545"
+        }}>
+          {cfg.logo ? (
+            <img src={cfg.logo} alt={cfg.canonico} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <span style={{ fontSize: 16 }}>{cfg.icon}</span>
+          )}
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             color: "#E2E8F0",
