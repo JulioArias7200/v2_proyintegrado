@@ -37,3 +37,10 @@ scratch/
 .DS_Store
 Thumbs.db
 *.log
+
+
+informe/
+PLAN_INTEGRACION_CODEX_REVIEW.md
+test_flujo_cadena_agentes.py
+
+.gitignore

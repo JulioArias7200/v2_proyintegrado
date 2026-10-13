@@ -6,10 +6,22 @@ const API_BASE_URL = 'http://127.0.0.1:8085/api';
 
 async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
+  let token;
+  try {
+    const rawUser = localStorage.getItem('sma_congreso_usuario');
+    if (rawUser) {
+      const parsed = JSON.parse(rawUser);
+      token = parsed?.token || parsed?.session_token;
+    }
+  } catch {
+    /* Sesión local inválida */
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
       headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
       },
     });
@@ -18,7 +30,9 @@ async function request(endpoint, options = {}) {
       let errorDetail = `Error ${response.status}: ${response.statusText}`;
       try {
         const errorJson = await response.json();
-        errorDetail = errorJson.detail || errorDetail;
+        errorDetail = Array.isArray(errorJson.detail)
+          ? errorJson.detail.map(d => d.msg).join('; ')
+          : errorJson.detail || errorDetail;
       } catch (e) {}
       throw new Error(errorDetail);
     }
@@ -83,6 +97,16 @@ export async function confirmarChatAccion(sesionId) {
 }
 
 export const api = {
+  getSession: () => request('/auth/session'),
+  logout: () => request('/auth/logout', { method: 'POST' }),
+  getRevisionBicameral: (id) => request(`/pipeline/revision_bicameral/${id}`),
+  decidirBicameral: (data) =>
+    request('/pipeline/decision_bicameral', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+
   getHealth: () => request('/health'),
   getDashboardStats: () => request('/dashboard/stats'),
 
@@ -200,6 +224,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ caso_texto: casoTexto, caso_nombre: casoNombre, materia, sesion_id: sesionId }),
     }),
+  getAgentes: () => request('/agentes'),
   getMessages: (limit = 50, sesion_id = null) => {
     const q = sesion_id ? `?limit=${limit}&sesion_id=${sesion_id}` : `?limit=${limit}`;
     return request(`/messages${q}`);

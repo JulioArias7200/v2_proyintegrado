@@ -39,6 +39,12 @@ workflows:
           - Registrar_Debate
           - Gestionar_Bicameral
         punto_control: true
+        control_aprobacion:
+          requiere_aprobacion_humana: true
+          roles_permitidos: [Diputado, Senador, Admin, Administrador]
+          requiere_verificacion_normativa: true
+          requiere_motivo_revision: true
+          estados: [PENDIENTE_APROBACION_HUMANA, APROBADO_REVISION_HUMANA, EN_REVISION]
         descripcion: "Debate en Cámara de Origen (verificación de quórum, oradores, votación en grande y detalle) y coordinación bicameral de enmiendas"
         dependencias:
           - Fase_2_Comision_Dictamenes

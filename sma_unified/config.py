@@ -142,3 +142,29 @@ def load_tasks_yaml() -> dict:
         with open(yaml_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     return {}
+
+
+def load_control_aprobacion() -> dict:
+    """Configuración de control de aprobación bicameral y permisos humanos."""
+    import yaml
+    path = Path(__file__).resolve().parent / "config" / "workflows.yaml"
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as archivo:
+                config = yaml.safe_load(archivo) or {}
+            control = (config.get("workflows", {})
+                       .get("Pipeline_Legislativo_Completo", {})
+                       .get("etapas", {})
+                       .get("Fase_3_Plenaria_Bicameral", {})
+                       .get("control_aprobacion"))
+            if control:
+                return control
+        except Exception:
+            pass
+    return {
+        "requiere_aprobacion_humana": True,
+        "roles_permitidos": ["Diputado", "Senador", "Admin", "Administrador"],
+        "requiere_verificacion_normativa": True,
+        "requiere_motivo_revision": True,
+        "estados": ["PENDIENTE_APROBACION_HUMANA", "APROBADO_REVISION_HUMANA", "EN_REVISION"]
+    }

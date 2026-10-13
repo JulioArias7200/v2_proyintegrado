@@ -48,7 +48,7 @@ import {
 import { useLatinSpeech } from '../hooks/useLatinSpeech';
 import VoiceAgentPanel from '../components/VoiceAgentPanel';
 
-// Catálogo completo de los 14 operadores robóticos parlamentarios
+// Catálogo completo de los 14 operadores robóticos parlamentarios (logos homologados con Mesa de Partes)
 export const VOICE_OPERATORS = [
   {
     id: 'distribuidor',
@@ -56,9 +56,9 @@ export const VOICE_OPERATORS = [
     name: 'Operador Distribuidor',
     shortName: 'Distribuidor',
     role: 'Mesa de Partes & Admisión',
-    image: '/robots/robot_distribuidor_hi.jpg',
+    image: '/robots/logos/agente_distribuidor.jpeg',
     theme: 'cyan',
-    primaryColor: '#00f0ff',
+    primaryColor: '#00B4D8',
     badge: 'Fase 1 • Admisión',
     model: 'Nemotron-3 30B',
     greeting: 'Saludos parlamentarios. Soy el Operador de Admisión de la Mesa de Partes. Dicta o escribe el resumen o título del documento que deseas canalizar al sistema legislativo.',
@@ -70,9 +70,9 @@ export const VOICE_OPERATORS = [
     name: 'Comisión Legislativa',
     shortName: 'Comisión',
     role: 'Asignación Temática CPE Art. 158',
-    image: '/robots/robot_constitucional_hi.jpg',
+    image: '/robots/logos/agente_comision.jpeg',
     theme: 'blue',
-    primaryColor: '#38bdf8',
+    primaryColor: '#38BDF8',
     badge: 'Fase 2 • Asignación',
     model: 'Nemotron-3 30B',
     greeting: 'Comisión parlamentaria conectada. Clasifico y asigno proyectos de ley a las comisiones camarales competentes según materia.',
@@ -84,9 +84,9 @@ export const VOICE_OPERATORS = [
     name: 'Verificador Constitucional',
     shortName: 'Constitucional',
     role: 'Auditoría Supremacía CPE 2009',
-    image: '/robots/robot_constitucional_hi.jpg',
-    theme: 'green',
-    primaryColor: '#10b981',
+    image: '/robots/logos/agente_constitucional.jpeg',
+    theme: 'blue',
+    primaryColor: '#2563EB',
     badge: 'Fase 2 • CPE 2009',
     model: 'Nemotron-3 30B',
     greeting: 'Atención legislativa. Me encargo del control de constitucionalidad. ¿Deseas consultar la conformidad de algún artículo o principio fundamental de la CPE?',
@@ -98,9 +98,9 @@ export const VOICE_OPERATORS = [
     name: 'Consistencia Normativa',
     shortName: 'Consistencia',
     role: 'Vectores pgvector 2048d & Antinomias',
-    image: '/robots/robot_consistencia_hi.jpg',
-    theme: 'gold',
-    primaryColor: '#f59e0b',
+    image: '/robots/logos/agente_consistencia.jpeg',
+    theme: 'blue',
+    primaryColor: '#1D4ED8',
     badge: 'Fase 2 • pgvector',
     model: 'pgvector 2048d',
     greeting: 'Base normativa conectada con embeddings de 2048 dimensiones. Pregúntame sobre posibles colisiones normativas con códigos o leyes sectoriales vigentes.',
@@ -112,9 +112,9 @@ export const VOICE_OPERATORS = [
     name: 'Concentrador y Emisor',
     shortName: 'Emisor PDF',
     role: 'Síntesis Oficial & Dictamen PDF',
-    image: '/robots/robot_emisor_hi.jpg',
-    theme: 'orange',
-    primaryColor: '#f97316',
+    image: '/robots/logos/concentrador.jpeg',
+    theme: 'cyan',
+    primaryColor: '#0284C7',
     badge: 'Fase 3 • Dictamen',
     model: 'ReportLab + IA',
     greeting: 'Módulo de emisión de dictámenes constitucionales y normativos. Genero el PDF tricolor con el resultado completo del análisis legislativo.',
@@ -126,9 +126,9 @@ export const VOICE_OPERATORS = [
     name: 'Notificador de Comisión',
     shortName: 'Notificador',
     role: 'Correos Institucionales HTML',
-    image: '/robots/robot_notificador_hi.jpg',
+    image: '/robots/logos/agente_comodin.jpeg',
     theme: 'teal',
-    primaryColor: '#14b8a6',
+    primaryColor: '#14B8A6',
     badge: 'Fase 3 • Notificación',
     model: 'SMTP / HTML SMA',
     greeting: 'Canal de notificación parlamentaria activo. Envío correos HTML a comisiones, senadores y al autor del proyecto con el dictamen adjunto.',
@@ -140,9 +140,9 @@ export const VOICE_OPERATORS = [
     name: 'Constitución Fondo',
     shortName: 'CPE Fondo',
     role: 'Hermenéutica & Precedentes TC',
-    image: '/robots/robot_constitucional_hi.jpg',
+    image: '/robots/logos/agente_constitucional.jpeg',
     theme: 'purple',
-    primaryColor: '#8b5cf6',
+    primaryColor: '#7C3AED',
     badge: 'Fase 4 • Fondo',
     model: 'Nemotron-70B',
     greeting: 'Análisis hermenéutico de fondo. Evalúo precedentes del Tribunal Constitucional Plurinacional y ponderación de derechos fundamentales.',
@@ -154,9 +154,9 @@ export const VOICE_OPERATORS = [
     name: 'Concentrador Multi-Agente',
     shortName: 'Concentrador',
     role: 'Síntesis Integral de Expediente',
-    image: '/robots/robot_emisor_hi.jpg',
-    theme: 'emerald',
-    primaryColor: '#10b981',
+    image: '/robots/logos/concentrador.jpeg',
+    theme: 'cyan',
+    primaryColor: '#0284C7',
     badge: 'Fase 4 • Síntesis',
     model: 'Nemotron-70B',
     greeting: 'Módulo de consolidación integral. Unifico las observaciones de todos los agentes en un único expediente estructurado.',
@@ -168,9 +168,9 @@ export const VOICE_OPERATORS = [
     name: 'Secretario de Cámara',
     shortName: 'Secretario',
     role: 'Actas de Debate & Votaciones',
-    image: '/robots/robot_secretario_hi.jpg',
+    image: '/robots/logos/agente_secretario.jpeg',
     theme: 'blue',
-    primaryColor: '#3b82f6',
+    primaryColor: '#1E40AF',
     badge: 'Fase 4 • Plenario',
     model: 'Nemotron-70B',
     greeting: 'Sistema de registro parlamentario activo. Puedo registrar debates, votos nominales y emitir actas formales de sesión plenaria.',
@@ -182,9 +182,9 @@ export const VOICE_OPERATORS = [
     name: 'Coordinador Bicameral',
     shortName: 'Bicameral',
     role: 'Trámite entre Cámaras Art. 163',
-    image: '/robots/robot_bicameral_hi.jpg',
-    theme: 'purple',
-    primaryColor: '#a855f7',
+    image: '/robots/logos/agente_bicamaral.jpeg',
+    theme: 'blue',
+    primaryColor: '#7DD3FC',
     badge: 'Fase 5 • Bicameral',
     model: 'Nemotron-70B',
     greeting: 'Procedimiento bicameral en curso. Gestiono el intercambio entre la Cámara de Diputados y el Senado, incluyendo la conciliación del texto aprobado.',
@@ -196,9 +196,9 @@ export const VOICE_OPERATORS = [
     name: 'Veto y Promulgación',
     shortName: 'Veto/Promulg.',
     role: 'Decisión Ejecutiva Final Art. 163-167',
-    image: '/robots/robot_presidencia_hi.jpg',
-    theme: 'rose',
-    primaryColor: '#f43f5e',
+    image: '/robots/logos/agente_veto.jpeg',
+    theme: 'blue',
+    primaryColor: '#1E3A8A',
     badge: 'Fase 5 • Veto/Promulg.',
     model: 'Nemotron-70B',
     greeting: 'Módulo de evaluación ejecutiva. Analizo los criterios de promulgación o veto presidencial conforme a la CPE.',
@@ -210,9 +210,9 @@ export const VOICE_OPERATORS = [
     name: 'Agente de Publicación',
     shortName: 'Gaceta Oficial',
     role: 'Gaceta Oficial & Promulgación',
-    image: '/robots/robot_publicacion_hi.jpg',
-    theme: 'lime',
-    primaryColor: '#84cc16',
+    image: '/robots/logos/agente_publicacion.jpeg',
+    theme: 'cyan',
+    primaryColor: '#00C2CB',
     badge: 'Fase 5 • Gaceta',
     model: 'Nemotron-70B',
     greeting: 'Módulo de promulgación y publicación oficial. Registro la ley en la Gaceta Oficial del Estado Plurinacional y asigno su número oficial.',
@@ -224,9 +224,9 @@ export const VOICE_OPERATORS = [
     name: 'Atención Ciudadana',
     shortName: 'Ciudadano',
     role: 'Ventanilla Social & Peticiones',
-    image: '/robots/robot_ciudadano_hi.jpg',
+    image: '/robots/logos/agente_ciudadania.jpeg',
     theme: 'violet',
-    primaryColor: '#8b5cf6',
+    primaryColor: '#8B5CF6',
     badge: 'Fase Social • Peticiones',
     model: 'Nemotron-3 30B',
     greeting: 'Bienvenido. Estoy listo para escuchar y transcribir solicitudes, peticiones o reclamos de la ciudadanía para derivarlos a la unidad competente.',
@@ -238,7 +238,7 @@ export const VOICE_OPERATORS = [
     name: 'Analista de Presupuesto',
     shortName: 'Presupuesto',
     role: 'Impacto Fiscal & Ley 1178 SAFCO',
-    image: '/robots/robot_presupuesto_hi.jpg',
+    image: '/robots/logos/agente_comodin.jpeg',
     theme: 'emerald',
     primaryColor: '#059669',
     badge: 'Nivel 2 • Fiscal',
@@ -732,18 +732,37 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
                   gap: '6px',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <img
-                    src={op.image}
-                    alt={op.name}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
                     style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '8px',
-                      objectFit: 'cover',
-                      border: `1px solid ${isSelected ? op.primaryColor : 'rgba(255,255,255,0.2)'}`,
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                      border: `2px solid ${isSelected ? op.primaryColor : 'rgba(255,255,255,0.2)'}`,
+                      boxShadow: isSelected ? `0 0 10px ${op.primaryColor}60` : 'none',
+                      background: 'linear-gradient(145deg, #0f172a, #1e293b)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
-                  />
+                  >
+                    <img
+                      src={op.image}
+                      alt={op.name}
+                      onError={(e) => {
+                        e.currentTarget.src = '/robots/logos/agente_distribuidor.jpeg';
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        filter: isSelected ? 'brightness(1.1)' : 'brightness(0.85)',
+                        transition: 'filter 0.2s ease',
+                      }}
+                    />
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div
                       style={{
@@ -806,38 +825,81 @@ export default function VoiceAssistantPage({ onNavigateTab }) {
             overflow: 'hidden',
           }}
         >
-          {/* Avatar del Robot con animación */}
+          {/* Avatar del Robot con animación institucional estilo Mesa de Partes */}
           <div
             style={{
               width: '100%',
-              height: '220px',
-              borderRadius: '16px',
+              height: '230px',
+              borderRadius: '20px',
               overflow: 'hidden',
               position: 'relative',
-              background: 'radial-gradient(circle at center, #1e293b 0%, #070c16 100%)',
-              border: `1.5px solid ${isActiveAudio ? activeOperator.primaryColor : 'rgba(255, 255, 255, 0.12)'}`,
+              background: 'radial-gradient(circle at center, #132238 0%, #070d18 100%)',
+              border: `1.5px solid ${isActiveAudio ? activeOperator.primaryColor : 'rgba(255, 255, 255, 0.14)'}`,
+              boxShadow: isActiveAudio
+                ? `0 0 25px ${activeOperator.primaryColor}40, inset 0 0 20px ${activeOperator.primaryColor}20`
+                : 'inset 0 0 25px rgba(0,0,0,0.6)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               marginBottom: '14px',
+              transition: 'all 0.3s ease',
             }}
           >
-            <img
-              src={activeOperator.image}
-              alt={activeOperator.name}
+            {/* Halo difuminado de luz institucional */}
+            <div
               style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                padding: '6px',
-                filter: isActiveAudio
-                  ? `brightness(1.2) drop-shadow(0 0 12px ${activeOperator.primaryColor}80)`
-                  : isSpeaking
-                  ? 'brightness(1.15) drop-shadow(0 0 12px rgba(16, 185, 129, 0.5))'
-                  : 'none',
+                position: 'absolute',
+                width: '140px',
+                height: '140px',
+                borderRadius: '50%',
+                background: activeOperator.primaryColor,
+                opacity: isActiveAudio ? 0.28 : 0.12,
+                filter: 'blur(30px)',
+                pointerEvents: 'none',
                 transition: 'all 0.3s ease',
               }}
             />
+
+            {/* Nodo Avatar Circular / Squircle Central Homologado */}
+            <div
+              style={{
+                width: '128px',
+                height: '128px',
+                borderRadius: '50%',
+                border: `3px solid ${activeOperator.primaryColor}`,
+                boxShadow: isActiveAudio
+                  ? `0 0 25px ${activeOperator.primaryColor}80, 0 0 10px ${activeOperator.primaryColor}`
+                  : `0 0 16px ${activeOperator.primaryColor}40`,
+                overflow: 'hidden',
+                position: 'relative',
+                background: 'linear-gradient(145deg, #0f172a, #1e293b)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 2,
+                transform: isActiveAudio ? 'scale(1.05)' : isSpeaking ? 'scale(1.03)' : 'scale(1)',
+                transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease',
+              }}
+            >
+              <img
+                src={activeOperator.image}
+                alt={activeOperator.name}
+                onError={(e) => {
+                  e.currentTarget.src = '/robots/logos/agente_distribuidor.jpeg';
+                }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  filter: isActiveAudio
+                    ? 'brightness(1.15) contrast(1.05)'
+                    : isSpeaking
+                    ? 'brightness(1.12)'
+                    : 'brightness(0.95)',
+                  transition: 'all 0.3s ease',
+                }}
+              />
+            </div>
 
             {/* Láser de escaneo al escuchar */}
             {isActiveAudio && (

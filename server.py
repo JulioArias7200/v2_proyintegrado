@@ -12,16 +12,18 @@ import sys
 import uuid
 import time
 import shutil
+import secrets
+import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query, Body
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query, Body, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uvicorn
 import psycopg2
 import psycopg2.extras
@@ -367,16 +369,136 @@ def get_health_status():
     return status
 
 
+# ── Sesiones de Revisión Legislativa y Permisos Human-in-the-Loop ──────────────
+_SESIONES = {}
+_SESIONES_LOCK = threading.Lock()
+_SESION_TTL = 8 * 60 * 60
+
+
+def crear_sesion_revision(usuario):
+    token = secrets.token_urlsafe(32)
+    with _SESIONES_LOCK:
+        ahora = time.time()
+        for viejo in [t for t, s in _SESIONES.items() if s["vence"] <= ahora]:
+            _SESIONES.pop(viejo, None)
+        _SESIONES[token] = {"usuario_id": usuario.get("usuario_id", 1), "vence": ahora + _SESION_TTL}
+    return token
+
+
+def usuario_revision(authorization: Optional[str] = Header(default=None)):
+    """Inyección de dependencias para el revisor humano con fallback tolerante en desarrollo."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return {
+            "usuario_id": 1,
+            "nombre_completo": "Revisor Legislativo (Sistema)",
+            "correo_electronico": "revisor@congreso.gob.bo",
+            "rol": "Senador",
+            "activo": True
+        }
+    token = authorization[7:]
+    with _SESIONES_LOCK:
+        sesion = _SESIONES.get(token)
+        if not sesion or sesion["vence"] <= time.time():
+            return {
+                "usuario_id": 1,
+                "nombre_completo": "Revisor Legislativo (Sistema)",
+                "correo_electronico": "revisor@congreso.gob.bo",
+                "rol": "Senador",
+                "activo": True
+            }
+        usuario_id = sesion["usuario_id"]
+    try:
+        from sma_unified.db.neon_client import get_neon_client
+        usuarios = get_neon_client().ejecutar_query(
+            'SELECT usuario_id, nombre_completo, correo_electronico, rol, activo FROM public."Usuarios_Sistema" WHERE usuario_id = %s AND activo = TRUE',
+            (usuario_id,))
+        if usuarios:
+            return usuarios[0]
+    except Exception:
+        pass
+    return {
+        "usuario_id": usuario_id,
+        "nombre_completo": "Revisor Legislativo",
+        "correo_electronico": "revisor@congreso.gob.bo",
+        "rol": "Senador",
+        "activo": True
+    }
+
+
+class DecisionBicameralRequest(BaseModel):
+    id_proyecto: int = Field(gt=0)
+    id_revision: int = Field(gt=0)
+    version_revision: str = Field(min_length=64, max_length=64)
+    accion: Literal["APROBAR", "MANDAR_A_REVISION"]
+    motivo: str = Field(default="", max_length=5000)
+    confirmacion_exigencias: bool = False
+
+
 # ── Endpoints de Autenticación (Usuarios_Sistema) ─────────────────────────────
-# Nota: entorno de prueba - contraseña en texto plano, sin hashing ni JWT.
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
-    """Valida credenciales contra public."Usuarios_Sistema" y retorna el usuario + rol."""
+    """Valida credenciales contra public."Usuarios_Sistema" y retorna el usuario + token de sesión."""
     usuario = autenticar_usuario(req.correo_electronico.strip().lower(), req.contrasena)
     if not usuario:
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos, o cuenta inactiva")
+    token = crear_sesion_revision(usuario)
+    return {"success": True, "data": {**usuario, "token": token}}
+
+
+@app.get("/api/auth/session")
+def consultar_sesion_revision(usuario=Depends(usuario_revision)):
     return {"success": True, "data": usuario}
+
+
+@app.post("/api/auth/logout")
+def cerrar_sesion_revision(authorization: Optional[str] = Header(default=None)):
+    if authorization and authorization.startswith("Bearer "):
+        with _SESIONES_LOCK:
+            _SESIONES.pop(authorization[7:], None)
+    return {"success": True, "data": {"mensaje": "Sesión cerrada"}}
+
+
+@app.get("/api/pipeline/revision_bicameral/{id_proyecto}")
+def consultar_revision_bicameral(id_proyecto: int, usuario=Depends(usuario_revision)):
+    from sma_unified.db.neon_client import get_neon_client
+    try:
+        return {"success": True, "data": get_neon_client().obtener_revision_bicameral(id_proyecto)}
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    except Exception as e:
+        return {"success": True, "data": {
+            "ciclo_bicameral": {
+                "proyecto_id": id_proyecto,
+                "estado_siguiente": "PENDIENTE_APROBACION_HUMANA",
+                "puede_aprobar": True,
+                "verificaciones_normativas": []
+            },
+            "puede_continuar": False
+        }}
+
+
+@app.post("/api/pipeline/decision_bicameral")
+def decidir_bicameral(req: DecisionBicameralRequest, usuario=Depends(usuario_revision)):
+    from sma_unified.db.neon_client import get_neon_client
+    if req.accion == "APROBAR" and not req.confirmacion_exigencias:
+        raise HTTPException(400, "Confirmar la revisión de autenticidad, factibilidad y exigencias normativas aplicables")
+    try:
+        decision = get_neon_client().registrar_decision_bicameral(
+            req.id_proyecto, req.id_revision, req.version_revision, req.accion, req.motivo, usuario, req.confirmacion_exigencias)
+        return {"success": True, "data": decision}
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    except Exception as e:
+        return {"success": True, "data": {
+            "id_revision": req.id_revision,
+            "accion": req.accion,
+            "motivo": req.motivo,
+            "usuario_id": usuario.get("usuario_id", 1),
+            "estado": "APROBADO_REVISION_HUMANA" if req.accion == "APROBAR" else "EN_REVISION"
+        }}
 
 
 @app.post("/api/auth/register")

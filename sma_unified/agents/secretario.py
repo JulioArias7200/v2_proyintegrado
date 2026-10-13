@@ -170,22 +170,51 @@ class AgenteSecretarioCamara:
             }
         
         duracion_ms = int((time.time() - t0) * 1000)
-        acta = data.get("acta_debate", {})
-        resultado = acta.get("resultado_final", "APROBADO_EN_GRANDE_Y_DETALLE")
-        es_rechazado = "RECHAZADO" in resultado
         
-        # Persistencia Neon
+        # Validación matemática formal con control_legislativo
         try:
-            self.neon.insertar_observacion(
-                id_proyecto=int(proyecto_id),
-                tipo_obs="ACTA_DEBATE",
-                agente="Secretario de Cámara",
-                hallazgos=acta,
-                riesgo="ALTO" if es_rechazado else "BAJO",
-                recomendacion="Proyecto rechazado en Cámara de Origen y archivado en legislatura." if es_rechazado else "Acta formal de debate aprobada. Remitido a trámite bicameral."
-            )
-            nuevo_estado = "RECHAZADO_ORIGEN" if es_rechazado else "EN_TRAMITE_BICAMERAL"
-            self.neon.actualizar_estado_proyecto(int(proyecto_id), nuevo_estado, "Secretario de Cámara")
+            from sma_unified.agents.control_legislativo import validar_acta
+            acta_cruda = data.get("acta_debate", {})
+            if not acta_cruda.get("texto_aprobado"):
+                acta_cruda["texto_aprobado"] = (proyecto_info.get("texto_completo") or
+                                                proyecto_info.get("contenido_texto") or
+                                                proyecto_info.get("texto") or
+                                                proyecto_info.get("titulo") or "Texto Oficial Sometido a Votación")
+            if not acta_cruda.get("camara"):
+                acta_cruda["camara"] = "DIPUTADOS"
+            if not acta_cruda.get("sesion_numero"):
+                acta_cruda["sesion_numero"] = debate_data.get("sesion_numero", 1)
+            if not acta_cruda.get("referencia_acta"):
+                acta_cruda["referencia_acta"] = f"ACTA-SES-{acta_cruda.get('sesion_numero', 1)}-2026"
+            acta = validar_acta(acta_cruda)
+            data["acta_debate"] = acta
+            data["estado_ejecucion"] = acta.get("resultado_final", "APROBADO_EN_GRANDE_Y_DETALLE")
+            data["puede_continuar"] = acta.get("resultado_final") == "APROBADO_EN_GRANDE_Y_DETALLE"
+        except Exception as e_val:
+            print(f"Aviso validación acta Secretario: {e_val}")
+            acta = data.get("acta_debate", {})
+
+        resultado = acta.get("resultado_final", "APROBADO_EN_GRANDE_Y_DETALLE")
+        es_rechazado = "RECHAZADO" in str(resultado)
+        
+        # Persistencia Neon (usando método transaccional si existe)
+        try:
+            if hasattr(self.neon, "guardar_insumo_legislativo"):
+                self.neon.guardar_insumo_legislativo(
+                    int(proyecto_id), "ACTA_DEBATE", data,
+                    "Secretario de Cámara", acta.get("estado_siguiente", "EN_TRAMITE_BICAMERAL")
+                )
+            else:
+                self.neon.insertar_observacion(
+                    id_proyecto=int(proyecto_id),
+                    tipo_obs="ACTA_DEBATE",
+                    agente="Secretario de Cámara",
+                    hallazgos=acta,
+                    riesgo="ALTO" if es_rechazado else "BAJO",
+                    recomendacion="Proyecto rechazado en Cámara de Origen y archivado en legislatura." if es_rechazado else "Acta formal de debate aprobada. Remitido a trámite bicameral."
+                )
+                nuevo_estado = "RECHAZADO_ORIGEN" if es_rechazado else "EN_TRAMITE_BICAMERAL"
+                self.neon.actualizar_estado_proyecto(int(proyecto_id), nuevo_estado, "Secretario de Cámara")
         except Exception as err:
             print(f"Aviso Neon Secretario: {err}")
             

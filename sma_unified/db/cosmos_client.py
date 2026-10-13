@@ -150,6 +150,26 @@ class CosmosDBClient:
         if self.client:
             self.client.close()
 
+def registrar_traza_legislativa(id_proyecto, agente, entrada, salida):
+    """Mantiene la copia de auditoría en Mongo; Neon conserva la decisión autoritativa."""
+    cliente = None
+    try:
+        cliente = CosmosDBClient()
+        cliente.log_agent_execution(str(id_proyecto), agente, entrada, salida,
+                                    estado=salida.get("estado_ejecucion", salida.get("estado", "REGISTRADO")))
+        if agente == "Concentrador":
+            cliente.get_collection("expedientes_concentrados").insert_one({
+                "id_proyecto": int(id_proyecto), "agente": "Agente_Concentrador", "resultado": salida})
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning("No se pudo guardar la copia de auditoría legislativa en MongoDB")
+    finally:
+        if cliente:
+            try:
+                cliente.close()
+            except Exception:
+                pass
+
 def setup_cosmos_completo():
     """Setup completo de colecciones MongoDB"""
     print("Iniciando configuración de colecciones MongoDB...")

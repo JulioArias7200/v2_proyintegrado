@@ -1,0 +1,20 @@
+.revision-panel { color: #e2e8f0; background: rgba(15,23,42,.85); border: 1px solid rgba(56,189,248,.3); padding: 20px; border-radius: 12px; margin-bottom: 16px; min-width: 0; overflow-wrap: anywhere; }
+.revision-panel h2, .revision-panel h3, .revision-panel h4, .revision-panel legend { color: #7dd3fc; margin: 12px 0; }
+.revision-panel label { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.revision-panel input, .revision-panel textarea, .revision-panel select { color: #e2e8f0; background: #0f172a; border: 1px solid #475569; border-radius: 6px; padding: 9px; width: 100%; box-sizing: border-box; }
+.revision-grid, .revision-votos { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 12px; }
+.revision-row { border-top: 1px solid #334155; padding: 8px 0; }
+.revision-scroll { overflow-x: auto; }
+.revision-panel table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+.revision-panel th, .revision-panel td { padding: 10px; text-align: left; border-bottom: 1px solid #334155; vertical-align: top; font-size: .85rem; }
+.revision-panel th { color: #7dd3fc; }
+.revision-cumple { color: #86efac; }
+.revision-pendiente { color: #fbbf24; }
+.revision-panel details { margin: 12px 0; }
+.revision-panel summary { cursor: pointer; color: #7dd3fc; }
+.revision-panel dt { color: #94a3b8; font-weight: 600; }
+.revision-panel dd { margin: 4px 0 12px 14px; }
+.revision-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.revision-panel .revision-check { flex-direction: row; align-items: flex-start; }
+.revision-panel .revision-check input { width: auto; margin-top: 4px; flex-shrink: 0; }
+.revision-panel button:disabled { opacity: .45; cursor: not-allowed; }
