@@ -36,6 +36,10 @@ import {
   Zap,
   Shield,
   Mic,
+  Code,
+  FileJson,
+  Copy,
+  Info,
 } from 'lucide-react';
 import { api } from '../services/api';
 import HorizontalAgentFlow, { AGENTS_DEFINITION } from '../components/HorizontalAgentFlow';
@@ -173,6 +177,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   const [normativaNumero, setNormativaNumero] = useState('');
   const [isUploadingNormativa, setIsUploadingNormativa] = useState(false);
   const [normativaUploadStatus, setNormativaUploadStatus] = useState(null);
+
+  // ── Pestañas técnicas para el Agente de Veto y Promulgación ──
+  const [vetoActiveTab, setVetoActiveTab] = useState('dictamen');
+  const [copiedVetoJson, setCopiedVetoJson] = useState(false);
 
   const cargarNormativas = async () => {
     setIsLoadingNormativas(true);
@@ -3959,8 +3967,8 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
         </div>
       )}
 
-      {/* ── STEP 14: RESULTADO VETO / PROMULGACIÓN ── */}
-      {effectiveViewStep === 14 && vetoPromulgacionData && (
+      {/* ── STEP 14: RESULTADO VETO / PROMULGACIÓN (CON VISOR COMPLETO Y PESTAÑAS) ── */}
+      {effectiveViewStep === 14 && (
         <div className="mesa-layout-grid">
           <div className="mesa-banner-col" style={{ position: 'sticky', top: '20px' }}>
             <LateralAgentHero
@@ -3972,304 +3980,697 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
             {renderAgentHeaderContainer()}
             <AgentResultCard
               agentName="Agente Veto y Promulgación"
-              role="Evaluación Estratégica Multicriterio del Órgano Ejecutivo"
+              role="Evaluación Estratégica y Decisión Presidencial (Arts. 163-167 CPE)"
               theme="blue"
-              status="completed"
+              status={vetoPromulgacionData ? "completed" : "idle"}
               phaseLabel="Fase 5: Decisión Ejecutiva"
-              thinkingText="Evaluación estratégica multicriterio emitida"
+              thinkingText={vetoPromulgacionData ? "Evaluación estratégica y dictamen ejecutivo emitido" : "Esperando ejecución de la evaluación de Veto/Promulgación"}
               image="/robots/logos/agente_veto.jpeg"
-              justificacion="Art. 163-167 CPE: Control político y constitucional previo a la promulgación presidencial. Dictamen sobre viabilidad política, legalidad, factibilidad y sostenibilidad."
+              justificacion="Art. 163-167 CPE: Control político y constitucional previo a la promulgación presidencial. Asesoría fundada sobre viabilidad política, legalidad, factibilidad y sostenibilidad."
               onViewPrev={() => updateActiveSession({ inspectedAgentId: 'bicameral' })}
               prevLabel="Ver Trámite Bicameral"
             >
               {(() => {
-                const ev = vetoPromulgacionData.evaluacion_veto || {};
-                const crit = ev.criterios || {};
-                const esPromulgar = ev.decision === 'PROMULGAR';
-                return (
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{ background: esPromulgar ? 'rgba(138,201,38,0.2)' : 'rgba(231,111,81,0.2)', borderRadius: '50%', padding: '12px' }}>
-                          <Gavel size={32} color={esPromulgar ? '#8AC926' : '#E76F51'} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                            Etapa 7 · Decisión Estratégica Ejecutiva
-                          </div>
-                          <h3 style={{ fontSize: '1.5rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                            {esPromulgar ? '✅ Sanción Aprobada: Proceder a Promulgación' : `⚠️ Dictamen de Veto: ${ev.decision}`}
-                          </h3>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '10px' }}>
-                        <span className="badge badge-gold">
-                          Score Multicriterio: {ev.score_final || '7.5'}/10
-                        </span>
-                        <span className={`badge ${esPromulgar ? 'badge-green' : 'badge-red'}`}>
-                          {ev.decision || 'PROMULGAR'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 4 Criterios Estratégicos */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '14px', marginBottom: '20px' }}>
-                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(0,180,216,0.25)' }}>
-                        <div style={{ fontSize: '0.75rem', color: '#00B4D8', fontWeight: 700, textTransform: 'uppercase' }}>Viabilidad Política</div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.viabilidad_politica?.score || 8}/10</div>
-                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.viabilidad_politica?.razon || 'Consenso alcanzado'}</div>
-                      </div>
-
-                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(138,201,38,0.3)' }}>
-                        <div style={{ fontSize: '0.75rem', color: '#8AC926', fontWeight: 700, textTransform: 'uppercase' }}>Legalidad Constitucional</div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.legalidad_constitucional?.score || 9}/10</div>
-                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.legalidad_constitucional?.razon || 'Conforme a CPE Art. 410'}</div>
-                      </div>
-
-                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(56,189,248,0.25)' }}>
-                        <div style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase' }}>Factibilidad Técnica</div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.factibilidad_tecnica?.score || 7}/10</div>
-                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.factibilidad_tecnica?.razon || 'Estructura técnica viable'}</div>
-                      </div>
-
-                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(244,162,97,0.3)' }}>
-                        <div style={{ fontSize: '0.75rem', color: '#F4A261', fontWeight: 700, textTransform: 'uppercase' }}>Sostenibilidad Fiscal</div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>{crit.sostenibilidad_fiscal?.score || 7}/10</div>
-                        <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{crit.sostenibilidad_fiscal?.razon || 'Impacto presupuestario sostenible'}</div>
-                      </div>
-                    </div>
-
-                    {/* Justificación */}
-                    {ev.justificacion && (
-                      <div style={{ background: 'rgba(11,37,69,0.5)', border: '1px solid rgba(0,180,216,0.3)', padding: '16px', borderRadius: '12px', marginBottom: '24px' }}>
-                        <p style={{ color: '#e2e8f0', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
-                          {ev.justificacion}
-                        </p>
-                      </div>
-                    )}
-                    {/* ── CONSTANCIA OFICIAL DE VOTACIÓN PARLAMENTARIA (CONTROL DE VETO ART. 163-164 CPE) ── */}
+                if (!vetoPromulgacionData) {
+                  return (
                     <div style={{
-                      background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 42, 74, 0.90) 100%)',
-                      border: '1.5px solid rgba(56, 189, 248, 0.35)',
+                      padding: '28px 24px',
+                      background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.9) 0%, rgba(27, 42, 74, 0.75) 100%)',
                       borderRadius: '16px',
-                      padding: '20px',
-                      marginBottom: '24px',
-                      boxShadow: '0 8px 30px rgba(0,0,0,0.35)'
+                      border: '1.5px dashed rgba(56, 189, 248, 0.4)',
+                      textAlign: 'center'
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '16px', borderBottom: '1px solid rgba(148,163,184,0.15)', paddingBottom: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <Scale size={22} color="#38bdf8" />
-                          <div>
-                            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#ffffff' }}>
-                              🗳️ Constancia Oficial de Votación Parlamentaria Bicameral
-                            </h4>
-                            <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
-                              Cómputo formal de votos y verificación de quórum de 2/3 para ratificación o allanamiento de veto (Art. 163-164 CPE).
-                            </p>
-                          </div>
-                        </div>
-                        <span style={{
-                          background: 'rgba(16, 185, 129, 0.2)',
-                          border: '1px solid rgba(16, 185, 129, 0.4)',
-                          color: '#34d399',
-                          padding: '4px 12px',
-                          borderRadius: '20px',
-                          fontSize: '0.75rem',
-                          fontWeight: 800,
-                          textTransform: 'uppercase'
-                        }}>
-                          ✓ Quórum 2/3 Ratificado
-                        </span>
+                      <div style={{
+                        width: '68px',
+                        height: '68px',
+                        borderRadius: '50%',
+                        background: 'rgba(30, 58, 138, 0.5)',
+                        border: '2px solid #38bdf8',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 16px',
+                        boxShadow: '0 0 25px rgba(56, 189, 248, 0.35)'
+                      }}>
+                        <Gavel size={34} color="#38bdf8" />
                       </div>
+                      <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>
+                        Agente de Veto y Promulgación Presidencial
+                      </h3>
+                      <p style={{ color: '#94a3b8', fontSize: '0.88rem', maxWidth: '680px', margin: '0 auto 20px', lineHeight: 1.55 }}>
+                        Este agente evalúa de forma estratégica y multicriterio el proyecto de ley sancionado por la Asamblea Legislativa Plurinacional (Cámara de Diputados y Cámara de Senadores), verificando antecedentes constitucionales, sostenibilidad fiscal y el plazo perentorio de 10 días hábiles (Arts. 163 y 164 CPE).
+                      </p>
 
-                      {/* Tabla de Votación por Cámaras */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-                        {/* Cámara de Diputados */}
-                        <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '14px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
-                              Cámara de Diputados (130 curules)
-                            </span>
-                            <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>67% votos presentes</span>
-                          </div>
-                          <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
-                            <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#34d399' }}>{votosBicameral?.dipFavor ?? 87}</div>
-                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>A Favor</div>
-                            </div>
-                            <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f87171' }}>{votosBicameral?.dipContra ?? 35}</div>
-                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>En Contra</div>
-                            </div>
-                            <div style={{ flex: 1, background: 'rgba(148, 163, 184, 0.15)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#cbd5e1' }}>{votosBicameral?.dipAbst ?? 8}</div>
-                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>Abstención</div>
-                            </div>
-                          </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px', maxWidth: '720px', margin: '0 auto 24px', textAlign: 'left' }}>
+                        <div style={{ background: 'rgba(11, 37, 69, 0.55)', border: '1px solid rgba(0, 180, 216, 0.25)', borderRadius: '12px', padding: '14px' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#00B4D8', fontWeight: 700, textTransform: 'uppercase' }}>Insumos Requeridos</div>
+                          <div style={{ fontSize: '0.82rem', color: '#e2e8f0', marginTop: '4px' }}>Ley sancionada en trámite bicameral, acta de escrutinio y expediente integral.</div>
                         </div>
-
-                        {/* Cámara de Senadores */}
-                        <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '14px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
-                              Cámara de Senadores (36 curules)
-                            </span>
-                            <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>69.4% votos presentes</span>
-                          </div>
-                          <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
-                            <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#34d399' }}>{votosBicameral?.senFavor ?? 25}</div>
-                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>A Favor</div>
-                            </div>
-                            <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f87171' }}>{votosBicameral?.senContra ?? 9}</div>
-                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>En Contra</div>
-                            </div>
-                            <div style={{ flex: 1, background: 'rgba(148, 163, 184, 0.15)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                              <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#cbd5e1' }}>{votosBicameral?.senAbst ?? 2}</div>
-                              <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>Abstención</div>
-                            </div>
-                          </div>
+                        <div style={{ background: 'rgba(11, 37, 69, 0.55)', border: '1px solid rgba(138, 201, 38, 0.25)', borderRadius: '12px', padding: '14px' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#8AC926', fontWeight: 700, textTransform: 'uppercase' }}>Plazo Constitucional</div>
+                          <div style={{ fontSize: '0.82rem', color: '#e2e8f0', marginTop: '4px' }}>10 días hábiles para promulgar u objetar con observaciones fundadas.</div>
+                        </div>
+                        <div style={{ background: 'rgba(11, 37, 69, 0.55)', border: '1px solid rgba(244, 162, 97, 0.25)', borderRadius: '12px', padding: '14px' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#F4A261', fontWeight: 700, textTransform: 'uppercase' }}>Decisiones Posibles</div>
+                          <div style={{ fontSize: '0.82rem', color: '#e2e8f0', marginTop: '4px' }}>Promulgación, Veto Parcial o Veto Total (Arts. 163-164 CPE).</div>
                         </div>
                       </div>
-
-                      {/* Certificación Jurídica */}
-                      <div style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(148, 163, 184, 0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                        ⚖️ <strong>Acta de Cómputo Oficial:</strong> Conforme al Art. 163 numeral 10 de la CPE, habiéndose alcanzado la mayoría de dos tercios de los miembros presentes en ambas Cámaras, la Ley queda definitivamente sancionada y habilitada para su remisión al Presidente o promulgación directa por la Presidencia de la ALP.
-                      </div>
-                    </div>
-
-                    {/* Banner de Remisión al Presidente */}
-                    <div style={{
-                      background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.35) 0%, rgba(15, 23, 42, 0.7) 100%)',
-                      border: '1.5px solid rgba(59, 130, 246, 0.4)',
-                      borderRadius: '12px',
-                      padding: '14px 18px',
-                      marginBottom: '20px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '12px'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <Building2 size={24} color="#60a5fa" />
-                        <div>
-                          <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.92rem' }}>
-                            {remitidoPresidente ? '✓ Autógrafa Remitida al Presidente del Estado' : 'Procedimiento Constitucional de Promulgación'}
-                          </div>
-                          <div style={{ fontSize: '0.78rem', color: '#93c5fd' }}>
-                            {remitidoPresidente ? 'Despachada a Casa Grande del Pueblo para promulgación oficial dentro de los 10 días hábiles.' : 'Remitir la ley sancionada al Presidente Constitucional del Estado Plurinacional.'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {!remitidoPresidente ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            updateActiveSession({ remitidoPresidente: true });
-                            appendLog('veto_promulgacion', 'PRESIDENCIA', 'Autógrafa de Ley remitida al Presidente del Estado para promulgación.');
-                          }}
-                          style={{
-                            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                            border: 'none',
-                            borderRadius: '8px',
-                            color: '#ffffff',
-                            padding: '8px 18px',
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
-                          }}
-                        >
-                          <Building2 size={15} />
-                          <span>Remitir al Presidente</span>
-                        </button>
-                      ) : (
-                        <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 800 }}>
-                          ✓ Estado: En Despacho Presidencial
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Acción Siguiente */}
-                    {/* Módulo de voz: Promulgación con Audio y Modificación por Voz */}
-                    <div style={{ marginBottom: '24px', width: '100%' }}>
-                      <AgentVoiceModule
-                        agentId="veto_promulgacion"
-                        agentLabel="Agente Veto y Promulgación"
-                        primaryColor="#1E3A8A"
-                        sesionId={fase1Data?.sesion_id || null}
-                        resultData={vetoPromulgacionData}
-                        speechHook={speechHook}
-                        onModificarPromulgacion={(nuevaDec) => {
-                          updateActiveSession({
-                            vetoPromulgacionData: {
-                              ...vetoPromulgacionData,
-                              evaluacion_veto: {
-                                ...vetoPromulgacionData?.evaluacion_veto,
-                                decision: nuevaDec
-                              }
-                            }
-                          });
-                          appendLog('veto_promulgacion', 'MODIFICACION_VOZ', `Decisión modificada por voz a: ${nuevaDec}`);
-                        }}
-                      />
-                    </div>
-
-                    {/* Acción Siguiente — Ir a la Sección de Publicación de Gaceta */}
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: '16px',
-                      marginTop: '16px',
-                      paddingTop: '20px',
-                      borderTop: '1px solid rgba(0, 180, 216, 0.25)'
-                    }}>
-                      <button
-                        type="button"
-                        onClick={() => updateActiveSession({ inspectedAgentId: 'bicameral' })}
-                        className="btn-secondary"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '0.9rem' }}
-                      >
-                        <Eye size={16} />
-                        <span>Ver Evaluación Bicameral Previa</span>
-                      </button>
 
                       <button
                         type="button"
-                        onClick={handlePublicacion}
+                        onClick={handleVetoPromulgacion}
                         disabled={isProcessing}
-                        className="btn-gaceta-oficial"
-                        style={{
-                          background: 'linear-gradient(135deg, #0284C7 0%, #00C2CB 100%)',
-                          fontSize: '1.08rem',
-                          padding: '14px 32px',
-                          fontWeight: 900,
-                          boxShadow: '0 6px 30px rgba(0, 194, 203, 0.5)',
-                          cursor: 'pointer'
-                        }}
+                        className="btn-primary"
+                        style={{ fontSize: '1rem', padding: '12px 28px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                       >
                         {isProcessing ? (
-                          <>
-                            <Cpu size={20} className="pulse-active" />
-                            <span>Publicando y Asignando Ley en Gaceta...</span>
-                          </>
+                          <><Cpu size={18} className="pulse-active" /><span>Evaluando Veto y Promulgación...</span></>
                         ) : (
-                          <>
-                            <Newspaper size={22} />
-                            <span>Ir a la Sección de Publicación de Gaceta</span>
-                            <ArrowRight size={20} />
-                          </>
+                          <><Gavel size={18} /><span>Iniciar Evaluación de Veto y Promulgación</span><ArrowRight size={16} /></>
                         )}
                       </button>
                     </div>
+                  );
+                }
+
+                const ev = vetoPromulgacionData.evaluacion_veto || {};
+                const rec = ev.recomendacion_tecnica || {};
+                const decision = ev.decision || rec.dictamen_sugerido || 'PROMULGAR';
+                const esPromulgar = decision === 'PROMULGAR' || (!decision.includes('VETO'));
+
+                const inputPayload = {
+                  proyecto_info: buildProyectoInfo(),
+                  expediente: concentradorData?.expediente_consolidado || {},
+                  id_proyecto: fase1Data?.id_proyecto,
+                  ciclo_bicameral: bicameralData?.ciclo_bicameral || {}
+                };
+
+                const handleCopyJson = () => {
+                  try {
+                    navigator.clipboard.writeText(JSON.stringify(vetoPromulgacionData, null, 2));
+                    setCopiedVetoJson(true);
+                    setTimeout(() => setCopiedVetoJson(false), 2000);
+                  } catch (err) {
+                    console.error('Error al copiar JSON:', err);
+                  }
+                };
+
+                return (
+                  <div>
+                    {/* ── BARRA DE PESTAÑAS TÉCNICAS ── */}
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      borderBottom: '1.5px solid rgba(56, 189, 248, 0.25)',
+                      paddingBottom: '12px',
+                      marginBottom: '20px',
+                      overflowX: 'auto'
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => setVetoActiveTab('dictamen')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '10px',
+                          border: vetoActiveTab === 'dictamen' ? '1.5px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
+                          background: vetoActiveTab === 'dictamen' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15,23,42,0.6)',
+                          color: vetoActiveTab === 'dictamen' ? '#ffffff' : '#94a3b8',
+                          fontWeight: vetoActiveTab === 'dictamen' ? 700 : 500,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        <FileText size={15} />
+                        <span>Dictamen y Asesoría Ejecutiva</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setVetoActiveTab('json')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '10px',
+                          border: vetoActiveTab === 'json' ? '1.5px solid #00B4D8' : '1px solid rgba(255,255,255,0.1)',
+                          background: vetoActiveTab === 'json' ? 'rgba(0, 180, 216, 0.2)' : 'rgba(15,23,42,0.6)',
+                          color: vetoActiveTab === 'json' ? '#ffffff' : '#94a3b8',
+                          fontWeight: vetoActiveTab === 'json' ? 700 : 500,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        <FileJson size={15} />
+                        <span>Entradas y Salidas JSON</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setVetoActiveTab('codigo')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '10px',
+                          border: vetoActiveTab === 'codigo' ? '1.5px solid #8AC926' : '1px solid rgba(255,255,255,0.1)',
+                          background: vetoActiveTab === 'codigo' ? 'rgba(138, 201, 38, 0.2)' : 'rgba(15,23,42,0.6)',
+                          color: vetoActiveTab === 'codigo' ? '#ffffff' : '#94a3b8',
+                          fontWeight: vetoActiveTab === 'codigo' ? 700 : 500,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        <Code size={15} />
+                        <span>Lógica y Código del Agente</span>
+                      </button>
+                    </div>
+
+                    {/* ══════════════════════════════════════════════════════════════ */}
+                    {/* PESTAÑA 1: DICTAMEN Y ASESORÍA EJECUTIVA                       */}
+                    {/* ══════════════════════════════════════════════════════════════ */}
+                    {vetoActiveTab === 'dictamen' && (
+                      <div>
+                        {/* Cabecera de Decisión */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{ background: esPromulgar ? 'rgba(138,201,38,0.2)' : 'rgba(231,111,81,0.2)', borderRadius: '50%', padding: '12px' }}>
+                              <Gavel size={32} color={esPromulgar ? '#8AC926' : '#E76F51'} />
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                                Etapa 7 · Decisión Presidencial del Órgano Ejecutivo
+                              </div>
+                              <h3 style={{ fontSize: '1.45rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
+                                {esPromulgar ? '✅ Sanción Aprobada: Proceder a Promulgación' : `⚠️ Dictamen Ejecutivo: ${decision}`}
+                              </h3>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            <span className="badge badge-gold" style={{ fontSize: '0.76rem' }}>
+                              ⏱️ Plazo: {ev.plazo_constitucional_dias || 10} días {ev.tipo_dias || 'hábiles'}
+                            </span>
+                            <span className={`badge ${esPromulgar ? 'badge-green' : 'badge-red'}`} style={{ fontSize: '0.76rem' }}>
+                              {decision}
+                            </span>
+                            <span className="badge badge-blue" style={{ fontSize: '0.76rem' }}>
+                              Modo: {ev.modo_control || 'HUMAN_IN_THE_LOOP'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Resumen Ejecutivo y Fundamentación */}
+                        <div style={{
+                          background: 'linear-gradient(145deg, rgba(15,23,42,0.9), rgba(30,41,59,0.85))',
+                          border: '1.5px solid rgba(56,189,248,0.3)',
+                          padding: '18px 20px',
+                          borderRadius: '14px',
+                          marginBottom: '20px'
+                        }}>
+                          <div style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>
+                            📋 Resumen Ejecutivo de la Asesoría Presidencial
+                          </div>
+                          <p style={{ color: '#f1f5f9', fontSize: '0.92rem', lineHeight: 1.6, margin: '0 0 12px 0' }}>
+                            {rec.resumen_ejecutivo || ev.justificacion || 'Evaluación jurídica y técnica favorable para la promulgación oficial del proyecto sancionado conforme a los Arts. 163 y 164 de la CPE.'}
+                          </p>
+
+                          {rec.fundamentacion && (
+                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '0.84rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                              <strong>Fundamento:</strong> {rec.fundamentacion}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Paneles de Alertas Constitucionales y Fiscales */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+                          <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(138,201,38,0.3)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                              <ShieldCheck size={18} color="#8AC926" />
+                              <div style={{ fontSize: '0.78rem', color: '#8AC926', fontWeight: 800, textTransform: 'uppercase' }}>
+                                Alertas Constitucionales (CPE Art. 410)
+                              </div>
+                            </div>
+                            {Array.isArray(rec.alertas_constitucionales) && rec.alertas_constitucionales.length > 0 ? (
+                              <ul style={{ margin: 0, paddingLeft: '18px', color: '#f87171', fontSize: '0.8rem' }}>
+                                {rec.alertas_constitucionales.map((a, idx) => (
+                                  <li key={idx} style={{ marginBottom: '4px' }}>{String(a)}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div style={{ fontSize: '0.82rem', color: '#a7f3d0' }}>
+                                ✓ Sin objeciones de constitucionalidad formal ni de fondo.
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(244,162,97,0.3)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                              <Scale size={18} color="#F4A261" />
+                              <div style={{ fontSize: '0.78rem', color: '#F4A261', fontWeight: 800, textTransform: 'uppercase' }}>
+                                Alertas Fiscales (Ley 1178 SAFCO)
+                              </div>
+                            </div>
+                            {Array.isArray(rec.alertas_fiscales) && rec.alertas_fiscales.length > 0 ? (
+                              <ul style={{ margin: 0, paddingLeft: '18px', color: '#f87171', fontSize: '0.8rem' }}>
+                                {rec.alertas_fiscales.map((f, idx) => (
+                                  <li key={idx} style={{ marginBottom: '4px' }}>{String(f)}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div style={{ fontSize: '0.82rem', color: '#a7f3d0' }}>
+                                ✓ Sostenibilidad fiscal y presupuestaria verificada contra el TGN.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Pliego de Observaciones (si aplica) */}
+                        {Array.isArray(ev.pliego_observaciones) && ev.pliego_observaciones.length > 0 && (
+                          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
+                            <div style={{ fontSize: '0.82rem', color: '#f87171', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px' }}>
+                              ⚠️ Pliego de Observaciones Presidenciales:
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {ev.pliego_observaciones.map((obs, idx) => (
+                                <div key={idx} style={{ background: 'rgba(15,23,42,0.8)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem' }}>
+                                  <strong style={{ color: '#ffffff' }}>{obs.articulo || `Observación #${idx+1}`}:</strong> {obs.motivo || obs.motivo_objecion || JSON.stringify(obs)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Constancia Oficial de Votación Bicameral */}
+                        <div style={{
+                          background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 42, 74, 0.90) 100%)',
+                          border: '1.5px solid rgba(56, 189, 248, 0.35)',
+                          borderRadius: '16px',
+                          padding: '20px',
+                          marginBottom: '24px',
+                          boxShadow: '0 8px 30px rgba(0,0,0,0.35)'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '16px', borderBottom: '1px solid rgba(148,163,184,0.15)', paddingBottom: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <Scale size={22} color="#38bdf8" />
+                              <div>
+                                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#ffffff' }}>
+                                  🗳️ Constancia Oficial de Votación Parlamentaria Bicameral
+                                </h4>
+                                <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                                  Cómputo formal de votos y verificación de quórum de 2/3 para ratificación o allanamiento de veto (Arts. 163-164 CPE).
+                                </p>
+                              </div>
+                            </div>
+                            <span style={{
+                              background: 'rgba(16, 185, 129, 0.2)',
+                              border: '1px solid rgba(16, 185, 129, 0.4)',
+                              color: '#34d399',
+                              padding: '4px 12px',
+                              borderRadius: '20px',
+                              fontSize: '0.75rem',
+                              fontWeight: 800,
+                              textTransform: 'uppercase'
+                            }}>
+                              ✓ Quórum 2/3 Ratificado
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                            {/* Cámara de Diputados */}
+                            <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '14px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
+                                  Cámara de Diputados (130 curules)
+                                </span>
+                                <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>67% votos presentes</span>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
+                                <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#34d399' }}>{votosBicameral?.dipFavor ?? 87}</div>
+                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>A Favor</div>
+                                </div>
+                                <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f87171' }}>{votosBicameral?.dipContra ?? 35}</div>
+                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>En Contra</div>
+                                </div>
+                                <div style={{ flex: 1, background: 'rgba(148, 163, 184, 0.15)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#cbd5e1' }}>{votosBicameral?.dipAbst ?? 8}</div>
+                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>Abstención</div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Cámara de Senadores */}
+                            <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '14px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
+                                  Cámara de Senadores (36 curules)
+                                </span>
+                                <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>69.4% votos presentes</span>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
+                                <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#34d399' }}>{votosBicameral?.senFavor ?? 25}</div>
+                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>A Favor</div>
+                                </div>
+                                <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f87171' }}>{votosBicameral?.senContra ?? 9}</div>
+                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>En Contra</div>
+                                </div>
+                                <div style={{ flex: 1, background: 'rgba(148, 163, 184, 0.15)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '8px', padding: '8px' }}>
+                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#cbd5e1' }}>{votosBicameral?.senAbst ?? 2}</div>
+                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>Abstención</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(148, 163, 184, 0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                            ⚖️ <strong>Acta de Cómputo Oficial:</strong> Conforme al Art. 163 numeral 10 de la CPE, habiéndose alcanzado la mayoría de dos tercios de los miembros presentes en ambas Cámaras, la Ley queda definitivamente sancionada y habilitada para su remisión al Presidente o promulgación directa por la Presidencia de la ALP.
+                          </div>
+                        </div>
+
+                        {/* Banner de Remisión al Presidente */}
+                        <div style={{
+                          background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.35) 0%, rgba(15, 23, 42, 0.7) 100%)',
+                          border: '1.5px solid rgba(59, 130, 246, 0.4)',
+                          borderRadius: '12px',
+                          padding: '14px 18px',
+                          marginBottom: '20px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '12px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Building2 size={24} color="#60a5fa" />
+                            <div>
+                              <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.92rem' }}>
+                                {remitidoPresidente ? '✓ Autógrafa Remitida al Presidente del Estado' : 'Procedimiento Constitucional de Promulgación'}
+                              </div>
+                              <div style={{ fontSize: '0.78rem', color: '#93c5fd' }}>
+                                {remitidoPresidente ? 'Despachada a Casa Grande del Pueblo para promulgación oficial dentro de los 10 días hábiles.' : 'Remitir la ley sancionada al Presidente Constitucional del Estado Plurinacional.'}
+                              </div>
+                            </div>
+                          </div>
+
+                          {!remitidoPresidente ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateActiveSession({ remitidoPresidente: true });
+                                appendLog('veto_promulgacion', 'PRESIDENCIA', 'Autógrafa de Ley remitida al Presidente del Estado para promulgación.');
+                              }}
+                              style={{
+                                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                                border: 'none',
+                                borderRadius: '8px',
+                                color: '#ffffff',
+                                padding: '8px 18px',
+                                fontSize: '0.82rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
+                              }}
+                            >
+                              <Building2 size={15} />
+                              <span>Remitir al Presidente</span>
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 800 }}>
+                              ✓ Estado: En Despacho Presidencial
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Módulo de voz */}
+                        <div style={{ marginBottom: '24px', width: '100%' }}>
+                          <AgentVoiceModule
+                            agentId="veto_promulgacion"
+                            agentLabel="Agente Veto y Promulgación"
+                            primaryColor="#1E3A8A"
+                            sesionId={fase1Data?.sesion_id || null}
+                            resultData={vetoPromulgacionData}
+                            speechHook={speechHook}
+                            onModificarPromulgacion={(nuevaDec) => {
+                              updateActiveSession({
+                                vetoPromulgacionData: {
+                                  ...vetoPromulgacionData,
+                                  evaluacion_veto: {
+                                    ...vetoPromulgacionData?.evaluacion_veto,
+                                    decision: nuevaDec
+                                  }
+                                }
+                              });
+                              appendLog('veto_promulgacion', 'MODIFICACION_VOZ', `Decisión modificada por voz a: ${nuevaDec}`);
+                            }}
+                          />
+                        </div>
+
+                        {/* Botones de Navegación de Pie */}
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '16px',
+                          marginTop: '16px',
+                          paddingTop: '20px',
+                          borderTop: '1px solid rgba(0, 180, 216, 0.25)'
+                        }}>
+                          <button
+                            type="button"
+                            onClick={() => updateActiveSession({ inspectedAgentId: 'bicameral' })}
+                            className="btn-secondary"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '0.9rem' }}
+                          >
+                            <Eye size={16} />
+                            <span>Ver Evaluación Bicameral Previa</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handlePublicacion}
+                            disabled={isProcessing}
+                            className="btn-gaceta-oficial"
+                            style={{
+                              background: 'linear-gradient(135deg, #0284C7 0%, #00C2CB 100%)',
+                              fontSize: '1.08rem',
+                              padding: '14px 32px',
+                              fontWeight: 900,
+                              boxShadow: '0 6px 30px rgba(0, 194, 203, 0.5)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {isProcessing ? (
+                              <>
+                                <Cpu size={20} className="pulse-active" />
+                                <span>Publicando y Asignando Ley en Gaceta...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Newspaper size={22} />
+                                <span>Ir a la Sección de Publicación de Gaceta</span>
+                                <ArrowRight size={20} />
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ══════════════════════════════════════════════════════════════ */}
+                    {/* PESTAÑA 2: ENTRADAS Y SALIDAS JSON (I/O)                       */}
+                    {/* ══════════════════════════════════════════════════════════════ */}
+                    {vetoActiveTab === 'json' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        {/* Insumos de Entrada (Inputs) */}
+                        <div style={{
+                          background: 'rgba(15, 23, 42, 0.85)',
+                          borderRadius: '14px',
+                          border: '1.5px solid rgba(56, 189, 248, 0.3)',
+                          padding: '18px'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <FileJson size={18} color="#38bdf8" />
+                              <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>
+                                Insumos Recibidos (Input Payload):
+                              </strong>
+                            </div>
+                            <span className="badge badge-blue" style={{ fontSize: '0.7rem' }}>
+                              Entrada al Agente
+                            </span>
+                          </div>
+                          <p style={{ color: '#94a3b8', fontSize: '0.78rem', marginBottom: '10px' }}>
+                            Datos remitidos por la Cámara Revisora y el expediente consolidado previo para la toma de decisión ejecutiva.
+                          </p>
+                          <pre style={{
+                            background: '#070d18',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            color: '#38bdf8',
+                            fontSize: '0.78rem',
+                            fontFamily: 'monospace',
+                            maxHeight: '260px',
+                            overflowY: 'auto'
+                          }}>
+                            {JSON.stringify(inputPayload, null, 2)}
+                          </pre>
+                        </div>
+
+                        {/* Salida Generada por el Agente (Output JSON) */}
+                        <div style={{
+                          background: 'rgba(15, 23, 42, 0.85)',
+                          borderRadius: '14px',
+                          border: '1.5px solid rgba(138, 201, 38, 0.35)',
+                          padding: '18px'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <FileJson size={18} color="#8AC926" />
+                              <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>
+                                Resultado Estructurado (Output Payload):
+                              </strong>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleCopyJson}
+                              style={{
+                                background: copiedVetoJson ? 'rgba(16, 185, 129, 0.25)' : 'rgba(0, 180, 216, 0.15)',
+                                border: `1px solid ${copiedVetoJson ? '#10b981' : 'rgba(0, 180, 216, 0.4)'}`,
+                                color: copiedVetoJson ? '#34d399' : '#00B4D8',
+                                padding: '5px 12px',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              {copiedVetoJson ? <Check size={14} /> : <Copy size={14} />}
+                              <span>{copiedVetoJson ? '✓ Copiado al Portapapeles' : 'Copiar JSON'}</span>
+                            </button>
+                          </div>
+                          <p style={{ color: '#94a3b8', fontSize: '0.78rem', marginBottom: '10px' }}>
+                            JSON formal devuelto por <code>AgenteVetoPromulgacion</code> registrado en PostgreSQL Neon y traza Cosmos DB.
+                          </p>
+                          <pre style={{
+                            background: '#070d18',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            color: '#a7f3d0',
+                            fontSize: '0.78rem',
+                            fontFamily: 'monospace',
+                            maxHeight: '340px',
+                            overflowY: 'auto'
+                          }}>
+                            {JSON.stringify(vetoPromulgacionData, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ══════════════════════════════════════════════════════════════ */}
+                    {/* PESTAÑA 3: CÓDIGO Y LÓGICA DEL AGENTE                          */}
+                    {/* ══════════════════════════════════════════════════════════════ */}
+                    {vetoActiveTab === 'codigo' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{
+                          background: 'rgba(15, 23, 42, 0.85)',
+                          borderRadius: '14px',
+                          border: '1.5px solid rgba(138, 201, 38, 0.3)',
+                          padding: '18px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <Code size={18} color="#8AC926" />
+                            <strong style={{ color: '#ffffff', fontSize: '0.95rem' }}>
+                              Especificación del Módulo en Python (CrewAI / Determinista)
+                            </strong>
+                          </div>
+                          <p style={{ color: '#94a3b8', fontSize: '0.82rem', marginBottom: '14px', lineHeight: 1.5 }}>
+                            El agente implementa el control gubernamental previo a la promulgación. Utiliza un prompt jurídico especializado con temperatura baja (0.1) para evitar alucinaciones, exigiendo estricto apego a las constancias recibidas sin inventar respaldo fiscal ni fechas.
+                          </p>
+
+                          <div style={{
+                            background: '#070d18',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '8px',
+                            padding: '14px',
+                            fontFamily: 'monospace',
+                            fontSize: '0.78rem',
+                            color: '#e2e8f0',
+                            maxHeight: '380px',
+                            overflowY: 'auto',
+                            lineHeight: 1.45
+                          }}>
+                            <span style={{ color: '#64748b' }}># sma_unified/agents/veto_promulgacion.py</span><br />
+                            <span style={{ color: '#f43f5e' }}>class</span> <span style={{ color: '#38bdf8' }}>AgenteVetoPromulgacion</span>:<br />
+                            &nbsp;&nbsp;<span style={{ color: '#f43f5e' }}>def</span> <span style={{ color: '#38bdf8' }}>ejecutar</span>(self, expediente: Dict, proyecto_info: Dict, usuario_registrador=None):<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#64748b' }}># 1. Recuperar ciclo y aprobación bicameral desde Neon PostgreSQL</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;ciclo = self.neon.obtener_aprobacion_bicameral(int(proyecto_id))<br /><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#64748b' }}># 2. Análisis con LLM Resiliente de Arts. 163 y 164 CPE</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;raw, _ = chat_completion_resiliente(messages=[<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#123;<span style={{ color: '#10b981' }}>"role"</span>: <span style={{ color: '#10b981' }}>"system"</span>, <span style={{ color: '#10b981' }}>"content"</span>: <span style={{ color: '#cbd5e1' }}>"Asesor jurídico boliviano. CPE arts. 163 y 164..."</span>&#125;,<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#123;<span style={{ color: '#10b981' }}>"role"</span>: <span style={{ color: '#10b981' }}>"user"</span>, <span style={{ color: '#10b981' }}>"content"</span>: json.dumps(ciclo)&#125;<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;], temperature=0.1, max_tokens=2500)<br /><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#64748b' }}># 3. Estructuración con Human-in-the-Loop y plazos perentorios</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;evaluacion = &#123;<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#10b981' }}>"modo_control"</span>: <span style={{ color: '#10b981' }}>"HUMAN_IN_THE_LOOP"</span>,<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#10b981' }}>"decision"</span>: decision or <span style={{ color: '#10b981' }}>"PENDIENTE_DECISION_HUMANA"</span>,<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#10b981' }}>"plazo_constitucional_dias"</span>: 10,<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#10b981' }}>"tipo_dias"</span>: <span style={{ color: '#10b981' }}>"HABILES"</span>,<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#10b981' }}>"ruta_siguiente"</span>: <span style={{ color: '#10b981' }}>"PUBLICACION_GACETA"</span> if decision == <span style={{ color: '#10b981' }}>"PROMULGAR"</span> else ...<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&#125;<br /><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#64748b' }}># 4. Persistencia en Neon y Traza en Cosmos DB</span><br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;self.neon.guardar_evaluacion_ejecutiva(...)<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;registrar_traza_legislativa(...)<br />
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#f43f5e' }}>return</span> &#123;<span style={{ color: '#10b981' }}>"evaluacion_veto"</span>: evaluacion&#125;
+                          </div>
+                        </div>
+
+                        {/* Marco Normativo Constitucional */}
+                        <div style={{
+                          background: 'rgba(15, 23, 42, 0.85)',
+                          borderRadius: '14px',
+                          border: '1.5px solid rgba(56, 189, 248, 0.3)',
+                          padding: '18px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <BookOpen size={18} color="#38bdf8" />
+                            <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>
+                              Marco Constitucional Aplicable (CPE 2009)
+                            </strong>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px', marginTop: '10px' }}>
+                            <div style={{ background: 'rgba(11, 37, 69, 0.5)', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                              <strong style={{ color: '#38bdf8' }}>Art. 163 numeral 10:</strong> La ley sancionada por la ALP será remitida al Órgano Ejecutivo para su promulgación como ley del Estado.
+                            </div>
+                            <div style={{ background: 'rgba(11, 37, 69, 0.5)', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                              <strong style={{ color: '#38bdf8' }}>Art. 163 numeral 11:</strong> El Presidente del Estado tiene 10 días hábiles desde su recepción para promulgarla o devolverla con observaciones fundadas.
+                            </div>
+                            <div style={{ background: 'rgba(11, 37, 69, 0.5)', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                              <strong style={{ color: '#38bdf8' }}>Art. 164 numeral I:</strong> La ley será de cumplimiento obligatorio desde el día de su publicación en la Gaceta Oficial del Estado Plurinacional.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
