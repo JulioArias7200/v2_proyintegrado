@@ -75,6 +75,7 @@ const AGENT_ACCENT_MAP = {
   comision: '#38BDF8', // Azul Cielo Radiante
   constitucional: '#2563EB', // Azul Zafiro Real
   consistencia: '#1D4ED8', // Azul Cobalto Profundo
+  concentrador: '#0284C7', // Azul Océano Cerúleo
   emisor: '#0284C7', // Azul Océano Cerúleo
   notificador: '#06B6D4', // Turquesa Azulado
   constitucion_fondo: '#4338CA', // Azul Índigo Parlamentario
@@ -948,21 +949,21 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     }
   };
 
-  // Active agent object determination (extended to 12 agents)
+  // Active agent object determination (preciso para los 9 agentes del pipeline)
   const getActiveAgentDef = () => {
     if (inspectedAgentId) return AGENTS_DEFINITION.find(a => a.id === inspectedAgentId) || AGENTS_DEFINITION[0];
-    if (pipelineStep <= 2) return AGENTS_DEFINITION[0];
-    if (pipelineStep <= 4) return AGENTS_DEFINITION[1];
-    if (pipelineStep === 5) return AGENTS_DEFINITION[2];
-    if (pipelineStep === 6) return AGENTS_DEFINITION[3];
-    if (pipelineStep === 7) return AGENTS_DEFINITION[4];
-    if (pipelineStep === 8) return AGENTS_DEFINITION[5];
-    if (pipelineStep <= 10) return AGENTS_DEFINITION.find(a => a.id === 'constitucion_fondo') || AGENTS_DEFINITION[6];
-    if (pipelineStep === 11) return AGENTS_DEFINITION.find(a => a.id === 'concentrador_crew') || AGENTS_DEFINITION[7];
-    if (pipelineStep === 12) return AGENTS_DEFINITION.find(a => a.id === 'secretario') || AGENTS_DEFINITION[8];
-    if (pipelineStep === 13) return AGENTS_DEFINITION.find(a => a.id === 'bicameral') || AGENTS_DEFINITION[9];
-    if (pipelineStep === 14) return AGENTS_DEFINITION.find(a => a.id === 'veto_promulgacion') || AGENTS_DEFINITION[10];
-    return AGENTS_DEFINITION.find(a => a.id === 'publicacion') || AGENTS_DEFINITION[11];
+    if (pipelineStep <= 2) return AGENTS_DEFINITION.find(a => a.id === 'distribuidor') || AGENTS_DEFINITION[0];
+    if (pipelineStep <= 4) return AGENTS_DEFINITION.find(a => a.id === 'comision') || AGENTS_DEFINITION[1];
+    if (pipelineStep === 5) return AGENTS_DEFINITION.find(a => a.id === 'constitucional') || AGENTS_DEFINITION[2];
+    if (pipelineStep === 6) return AGENTS_DEFINITION.find(a => a.id === 'consistencia') || AGENTS_DEFINITION[3];
+    if (pipelineStep === 7 || pipelineStep === 8 || pipelineStep === 11) {
+      return AGENTS_DEFINITION.find(a => a.id === 'concentrador') || AGENTS_DEFINITION[4];
+    }
+    if (pipelineStep <= 10) return AGENTS_DEFINITION.find(a => a.id === 'constitucional') || AGENTS_DEFINITION[2];
+    if (pipelineStep === 12) return AGENTS_DEFINITION.find(a => a.id === 'secretario') || AGENTS_DEFINITION[5];
+    if (pipelineStep === 13) return AGENTS_DEFINITION.find(a => a.id === 'bicameral') || AGENTS_DEFINITION[6];
+    if (pipelineStep === 14) return AGENTS_DEFINITION.find(a => a.id === 'veto_promulgacion') || AGENTS_DEFINITION[7];
+    return AGENTS_DEFINITION.find(a => a.id === 'publicacion') || AGENTS_DEFINITION[8];
   };
   const activeAgentDef = getActiveAgentDef();
   const activeLogoUrl = AGENT_LOGO_MAP[activeAgentDef?.id] || '/robots/logos/agente_distribuidor.jpeg';

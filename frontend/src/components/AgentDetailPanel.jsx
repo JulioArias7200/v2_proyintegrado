@@ -46,18 +46,21 @@ const AGENT_LOGO_MAP = {
 };
 
 const AGENT_BANNER_MAP = {
-  distribuidor: '/robots/banner/disribuidor.png',
-  comision: '/robots/banner/normativa.png',
-  constitucional: '/robots/banner/normativa.png',
-  consistencia: '/robots/banner/consistencia.png',
-  emisor: '/robots/banner/emisor.png',
-  notificador: '/robots/banner/emisor.png',
-  constitucion_fondo: '/robots/banner/normativa.png',
-  concentrador_crew: '/robots/banner/emisor.png',
-  secretario: '/robots/banner/normativa.png',
-  bicameral: '/robots/banner/normativa.png',
-  veto_promulgacion: '/robots/banner/normativa.png',
-  publicacion: '/robots/banner/emisor.png',
+  distribuidor:       '/robots/banner/DISTRIBUIDOR.png',
+  comision:           '/robots/banner/COMISION.png',
+  constitucional:     '/robots/banner/CONSTITUCIONALIDAD.png',
+  consistencia:       '/robots/banner/CONSISTENCIA.png',
+  concentrador:       '/robots/banner/CONCENTRADOR.png',
+  emisor:             '/robots/banner/CONCENTRADOR.png',
+  notificador:        '/robots/banner/CONCENTRADOR.png',
+  constitucion_fondo: '/robots/banner/CONSTITUCIONALIDAD.png',
+  concentrador_crew:  '/robots/banner/CONCENTRADOR.png',
+  secretario:         '/robots/banner/SECRETARIO.png',
+  bicameral:          '/robots/banner/BICAMARAL.png',
+  veto_promulgacion:  '/robots/banner/VETO.png',
+  publicacion:        '/robots/banner/GACETAA.png',
+  ciudadania:         '/robots/banner/DISTRIBUIDOR.png',
+  comodin:            '/robots/banner/DISTRIBUIDOR.png',
 };
 
 // Color institucional por agente
