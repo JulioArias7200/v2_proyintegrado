@@ -35,8 +35,8 @@ class AgenteBicameral:
             except Exception as e_ant:
                 print(f"Aviso antecedentes Bicameral DB: {e_ant}")
 
-        acta = acta_secretario or antecedentes.get("secretario", {}).get("acta_debate", {})
-        exp = expediente or antecedentes.get("concentrador", {}).get("expediente_consolidado", {})
+        acta = antecedentes.get("secretario", {}).get("acta_debate") or acta_secretario or {}
+        exp = antecedentes.get("concentrador", {}).get("expediente_consolidado") or expediente or {}
         
         # Resiliencia si los antecedentes son mínimos
         if not acta:

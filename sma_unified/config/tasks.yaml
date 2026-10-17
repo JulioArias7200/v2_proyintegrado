@@ -52,24 +52,177 @@ tareas:
   # FASE 2: AUDITORÍA NORMATIVA Y TRABAJO EN COMISIÓN
   # ==========================================================================
 
-  Auditar_Constitucionalidad:
-    descripcion: >
-      Auditoría formal y textual estricta contra la CPE 2009 (Arts. 1 al 410).
-      1. Extraer cada artículo del proyecto de ley.
-      2. Cotejar de manera literal contra derechos fundamentales (Arts. 13-144) y régimen competencial autonómico (Arts. 297-304).
-      3. Emitir semáforo de severidad: CRÍTICA (incompatibilidad insalvable), GRAVE o LEVE.
-    agente: "Verificador_Constitucional"
-    expected_output: >
-      JSON con:
+ Auditar_Constitucionalidad:
+  descripcion: >
+    Auditoría formal y textual estricta contra la CPE 2009 (Arts. 1 al 410).
+    1. Extraer cada artículo del proyecto de ley (identificando "Art. X", incisos y
+       proposiciones normativas autónomas). Si el proyecto no está articulado,
+       segmentar por párrafos numerados o por bloques temáticos y declararlo en
+       fundamentacion_general.
+    2. Cotejar de manera literal contra derechos fundamentales (Arts. 13-144),
+       garantías (Arts. 115-124), estructura y competencias del Estado (Arts. 145-268)
+       y régimen competencial autonómico (Arts. 297-304), bajo el principio de
+       Supremacía Constitucional (Art. 410 CPE).
+    3. Aplicar en orden las reglas de deducción R1→R7 del agente
+       (prohibición vs. permiso; obligación vs. omisión; jerarquía normativa;
+       competencia/ámbito; desarrollo/garantía; ponderación; sin tensión).
+    4. Exigir cita literal de AMBOS textos (proyecto y CPE) antes de reportar
+       cualquier contradicción. Sin cita literal verificable → NEUTRAL con
+       verificado=false (candado anti-alucinación).
+    5. Emitir semáforo de severidad: BLOQUEANTE (incompatibilidad insalvable con
+       derecho fundamental, supremacía constitucional o núcleo de competencia
+       exclusiva), GRAVE (conflicto competencial Arts. 297-304 o invasión de ámbito
+       que exige reforma del artículo), LEVE (ambigüedad formal o defecto de técnica
+       legislativa) o NINGUNA (sin tensión jurídica relevante).
+    6. Cuando la tensión exija ponderar derechos o valores en conflicto, NO decidir:
+       clasificar como REQUIERE_ANALISIS_DE_FONDO y remitir a revisión humana.
+    7. Persistir el dictamen con trazabilidad completa: regla aplicada (R1-R7),
+       tipo_conflicto, severidad, citas literales y estado de verificación.
+    8. Ante fallo de tool o artículo no encontrado: registrar en
+       fundamentacion_general y continuar; NUNCA inventar texto constitucional.
+
+  agente: "Verificador_Constitucional"
+
+  expected_output: >
+    JSON ESTRICTO (sin markdown, sin texto adicional) con el siguiente contrato.
+    Los campos marcados como (obligatorio) DEBEN estar siempre presentes.
+    Los campos marcados como (aditivo) amplían el contrato y son retrocompatibles.
+
+    {
+      "valido": true | false,                                  // (obligatorio) true solo si num_contradicciones == 0
+      "confianza": 0.0 a 1.0,                                  // (obligatorio) ver regla_confianza abajo
+      "severidad_maxima": "ninguna" | "leve" | "grave" | "bloqueante",  // (obligatorio)
+      "num_contradicciones": 0,                                // (obligatorio) entero >= 0
+      "contradicciones": [                                     // (obligatorio) lista, puede ser vacía
+        {
+          "articulo_proyecto": "Art. X",                       // (obligatorio)
+          "articulo_cpe": "Art. Y CPE",                        // (obligatorio)
+          "texto_cpe_literal": "...",                          // (obligatorio) copia textual exacta
+          "texto_proyecto_literal": "...",                     // (aditivo)    copia textual exacta
+          "tipo_conflicto": "VULNERACION_DERECHO | INVASION_COMPETENCIAS | FORMA | SUPREMACIA_CONSTITUCIONAL",  // (obligatorio)
+          "severidad": "leve" | "grave" | "bloqueante",        // (obligatorio)
+          "regla_aplicada": "R1 | R2 | R3 | R4",               // (aditivo)    trazabilidad lógica
+          "explicacion": "...",                                // (obligatorio) <=120 palabras, sin interpretación
+          "verificado": true | false                           // (aditivo)    true solo si ambas citas son literales
+        }
+      ],
+      "requieren_analisis_fondo": [                            // (aditivo)    casos R6 (no decididos)
+        {
+          "articulo_cpe": "Art. Z CPE",
+          "razon": "...",
+          "texto_cpe_literal": "..."
+        }
+      ],
+      "articulos_a_favor": [                                   // (aditivo)    casos R5
+        {
+          "articulo_cpe": "Art. W CPE",
+          "texto_cpe_literal": "...",
+          "explicacion": "..."
+        }
+      ],
+      "articulos_consultados": [                               // (aditivo)    trazabilidad de tools
+        { "numero": "X", "titulo": "...", "extracto": "..." }
+      ],
+      "fundamentacion_general": "string"                       // (obligatorio) síntesis <=200 palabras
+    }
+
+    REGLAS DEL CONTRATO:
+    - "valido" = true SI Y SOLO SI "num_contradicciones" == 0.
+    - "severidad_maxima" = máximo de las severidades de "contradicciones"
+      (bloqueante > grave > leve > ninguna). Si la lista está vacía → "ninguna".
+    - "num_contradicciones" = len("contradicciones"). Debe coincidir exactamente.
+    - Toda entrada de "contradicciones" DEBE tener "verificado"=true; si no,
+      se excluye de la lista y se degrada a "NEUTRAL" (ver regla_confianza).
+    - "confianza" se calcula así:
+        base = 0.95
+        penalizacion = 0.12 * num_contradicciones_verificadas
+        bonus_si_todo_verificado = +0.03 si todas las contradicciones tienen verificado=true
+        penalizacion_por_no_verificado = -0.10 por cada hallazgo con verificado=false
+        confianza = max(0.55, min(0.98, base - penalizacion + bonus - penalizacion_por_no_verificado))
+      Si no hay contradicciones y todos los artículos consultados fueron verificados → confianza >= 0.90.
+      Si hubo fallos de tools o artículos no encontrados → confianza <= 0.80.
+    - "fundamentacion_general" DEBE mencionar: (a) número de artículos consultados,
+      (b) reglas R aplicadas, (c) si hubo casos R6 remitidos a revisión humana,
+      (d) cualquier degradación por falta de cita literal.
+
+  herramientas: []  # El agente usa sus tools internas declaradas en Verificador_Constitucional.tools_permitidas
+
+  # ── Ampliaciones operativas (aditivas, no rompen el cargador de tareas) ────
+  instrucciones_entrada:
+    - "Aceptar como entrada: texto completo del proyecto, o lista de artículos ya segmentados."
+    - "Si el proyecto excede el contexto del modelo, procesar por bloques de máximo 3000 caracteres, manteniendo continuidad de numeración de artículos."
+    - "Si el proyecto no tiene articulado formal, segmentar por párrafos y declararlo en fundamentacion_general."
+    - "Registrar en articulos_consultados TODOS los artículos CPE recuperados, incluso los NEUTRAL."
+
+  criterios_aceptacion:
+    - "Toda contradicción reportada tiene texto_cpe_literal y texto_proyecto_literal copiados textualmente."
+    - "Toda contradicción reportada declara regla_aplicada (R1-R4) y tipo_conflicto."
+    - "severidad_maxima es coherente con la lista de contradicciones."
+    - "num_contradicciones == len(contradicciones)."
+    - "valido es coherente con num_contradicciones."
+    - "confianza respeta la fórmula de regla_confianza."
+    - "fundamentacion_general sintetiza el dictamen sin introducir hechos no citados."
+
+  politica_degradacion:
+    sin_cita_literal: "NEUTRAL + verificado=false; excluir de contradicciones."
+    tool_error: "Registrar en fundamentacion_general; continuar con los demás artículos; no inventar texto."
+    articulo_cpe_no_encontrado: "Registrar en articulos_consultados con extracto='NO_ENCONTRADO'; continuar."
+    proyecto_vacio: "Devolver valido=false, confianza=0.0, severidad_maxima='ninguna', num_contradicciones=0, contradicciones=[], fundamentacion_general='Proyecto vacío o ilegible'."
+    caso_ambiguo: "REQUIERE_ANALISIS_DE_FONDO (no decidir; añadir a requieren_analisis_fondo)."
+
+  metricas_salida:
+    requiere_cita_literal: true
+    requiere_regla_aplicada: true
+    requiere_severidad: true
+    requiere_tipo_conflicto: true
+    max_contradicciones_reportadas: 20
+    idioma: "es-BO"
+    formato: "json_estricto"
+
+  ejemplos_salida:
+    valido_sin_hallazgos: >
       {
         "valido": true,
-        "confianza": 0.98,
-        "severidad_maxima": "ninguna | leve | grave | bloqueante",
+        "confianza": 0.95,
+        "severidad_maxima": "ninguna",
         "num_contradicciones": 0,
         "contradicciones": [],
-        "fundamentacion_general": "string"
+        "requieren_analisis_fondo": [],
+        "articulos_a_favor": [
+          { "articulo_cpe": "Art. 18 CPE", "texto_cpe_literal": "Todas las personas tienen derecho a la salud.", "explicacion": "El proyecto desarrolla el derecho a la salud (R5)." }
+        ],
+        "articulos_consultados": [
+          { "numero": "18", "titulo": "Derecho a la salud", "extracto": "Todas las personas tienen derecho a la salud." }
+        ],
+        "fundamentacion_general": "Se consultaron 1 artículo CPE. No se detectaron contradicciones literales. Regla R5 aplicada (A_FAVOR)."
       }
-    herramientas: []
+
+    invalido_con_hallazgo: >
+      {
+        "valido": false,
+        "confianza": 0.83,
+        "severidad_maxima": "bloqueante",
+        "num_contradicciones": 1,
+        "contradicciones": [
+          {
+            "articulo_proyecto": "Art. 5",
+            "articulo_cpe": "Art. 18 CPE",
+            "texto_cpe_literal": "Todas las personas tienen derecho a la salud.",
+            "texto_proyecto_literal": "Se excluye del sistema público de salud a las personas sin domicilio fijo.",
+            "tipo_conflicto": "VULNERACION_DERECHO",
+            "severidad": "bloqueante",
+            "regla_aplicada": "R2",
+            "explicacion": "La CPE garantiza el derecho a la salud sin condicionarlo; el proyecto excluye un grupo. Regla R2 (obligación vs. omisión).",
+            "verificado": true
+          }
+        ],
+        "requieren_analisis_fondo": [],
+        "articulos_a_favor": [],
+        "articulos_consultados": [
+          { "numero": "18", "titulo": "Derecho a la salud", "extracto": "Todas las personas tienen derecho a la salud." }
+        ],
+        "fundamentacion_general": "Se consultó 1 artículo CPE. Se detectó 1 contradicción verificada con cita literal (R2). Severidad máxima: bloqueante."
+      }
 
   Analizar_Consistencia:
     descripcion: >

@@ -626,6 +626,25 @@ def generar_pdf_ley_gaceta(
 
     pdf.output(file_path)
 
+    # ── Subida a Google Drive (Categoría: Leyes Editadas y Promulgadas - Gaceta Oficial) ──
+    drive_link = ""
+    drive_file_id = ""
+    try:
+        with open(file_path, "rb") as f_pdf:
+            pdf_bytes = f_pdf.read()
+        from sma_unified.utils.drive_uploader import upload_pdf_to_drive
+        drive_res = upload_pdf_to_drive(
+            file_bytes=pdf_bytes,
+            filename=filename,
+            categoria="leyes_editadas",
+            subcarpeta=f"Ley_{numero_ley}"
+        )
+        if drive_res:
+            drive_link = drive_res.get("web_view_link", "")
+            drive_file_id = drive_res.get("file_id", "")
+    except Exception as _e_drive:
+        pass
+
     return {
         "success": True,
         "filename": filename,
@@ -636,6 +655,8 @@ def generar_pdf_ley_gaceta(
         "fecha_promulgacion": fecha_prom_str,
         "fecha_vigencia": fecha_vig_corta,
         "hash_integridad": hash_cert,
-        "total_enmiendas_aplicadas": len(correcciones_aplicadas)
+        "total_enmiendas_aplicadas": len(correcciones_aplicadas),
+        "drive_link": drive_link,
+        "drive_file_id": drive_file_id
     }
 

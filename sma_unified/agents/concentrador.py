@@ -36,8 +36,11 @@ from openai import OpenAI
 from fpdf import FPDF
 
 from sma_unified.agents.llm_client import chat_completion_resiliente, extraer_json_de_llm
+from sma_unified.config import settings
 from sma_unified.db.neon_postgres import get_conn, registrar_bitacora
+from sma_unified.db.neon_client import get_neon_client
 from sma_unified.db.mongo_atlas import get_db
+
 
 # ── Constantes y Configuración ────────────────────────────────────────────────
 CAMPOS_REQUERIDOS_INSUMO = {"hallazgos", "agente_origen"}
@@ -47,8 +50,8 @@ DEFAULT_NVIDIA_API_KEY = (
     os.getenv("NVIDIA_API_KEY") or
     "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"
 )
-NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
-MODELO_RAZONAMIENTO_AMPLIADO = "nvidia/nemotron-3-super-120b-a12b"
+NVIDIA_BASE_URL = getattr(settings, "NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
+MODELO_RAZONAMIENTO_AMPLIADO = getattr(settings, "LLM_MODEL_NVIDIA", "openai/gpt-oss-20b")
 
 
 def _clean_str(text: Any) -> str:
@@ -208,12 +211,17 @@ def _validar_insumo(obs: Dict) -> tuple[bool, str]:
     faltantes = CAMPOS_REQUERIDOS_INSUMO - set(obs.keys())
     if faltantes:
         return False, f"Faltan campos: {faltantes}"
-    conf = obs.get("confianza", obs.get("nivel_confianza", 1.0))
-    try:
-        if float(conf) < NIVEL_CONFIANZA_MINIMO:
-            return False, f"Confianza {conf} < umbral {NIVEL_CONFIANZA_MINIMO}"
-    except (TypeError, ValueError):
-        pass
+    if "confianza" in obs or "nivel_confianza" in obs:
+        conf = obs.get("confianza") if "confianza" in obs else obs.get("nivel_confianza")
+        if isinstance(conf, bool):
+            return False, "Confianza no puede ser booleano"
+        try:
+            val = float(conf)
+            import math
+            if math.isnan(val) or val < NIVEL_CONFIANZA_MINIMO or val > 1.0:
+                return False, f"Confianza {conf} fuera de rango [{NIVEL_CONFIANZA_MINIMO}, 1.0]"
+        except (TypeError, ValueError):
+            return False, f"Confianza no numérica: {conf}"
     return True, "OK"
 
 
@@ -242,16 +250,18 @@ def _extraer_observaciones_de_insumo(obs: Dict, start_id: int = 1) -> List[Dict]
                 "N/A"
             )
             cita = (
-                h.get("explicacion") or
-                h.get("analisis") or
-                h.get("fundamento") or
-                h.get("texto_cpe_literal") or
-                h.get("cita_original") or
-                h.get("contenido") or
-                h.get("cita_proyecto") or
-                h.get("descripcion") or
-                ""
+                h.get("cita_original") if h.get("cita_original") is not None else (
+                    h.get("explicacion") or
+                    h.get("analisis") or
+                    h.get("fundamento") or
+                    h.get("texto_cpe_literal") or
+                    h.get("contenido") or
+                    h.get("cita_proyecto") or
+                    h.get("descripcion") or
+                    ""
+                )
             )
+            cita_str = str(cita)
             resultado.append({
                 "id": f"OBS-{idx:03d}",
                 "fuente": agente,
@@ -259,8 +269,8 @@ def _extraer_observaciones_de_insumo(obs: Dict, start_id: int = 1) -> List[Dict]
                 "articulo": art,
                 "articulo_afectado": art,
                 "articulo_proyecto": art,
-                "cita_original": str(cita).strip(),
-                "contenido": str(cita).strip(),
+                "cita_original": cita_str,
+                "contenido": cita_str.strip(),
                 "tipo": h.get("tipo_conflicto", h.get("tipo_relacion", h.get("clasificacion", h.get("tipo", "OBSERVACION")))),
                 "riesgo": h.get("severidad", h.get("riesgo", "leve")),
                 "verificado": h.get("verificado", True),
@@ -277,13 +287,14 @@ def _extraer_observaciones_de_insumo(obs: Dict, start_id: int = 1) -> List[Dict]
 
 def _fusionar_redundancias(observaciones: List[Dict]) -> tuple[List[Dict], List[Dict]]:
     """
-    PASO 4 — Fusiona observaciones que apuntan al mismo artículo + tipo.
-    Conserva AMBAS fuentes en 'fuentes': []. Nunca elimina una fuente.
+    PASO 4 — Fusiona observaciones que apuntan al mismo artículo + tipo + cita_original.
+    Conserva AMBAS fuentes en 'fuentes': []. Nunca elimina una fuente ni citas distintas.
     """
     clave_a_grupo: Dict[str, List[Dict]] = {}
     for obs in observaciones:
-        clave = f"{obs.get('articulo_afectado', '')}|{obs.get('tipo', '')}"
+        clave = f"{obs.get('articulo_afectado', '')}|{obs.get('tipo', '')}|{obs.get('cita_original', '')}"
         clave_a_grupo.setdefault(clave, []).append(obs)
+
 
     integradas = []
     fusionadas = []
@@ -380,7 +391,7 @@ INSTRUCCIÓN: Devuelve un JSON estructurado con exactamente estas claves:
         client = OpenAI(
             base_url=NVIDIA_BASE_URL,
             api_key=DEFAULT_NVIDIA_API_KEY,
-            timeout=35.0,
+            timeout=90.0,
         )
         completion = client.chat.completions.create(
             model=MODELO_RAZONAMIENTO_AMPLIADO,
@@ -842,28 +853,58 @@ def generar_pdf_informe_concentrador(
     url_descarga = f"http://127.0.0.1:8085/uploaded_files/informes/{filename}"
     logger.info(f"[Concentrador] ✅ Dictamen formal PDF emitido exitosamente: {filename} ({len(pdf_bytes)} bytes)")
 
+    # ── Subida a Google Drive (Categoría: Reportes y Dictámenes Legislativos) ──
+    drive_link = ""
+    drive_file_id = ""
+    try:
+        from sma_unified.utils.drive_uploader import upload_pdf_to_drive
+        drive_res = upload_pdf_to_drive(
+            file_bytes=pdf_bytes,
+            filename=filename,
+            categoria="reportes",
+            subcarpeta=expediente_codigo,
+        )
+        if drive_res:
+            drive_link = drive_res.get("web_view_link", "")
+            drive_file_id = drive_res.get("file_id", "")
+            logger.info(f"[Concentrador] 📁 Reporte formal vinculado a Google Drive: {drive_link}")
+    except Exception as _e_drive:
+        logger.warning(f"[Concentrador] No se pudo subir reporte a Drive (opcional): {_e_drive}")
+
     return {
         "filename": filename,
         "filepath": filepath,
         "url_descarga": url_descarga,
         "sha256": sha256_hash,
         "tamano_bytes": len(pdf_bytes),
-        "fecha_emision": timestamp_str
+        "fecha_emision": timestamp_str,
+        "drive_link": drive_link,
+        "drive_file_id": drive_file_id,
     }
 
 
-def _persistir_en_neon(conn, id_proyecto: int, resumen: str, riesgo: str, t0: float, pdf_url: str = "") -> None:
+def _persistir_en_neon(
+    conn,
+    id_proyecto: int,
+    resumen: str,
+    riesgo: str,
+    t0: float,
+    pdf_url: str = "",
+    drive_link: str = "",
+    drive_file_id: str = ""
+) -> None:
     try:
         cur = conn.cursor()
         cur.execute("""
             UPDATE sistema.proyecto_ley SET
                 estado_actual = 'AUDITORIA_COMPLETADA',
                 drive_link = COALESCE(NULLIF(%s, ''), drive_link),
+                drive_file_id = COALESCE(NULLIF(%s, ''), drive_file_id),
                 observaciones_generales = COALESCE(observaciones_generales,'') ||
                     E'\\n[Concentrador] Riesgo: ' || %s || ' — ' || %s ||
                     E'\\n[PDF Informe Formal]: ' || %s
             WHERE id_proyecto = %s
-        """, (pdf_url, riesgo, resumen[:300], pdf_url, id_proyecto))
+        """, (drive_link or None, drive_file_id or None, riesgo, resumen[:300], pdf_url, id_proyecto))
         conn.commit()
         cur.close()
 
@@ -1009,7 +1050,7 @@ class AgenteConcentrador:
                 "riesgo": o.get("riesgo", "leve"),
                 "verificado": o.get("verificado", True),
             }
-            for i, o in enumerate(obs_verificadas)
+            for i, o in enumerate(obs_integradas)
         ]
 
         bitacora_trazabilidad = [
@@ -1029,9 +1070,9 @@ class AgenteConcentrador:
                        if "constitucional" in str(o.get("fuente", "")).lower()
                        or "constitucional" in str(o.get("agente_origen", "")).lower()]
         obs_norm_raw = [o for o in obs_verificadas
-                        if "consistencia" in str(o.get("fuente", "")).lower()
-                        or "consistencia" in str(o.get("agente_origen", "")).lower()
-                        or "normat" in str(o.get("tipo", "")).lower()]
+                       if "consistencia" in str(o.get("fuente", "")).lower()
+                       or "consistencia" in str(o.get("agente_origen", "")).lower()
+                       or "normat" in str(o.get("tipo", "")).lower()]
         try:
             pdf_info = generar_pdf_informe_concentrador(
                 id_proyecto=id_proyecto,
@@ -1077,6 +1118,7 @@ class AgenteConcentrador:
                 "recomendaciones_vinculantes": analisis_ampliado.get("recomendaciones_vinculantes", ""),
                 "declaracion_metodologia": analisis_ampliado.get("declaracion_metodologia", ""),
                 "observaciones_integradas": lista_observaciones_final,
+                "observaciones_pendientes": lista_observaciones_final,
                 "redundancias_fusionadas": len(fusionadas),
                 "insumos_no_validos": no_validos,
                 "obs_descartadas_baja_confianza": obs_descartadas,
@@ -1097,9 +1139,32 @@ class AgenteConcentrador:
         if id_proyecto:
             try:
                 conn = get_conn()
-                _persistir_en_neon(conn, id_proyecto, resumen_ejecutivo, riesgo_global, t0, pdf_url=pdf_url)
+                drive_link = pdf_info.get("drive_link", "")
+                drive_file_id = pdf_info.get("drive_file_id", "")
+                _persistir_en_neon(
+                    conn,
+                    id_proyecto,
+                    resumen_ejecutivo,
+                    riesgo_global,
+                    t0,
+                    pdf_url=pdf_url,
+                    drive_link=drive_link,
+                    drive_file_id=drive_file_id
+                )
             except Exception as e:
                 logger.warning(f"[Concentrador] Neon no disponible: {e}")
+            try:
+                neon_client = get_neon_client()
+                if hasattr(neon_client, "guardar_insumo_legislativo"):
+                    neon_client.guardar_insumo_legislativo(
+                        id_proyecto,
+                        "EXPEDIENTE_CONSOLIDADO",
+                        {"expediente_consolidado": resultado["expediente_consolidado"]},
+                        "Concentrador",
+                        estado_siguiente
+                    )
+            except Exception as e_neon:
+                logger.warning(f"[Concentrador] Error guardando insumo en Neon: {e_neon}")
         _persistir_en_mongo(id_proyecto, resultado, tiempo_ms)
 
         # ── PASO 9: NOTIFICACIÓN FORMAL A MIEMBROS DE COMISIÓN Y ENCARGADOS ─────

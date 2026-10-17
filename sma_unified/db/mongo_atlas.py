@@ -63,10 +63,16 @@ def _ensure_indexes(db):
 
         docs = db["documentos"]
         docs.create_index([("expediente_id", 1)], unique=True, sparse=True)
+        docs.create_index([("id_proyecto_pg", 1)])
+        docs.create_index([("sesion_id", 1)])
         docs.create_index([("estado", 1)])
         docs.create_index([("fecha_ingreso", -1)])
 
-        # ── Colección nueva: observaciones constitucionales ─────────────────
+        raw = db["documentos_raw"]
+        raw.create_index([("doc_id", 1)], unique=True, sparse=True)
+        raw.create_index([("sesion_id", 1)])
+
+        # ── Colección: observaciones constitucionales ─────────────────
         obs = db["observaciones_constitucionales"]
         obs.create_index([("obs_id", 1)], unique=True, sparse=True)
         obs.create_index([("sesion_id", 1)])
@@ -86,16 +92,40 @@ def _ensure_indexes(db):
 
         notif_pend = db["notificaciones_pendientes"]
         notif_pend.create_index([("id_comision", 1)])
+        notif_pend.create_index([("sesion_id", 1)])
         notif_pend.create_index([("estado", 1)])
 
         msg_ofic = db["mensajes_oficiales"]
+        msg_ofic.create_index([("id_comision", 1)])
         msg_ofic.create_index([("sesion_id", 1)])
         msg_ofic.create_index([("fecha_envio", -1)])
 
-        # ── Colecciones de Expedientes Digitales, Audio y Ciudadanía ──
+        # ── Colecciones de Notificaciones por Cámara y Comisiones ─────
+        notif_com = db["notificaciones_comision"]
+        notif_com.create_index([("id_proyecto", 1)])
+        notif_com.create_index([("sesion_id", 1)])
+        notif_com.create_index([("comision", 1)])
+
+        notif_bic = db["notificaciones_bicameral"]
+        notif_bic.create_index([("id_proyecto", 1)])
+        notif_bic.create_index([("sesion_id", 1)])
+
+        msg_sen = db["mensajes_presidente_senado"]
+        msg_sen.create_index([("id_proyecto", 1)])
+        msg_sen.create_index([("sesion_id", 1)])
+
+        msg_sis = db["mensajes_sistema"]
+        msg_sis.create_index([("id_proyecto", 1)])
+
+        # ── Colecciones de Expedientes Digitales, Audio y Concentración ──
         exp_dig = db["expedientes_digitales"]
         exp_dig.create_index([("id_proyecto", 1)], unique=True, sparse=True)
+        exp_dig.create_index([("codigo_expediente", 1)], sparse=True)
         exp_dig.create_index([("estado", 1)])
+
+        exp_conc = db["expedientes_concentrados"]
+        exp_conc.create_index([("id_proyecto", 1)])
+        exp_conc.create_index([("agente", 1)])
 
         reg_aud = db["registros_audio"]
         reg_aud.create_index([("id_proyecto", 1)])
@@ -113,7 +143,17 @@ def _ensure_indexes(db):
         actas_det.create_index([("fecha_sesion", -1)])
         actas_det.create_index([("fecha_registro", -1)])
 
-        logger.info("Índices MongoDB verificados/creados.")
+        ag_exec = db["agent_executions"]
+        ag_exec.create_index([("id_proyecto", 1)])
+        ag_exec.create_index([("nombre_agente", 1)])
+
+        chat_ses = db["chat_sesiones"]
+        chat_ses.create_index([("sesion_id", 1)])
+
+        voz = db["voz_comandos"]
+        voz.create_index([("sesion_id", 1)])
+
+        logger.info("Índices relacionales MongoDB verificados/creados.")
     except Exception as e:
         logger.warning(f"No se pudieron crear índices: {e}")
 

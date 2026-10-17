@@ -137,6 +137,172 @@ function createDefaultSession(index = 1) {
   };
 }
 
+// ── Componente de Tarjeta Detallada para Artículos CPE A FAVOR ──
+function CardArticuloAFavor({ art, idx }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const analisis = art.analisis_profundo || {};
+  const justificacion = art.justificacion_detallada || analisis.justificacion_por_que || art.fundamento;
+  const parrafos = art.parrafos_evaluados || analisis.evaluacion_detallada_articulos_parrafos || (
+    art.cita_proyecto ? [{ articulo_proyecto: 'Disposición analizada del proyecto', texto_parrafo: art.cita_proyecto, explicacion_concordancia: art.fundamento }] : []
+  );
+  const fortaleza = art.fortaleza_constitucional || analisis.fortaleza_constitucional || 'ALTA';
+  const principios = art.principios || analisis.principios_constitucionales_aplicados || [];
+  const blindaje = art.recomendacion_blindaje || analisis.recomendacion_blindaje;
+
+  return (
+    <div style={{
+      background: 'rgba(6, 30, 20, 0.90)',
+      border: '1px solid rgba(16, 185, 129, 0.35)',
+      borderRadius: '14px',
+      padding: '18px 20px',
+      position: 'relative',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '12px',
+      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
+      transition: 'all 0.2s ease',
+    }}>
+      {/* Indicador lateral verde esmeralda */}
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: '#10b981', borderRadius: '14px 0 0 14px' }} />
+
+      {/* Cabecera del Artículo */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ color: '#34d399', fontWeight: 800, fontSize: '1.05rem', letterSpacing: '0.02em' }}>
+              Art. {art.numero}
+            </span>
+            <span style={{ background: 'rgba(16,185,129,0.18)', color: '#34d399', border: '1px solid rgba(16,185,129,0.4)', padding: '2px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              A FAVOR
+            </span>
+            <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.68rem', fontWeight: 600 }}>
+              Fortaleza: {fortaleza}
+            </span>
+          </div>
+          {art.titulo && (
+            <div style={{ color: '#a7f3d0', fontWeight: 600, fontSize: '0.86rem', marginTop: '4px' }}>
+              {art.titulo}
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={() => setExpanded(!expanded)}
+          style={{
+            background: expanded ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            color: '#a7f3d0',
+            borderRadius: '8px',
+            padding: '4px 10px',
+            fontSize: '0.74rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontWeight: 600,
+            transition: 'background 0.2s',
+          }}
+        >
+          {expanded ? '▲ Contraer desglose' : `▼ Ver evaluación párrafo a párrafo (${parrafos.length})`}
+        </button>
+      </div>
+
+      {/* Justificación Jurídica Principal (¿Por qué está a favor?) */}
+      <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '10px', padding: '12px 14px' }}>
+        <div style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span>⚖️ JUSTIFICACIÓN JURÍDICA (¿POR QUÉ RESPALDA A LA CPE?):</span>
+        </div>
+        <div style={{ color: '#d1fae5', fontSize: '0.84rem', lineHeight: 1.6, textAlign: 'justify' }}>
+          {justificacion || 'El proyecto de ley materializa y desarrolla de forma conforme el precepto constitucional.'}
+        </div>
+      </div>
+
+      {/* Evaluación Párrafo por Párrafo / Artículo por Artículo del Proyecto */}
+      {parrafos.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ fontSize: '0.72rem', color: '#6ee7b7', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            🔍 ANÁLISIS ARTÍCULO POR ARTÍCULO Y PÁRRAFO POR PÁRRAFO DEL PROYECTO:
+          </div>
+
+          {(expanded ? parrafos : parrafos.slice(0, 1)).map((p, pIdx) => (
+            <div key={pIdx} style={{
+              background: 'rgba(0, 0, 0, 0.35)',
+              border: '1px solid rgba(16, 185, 129, 0.2)',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              fontSize: '0.8rem',
+            }}>
+              <div style={{ color: '#34d399', fontWeight: 700, fontSize: '0.76rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>📌 {p.articulo_proyecto || `Fragmento #${pIdx + 1} del Proyecto`}</span>
+              </div>
+              {p.texto_parrafo && (
+                <div style={{ color: 'rgba(255, 255, 255, 0.82)', fontStyle: 'italic', background: 'rgba(0, 0, 0, 0.25)', padding: '6px 10px', borderRadius: '6px', marginBottom: '6px', lineHeight: 1.5, borderLeft: '2px solid #10b981' }}>
+                  "{p.texto_parrafo}"
+                </div>
+              )}
+              {p.explicacion_concordancia && (
+                <div style={{ color: '#a7f3d0', fontSize: '0.78rem', lineHeight: 1.5 }}>
+                  <strong style={{ color: '#6ee7b7' }}>✓ Concordancia: </strong>
+                  {p.explicacion_concordancia}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {!expanded && parrafos.length > 1 && (
+            <div
+              onClick={() => setExpanded(true)}
+              style={{ fontSize: '0.72rem', color: '#6ee7b7', fontStyle: 'italic', textAlign: 'center', cursor: 'pointer', padding: '4px 0', textDecoration: 'underline' }}
+            >
+              +{parrafos.length - 1} párrafo(s) analizado(s) adicional(es) — presiona para ver todo el desglose
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Detalle complementario (Texto CPE, Principios y Blindaje) */}
+      {expanded && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '1px solid rgba(16, 185, 129, 0.15)', paddingTop: '10px' }}>
+          {art.extracto && (
+            <div>
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                📖 Precepto Constitucional (CPE 2009 - Art. {art.numero}):
+              </div>
+              <div style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: '0.78rem', lineHeight: 1.5, background: 'rgba(0, 0, 0, 0.25)', padding: '8px 10px', borderRadius: '6px' }}>
+                {art.extracto}
+              </div>
+            </div>
+          )}
+
+          {principios.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.7rem', color: '#6ee7b7', fontWeight: 600 }}>Valores/Principios Constitucionales:</span>
+              {principios.map((pr, prIdx) => (
+                <span key={prIdx} style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#a7f3d0', borderRadius: '12px', padding: '1px 8px', fontSize: '0.68rem' }}>
+                  {pr}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {blindaje && (
+            <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '8px', padding: '8px 12px' }}>
+              <div style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', marginBottom: '3px' }}>
+                🛡️ Recomendación de Blindaje Constitucional:
+              </div>
+              <div style={{ color: '#bae6fd', fontSize: '0.78rem', lineHeight: 1.5 }}>
+                {blindaje}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   // ── Multi-Session State Initialization ──
   const [sessions, setSessions] = useState(() => {
@@ -368,7 +534,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           motor: res.motor,
           saved_as: res.saved_as,
           local_path: res.local_path,
+          drive_link: res.drive_link,
+          drive_file_id: res.drive_file_id,
         },
+        driveLinkInicial: res.drive_link,
         isProcessing: false
       });
     } catch (err) {
@@ -404,6 +573,8 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           email_autor: activeSession.emailAutor || null,
           nombre_autor: activeSession.nombreAutor || null,
           tipo_iniciativa: activeSession.tipoIniciativa || 'Senado',
+          drive_link: activeSession.driveLinkInicial || uploadStats?.drive_link || null,
+          drive_file_id: uploadStats?.drive_file_id || null,
         },
       });
 
@@ -1534,6 +1705,31 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                         <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 600 }}>Motor:</span>
                         <strong style={{ display: 'block', color: '#8AC926', fontSize: '1.15rem' }}>{uploadStats.motor}</strong>
                       </div>
+                      {uploadStats.drive_link && (
+                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                          <a
+                            href={uploadStats.drive_link}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              background: 'rgba(16, 185, 129, 0.2)',
+                              border: '1px solid rgba(16, 185, 129, 0.45)',
+                              color: '#34d399',
+                              padding: '8px 14px',
+                              borderRadius: '8px',
+                              fontSize: '0.82rem',
+                              fontWeight: 700,
+                              textDecoration: 'none'
+                            }}
+                          >
+                            <ExternalLink size={15} />
+                            <span>Guardado en Google Drive</span>
+                          </a>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2153,36 +2349,9 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                           Fuente: public.articulos_constitucion
                         </span>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' }}>
                         {aFavor.map((art, idx) => (
-                          <div key={idx} style={{
-                            background: 'rgba(6, 30, 20, 0.85)',
-                            border: '1px solid rgba(16, 185, 129, 0.3)',
-                            borderRadius: '12px',
-                            padding: '16px',
-                            position: 'relative',
-                            overflow: 'hidden'
-                          }}>
-                            <div style={{ position: 'absolute', top: 0, left: 0, width: '3px', height: '100%', background: '#10b981', borderRadius: '12px 0 0 12px' }} />
-                            <div style={{ paddingLeft: '8px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                                <span style={{ color: '#34d399', fontWeight: 700, fontSize: '0.92rem' }}>
-                                  Art. {art.numero}
-                                </span>
-                                <span style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)', padding: '2px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700 }}>
-                                  A FAVOR
-                                </span>
-                              </div>
-                              {art.titulo && (
-                                <div style={{ color: '#a7f3d0', fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px' }}>
-                                  {art.titulo}
-                                </div>
-                              )}
-                              <div style={{ color: 'rgba(167,243,208,0.75)', fontSize: '0.8rem', lineHeight: 1.55, borderTop: '1px solid rgba(16,185,129,0.1)', paddingTop: '8px' }}>
-                                {art.extracto || art.fundamento || 'Artículo de la CPE verificado como conforme.'}
-                              </div>
-                            </div>
-                          </div>
+                          <CardArticuloAFavor key={idx} art={art} idx={idx} />
                         ))}
                       </div>
                     </div>
@@ -3085,6 +3254,18 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                   <Download size={20} />
                   <span>Descargar PDF</span>
                 </a>
+                {pdfResult?.drive_link && (
+                  <a
+                    href={pdfResult.drive_link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-success"
+                    style={{ fontSize: '1rem', padding: '13px 24px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <ExternalLink size={20} />
+                    <span>Ver en Google Drive</span>
+                  </a>
+                )}
                 <button
                   onClick={handleNotificar}
                   disabled={isProcessing}
@@ -3512,16 +3693,41 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                             </div>
                           </div>
                         </div>
-                        <a
-                          href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfFilename}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn-secondary"
-                          style={{ fontSize: '0.88rem', padding: '9px 18px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
-                        >
-                          <Download size={16} />
-                          <span>Descargar Dictamen Formal (PDF)</span>
-                        </a>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <a
+                            href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfFilename}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn-secondary"
+                            style={{ fontSize: '0.88rem', padding: '9px 18px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                          >
+                            <Download size={16} />
+                            <span>Descargar Dictamen Formal (PDF)</span>
+                          </a>
+                          {(concentradorData?.pdf_informe?.drive_link || pdfResult?.drive_link) && (
+                            <a
+                              href={concentradorData?.pdf_informe?.drive_link || pdfResult?.drive_link}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                fontSize: '0.88rem',
+                                padding: '9px 18px',
+                                textDecoration: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                background: 'rgba(16,185,129,0.18)',
+                                border: '1px solid rgba(16,185,129,0.45)',
+                                color: '#34d399',
+                                borderRadius: '8px',
+                                fontWeight: 700
+                              }}
+                            >
+                              <ExternalLink size={16} />
+                              <span>Google Drive</span>
+                            </a>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -4910,13 +5116,43 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                             <Download size={16} />
                             <span>Descargar PDF Gaceta</span>
                           </button>
+                          {gacetaPdfData?.drive_link && (
+                            <a
+                              href={gacetaPdfData.drive_link}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                background: 'rgba(16,185,129,0.2)',
+                                border: '1px solid rgba(16,185,129,0.5)',
+                                borderRadius: '10px',
+                                color: '#34d399',
+                                padding: '12px 18px',
+                                fontSize: '0.86rem',
+                                fontWeight: 800,
+                                textDecoration: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                              }}
+                            >
+                              <ExternalLink size={16} />
+                              <span>Ver en Google Drive</span>
+                            </a>
+                          )}
                         </div>
                       </div>
 
                       {gacetaPdfData && (
                         <div style={{ marginTop: '12px', padding: '10px 16px', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', borderRadius: '8px', fontSize: '0.82rem', color: '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                           <span>✓ Documento oficial de Gaceta generado: <strong>{gacetaPdfData.filename}</strong></span>
-                          <a href={gacetaPdfData.url_descarga} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', fontWeight: 700, textDecoration: 'underline' }}>Abrir Documento Digital</a>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <a href={gacetaPdfData.url_descarga} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', fontWeight: 700, textDecoration: 'underline' }}>Abrir Documento Digital</a>
+                            {gacetaPdfData.drive_link && (
+                              <a href={gacetaPdfData.drive_link} target="_blank" rel="noreferrer" style={{ color: '#10b981', fontWeight: 800, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                📁 Guardado en Drive
+                              </a>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

@@ -134,14 +134,21 @@ def modulo_agente(nombre):
     crew.Task = Mock
     base = types.ModuleType("sma_unified.agents.base_agent")
     base.get_base_agent = Mock()
+    base.BaseAgenteLegislativo = Mock
     llm = types.ModuleType("sma_unified.agents.llm_client")
     llm.chat_completion_resiliente = Mock(side_effect=RuntimeError("Modelo no disponible"))
     llm.extraer_json_de_llm = Mock()
     mongo = types.ModuleType("sma_unified.db.cosmos_client")
     mongo.registrar_traza_legislativa = Mock()
+    mongo.CosmosDBClient = Mock
+    mock_notificador = types.ModuleType("sma_unified.agents.notificador_comision")
+    mock_notificador.notificar_miembros_comision = Mock(return_value={"exito": True})
+    mock_openai = types.ModuleType("openai")
+    mock_openai.OpenAI = Mock(side_effect=RuntimeError("OpenAI no disponible"))
     nombre_completo = "sma_unified.agents." + nombre
-    with patch.dict(sys.modules, {"crewai": crew, "sma_unified.agents.base_agent": base,
-                                  "sma_unified.agents.llm_client": llm, "sma_unified.db.cosmos_client": mongo}):
+    with patch.dict(sys.modules, {"crewai": crew, "openai": mock_openai, "sma_unified.agents.base_agent": base,
+                                  "sma_unified.agents.llm_client": llm, "sma_unified.db.cosmos_client": mongo,
+                                  "sma_unified.agents.notificador_comision": mock_notificador}):
         anterior = sys.modules.pop(nombre_completo, None)
         try:
             yield importlib.import_module(nombre_completo), llm

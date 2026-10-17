@@ -362,11 +362,26 @@ def get_health_status():
     api_key = os.getenv("NVIDIA_API_KEY", "")
     status["services"]["nvidia_nim"] = {
         "configured": bool(api_key and not api_key.startswith("nvapi-placeholder")),
-        "model_crew": os.getenv("LLM_MODEL_CREW", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"),
+        "model_crew": os.getenv("LLM_MODEL_CREW", "openai/gpt-oss-20b"),
         "model_embed": os.getenv("NVIDIA_EMBED_MODEL", "nvidia/nemotron-3-embed-1b"),
     }
 
     return status
+
+
+@app.get("/api/llm/metricas")
+def get_llm_metrics():
+    """
+    Retorna métricas operativas de latencia (P50, P95), llamadas por modelo,
+    timeouts y estado del Circuit Breaker de NVIDIA NIM en tiempo real.
+    """
+    from sma_unified.agents.llm_client import obtener_metricas_latencia_llm
+    return {
+        "status": "ok",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "modelo_principal": getattr(settings, "LLM_MODEL_NVIDIA", "openai/gpt-oss-20b"),
+        "metricas": obtener_metricas_latencia_llm()
+    }
 
 
 # ── Sesiones de Revisión Legislativa y Permisos Human-in-the-Loop ──────────────
@@ -386,31 +401,19 @@ def crear_sesion_revision(usuario):
 
 
 def usuario_revision(authorization: Optional[str] = Header(default=None)):
-    """Inyección de dependencias para el revisor humano con fallback tolerante en desarrollo."""
+    """Inyección de dependencias para el revisor humano."""
     if not authorization or not authorization.startswith("Bearer "):
-        return {
-            "usuario_id": 1,
-            "nombre_completo": "Revisor Legislativo (Sistema)",
-            "correo_electronico": "revisor@congreso.gob.bo",
-            "rol": "Senador",
-            "activo": True
-        }
-    token = authorization[7:]
+        raise HTTPException(status_code=401, detail="No autenticado: Token requerido")
+    token = authorization[7:].strip()
     with _SESIONES_LOCK:
         sesion = _SESIONES.get(token)
-        if not sesion or sesion["vence"] <= time.time():
-            return {
-                "usuario_id": 1,
-                "nombre_completo": "Revisor Legislativo (Sistema)",
-                "correo_electronico": "revisor@congreso.gob.bo",
-                "rol": "Senador",
-                "activo": True
-            }
+        if not sesion or sesion.get("vence", 0) <= time.time():
+            raise HTTPException(status_code=401, detail="Sesión expirada o token inválido")
         usuario_id = sesion["usuario_id"]
     try:
         from sma_unified.db.neon_client import get_neon_client
         usuarios = get_neon_client().ejecutar_query(
-            'SELECT usuario_id, nombre_completo, correo_electronico, rol, activo FROM public."Usuarios_Sistema" WHERE usuario_id = %s AND activo = TRUE',
+            'SELECT usuario_id, nombre_completo, correo_electronico, rol, activo FROM sistema."Usuarios_Sistema" WHERE usuario_id = %s AND activo = TRUE',
             (usuario_id,))
         if usuarios:
             return usuarios[0]
@@ -438,7 +441,7 @@ class DecisionBicameralRequest(BaseModel):
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
-    """Valida credenciales contra public."Usuarios_Sistema" y retorna el usuario + token de sesión."""
+    """Valida credenciales contra sistema."Usuarios_Sistema" y retorna el usuario + token de sesión."""
     usuario = autenticar_usuario(req.correo_electronico.strip().lower(), req.contrasena)
     if not usuario:
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos, o cuenta inactiva")
@@ -581,6 +584,23 @@ async def upload_document(file: UploadFile = File(...)):
         if not texto_extraido.strip():
             texto_extraido = "[No se pudo extraer texto legible del documento o el archivo contiene solo imágenes]"
 
+        # Subir a Google Drive (Categoría: Proyectos de Ley de Entrada - Mesa de Partes)
+        drive_link = ""
+        drive_file_id = ""
+        try:
+            from sma_unified.utils.drive_uploader import upload_pdf_to_drive
+            drive_res = upload_pdf_to_drive(
+                file_bytes=file_bytes,
+                filename=unique_name,
+                categoria="proyectos_iniciales"
+            )
+            if drive_res:
+                drive_link = drive_res.get("web_view_link", "")
+                drive_file_id = drive_res.get("file_id", "")
+                logger.info(f"✅ [Mesa de Partes] Proyecto inicial respaldado en Google Drive: {drive_link}")
+        except Exception as _e_drive:
+            logger.warning(f"No se pudo respaldar proyecto inicial en Drive: {_e_drive}")
+
         return {
             "success": True,
             "filename": filename,
@@ -593,6 +613,8 @@ async def upload_document(file: UploadFile = File(...)):
             "motor": metadata_extraccion.get("motor", "standard"),
             "texto_preview": texto_extraido[:800],
             "texto_completo": texto_extraido,
+            "drive_link": drive_link,
+            "drive_file_id": drive_file_id,
         }
     except Exception as e:
         logger.error(f"Error procesando archivo subido: {e}")
@@ -815,26 +837,28 @@ Responde con este JSON exacto:
   "justificacion": "<por qué esta comisión es la competente según materia>"
 }}"""
 
-        # 3a. Intento primario: NVIDIA NIM con modelo Nemotron Super 120B
+        # 3a. Intento primario: NVIDIA NIM con modelo primario de alto rendimiento
         try:
+            modelo_principal = getattr(settings, "LLM_MODEL_NVIDIA", "openai/gpt-oss-20b")
             client_nim = OpenAI(
                 base_url="https://integrate.api.nvidia.com/v1",
                 api_key=nvidia_api_key,
-                timeout=30.0,
+                timeout=90.0,
             )
             completion = client_nim.chat.completions.create(
-                model="nvidia/nemotron-3-super-120b-a12b",
+                model=modelo_principal,
                 messages=[
                     {"role": "system", "content": system_prompt_comision},
                     {"role": "user",   "content": user_prompt_comision},
                 ],
                 temperature=0.1,
                 top_p=0.95,
-                max_tokens=700,
+                max_tokens=400,
                 stream=False,
             )
-            raw_llm = completion.choices[0].message.content or ""
-            modelo_usado = "nvidia/nemotron-3-super-120b-a12b"
+            msg_obj = completion.choices[0].message
+            raw_llm = msg_obj.content or getattr(msg_obj, "reasoning_content", "") or ""
+            modelo_usado = modelo_principal
             from sma_unified.agents.llm_client import extraer_json_de_llm
             data = extraer_json_de_llm(raw_llm)
             if isinstance(data, dict) and data.get("comision_principal"):
@@ -1132,8 +1156,12 @@ def run_emit_pdf(req: EmitPdfRequest):
                 conn = get_conn()
                 cur = conn.cursor()
                 cur.execute(
-                    "UPDATE sistema.proyecto_ley SET archivo_pdf = %s WHERE id_proyecto = %s",
-                    (resultado["filename"], id_proyecto)
+                    """UPDATE sistema.proyecto_ley 
+                       SET archivo_pdf = %s,
+                           drive_link = COALESCE(NULLIF(%s, ''), drive_link),
+                           drive_file_id = COALESCE(NULLIF(%s, ''), drive_file_id)
+                       WHERE id_proyecto = %s""",
+                    (resultado["filename"], resultado.get("drive_link", ""), resultado.get("drive_file_id", ""), id_proyecto)
                 )
                 conn.commit()
                 cur.close()
@@ -1726,6 +1754,7 @@ def get_expedientes(limit: int = Query(50, ge=1, le=200)):
                 p.titulo,
                 p.resumen,
                 p.archivo_pdf,
+                p.drive_link,
                 p.fecha_ingreso,
                 p.prioridad,
                 p.id_estado_actual,
@@ -1860,7 +1889,7 @@ def get_expediente_detalle(id_proyecto: int):
             cur_c = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur_c.execute(
                 """
-                SELECT * FROM normativa.analisis_consistencia
+                SELECT * FROM sistema.analisis_consistencia
                 WHERE id_proyecto = %s OR (nombre_archivo IS NOT NULL AND %s IS NOT NULL AND nombre_archivo = %s)
                 ORDER BY fecha_analisis DESC
                 """,
@@ -2133,8 +2162,8 @@ async def subir_normativa_vigente(
     1. Extrae el texto del documento o usa el texto directo.
     2. Procesa con LLM (NVIDIA NIM) para extraer resumen jurídico formal y materia.
     3. Parsea los artículos o bloques normativos.
-    4. Genera embeddings NVIDIA y los indexa en public.articulos_normativos (pgvector).
-    5. Registra la norma en el catálogo public.normativas_catalogadas.
+    4. Genera embeddings NVIDIA y los indexa en sistema.articulos_normativos (pgvector).
+    5. Registra la norma en el catálogo sistema.normativas_catalogadas.
     """
     import json
     try:
@@ -2729,6 +2758,41 @@ def api_generar_pdf_gaceta(id_proyecto: int):
             texto_consolidado=texto_consolidado,
             correcciones_aplicadas=aplicadas,
         )
+
+        # Persistir enlace de Drive en PostgreSQL Neon
+        if resultado_pdf.get("drive_link"):
+            try:
+                conn = get_conn()
+                cur = conn.cursor()
+                cur.execute("""
+                    UPDATE sistema.proyecto_ley SET
+                        drive_link = %s,
+                        drive_file_id = %s
+                    WHERE id_proyecto = %s
+                """, (resultado_pdf["drive_link"], resultado_pdf.get("drive_file_id", ""), id_proyecto))
+                conn.commit()
+                cur.close()
+            except Exception as _e_db:
+                logger.warning(f"No se pudo guardar drive_link en Neon: {_e_db}")
+
+        # Persistir en MongoDB Atlas
+        try:
+            db = get_db()
+            db["gaceta_publicaciones"].update_one(
+                {"id_proyecto": id_proyecto},
+                {"$set": {
+                    "id_proyecto": id_proyecto,
+                    "numero_ley": num_ley_int,
+                    "filename": resultado_pdf.get("filename"),
+                    "drive_link": resultado_pdf.get("drive_link", ""),
+                    "drive_file_id": resultado_pdf.get("drive_file_id", ""),
+                    "fecha_publicacion": datetime.now(timezone.utc).isoformat()
+                }},
+                upsert=True
+            )
+        except Exception as _e_mg:
+            logger.warning(f"No se pudo guardar en Mongo gaceta_publicaciones: {_e_mg}")
+
         return {"success": True, "data": resultado_pdf}
     except Exception as e:
         logger.error(f"Error generando PDF de Gaceta para #{id_proyecto}: {e}")
@@ -3103,6 +3167,144 @@ async def api_chat_confirmar(datos: Dict[str, Any] = Body(...)):
     except Exception as e:
         logger.error(f"Error en /api/chat/confirmar: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Endpoints de Google Drive (Reportes y Leyes Editadas) ────────────────────
+
+@app.get("/api/drive/estado")
+def api_drive_estado():
+    """
+    Retorna el estado de la integración con Google Drive OAuth2:
+    - Verificación de credenciales (client_secrets.json, token.json)
+    - Subcarpetas configuradas para Reportes y Leyes Editadas
+    """
+    from sma_unified.utils.drive_uploader import verificar_conexion_drive
+    return {"success": True, "data": verificar_conexion_drive()}
+
+
+@app.post("/api/drive/autorizar")
+def api_drive_autorizar():
+    """
+    Inicia el flujo interactivo de OAuth2 en el servidor local abriendo el navegador.
+    """
+    from sma_unified.utils.drive_uploader import autorizar_interactivamente, verificar_conexion_drive
+    exito = autorizar_interactivamente()
+    estado = verificar_conexion_drive()
+    return {"success": exito, "data": estado}
+
+
+@app.post("/api/drive/subir-reporte/{id_proyecto}")
+def api_drive_subir_reporte(id_proyecto: int):
+    """
+    Sube a Google Drive (subcarpeta de Reportes y Dictámenes) el último informe formal PDF
+    emitido para el proyecto de ley indicado.
+    """
+    from sma_unified.utils.drive_uploader import upload_pdf_to_drive
+    from sma_unified.db.neon_postgres import get_conn
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT archivo_pdf, titulo, drive_link FROM sistema.proyecto_ley WHERE id_proyecto = %s", (id_proyecto,))
+    row = cur.fetchone()
+    cur.close()
+
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="El proyecto no tiene un archivo PDF de reporte registrado.")
+
+    pdf_filename = row[0]
+    base_dir = Path(__file__).resolve().parent
+    pdf_path = base_dir / "uploaded_files" / "informes" / pdf_filename
+    if not pdf_path.exists():
+        pdf_path = base_dir / "uploaded_files" / pdf_filename
+
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail=f"No se encontró el archivo local: {pdf_filename}")
+
+    with open(pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+
+    drive_res = upload_pdf_to_drive(
+        file_bytes=pdf_bytes,
+        filename=pdf_filename,
+        categoria="reportes",
+        subcarpeta=f"EXP-{id_proyecto:04d}"
+    )
+
+    if not drive_res:
+        raise HTTPException(status_code=500, detail="No se pudo subir a Google Drive. Verifique la autenticación ejecutando 'python auth_drive.py'.")
+
+    drive_link = drive_res.get("web_view_link", "")
+    drive_file_id = drive_res.get("file_id", "")
+
+    # Actualizar en Neon
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE sistema.proyecto_ley SET drive_link = %s, drive_file_id = %s WHERE id_proyecto = %s",
+        (drive_link, drive_file_id, id_proyecto)
+    )
+    conn.commit()
+    cur.close()
+
+    return {"success": True, "data": drive_res}
+
+
+@app.post("/api/drive/subir-ley/{id_proyecto}")
+def api_drive_subir_ley(id_proyecto: int):
+    """
+    Sube a Google Drive (subcarpeta de Leyes Editadas y Promulgadas) el PDF oficial de la Gaceta
+    para el proyecto de ley indicado.
+    """
+    from sma_unified.utils.drive_uploader import upload_pdf_to_drive
+    from sma_unified.db.neon_postgres import get_conn
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT numero_ley FROM sistema.proyecto_ley WHERE id_proyecto = %s", (id_proyecto,))
+    row = cur.fetchone()
+    cur.close()
+
+    import re
+    num_str = (row[0] if row else "") or ""
+    digitos = re.findall(r'\d+', num_str)
+    numero_ley = int(digitos[0]) if digitos else (1400 + id_proyecto)
+
+    filename = f"Ley_{numero_ley}_Gaceta_Oficial.pdf"
+    base_dir = Path(__file__).resolve().parent
+    pdf_path = base_dir / "uploaded_files" / "informes" / filename
+
+    if not pdf_path.exists():
+        # Si no existe aún el PDF de la Gaceta, generarlo primero
+        info_pdf = api_generar_pdf_gaceta(id_proyecto)
+        return {"success": True, "data": info_pdf.get("data", {})}
+
+    with open(pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+
+    drive_res = upload_pdf_to_drive(
+        file_bytes=pdf_bytes,
+        filename=filename,
+        categoria="leyes_editadas",
+        subcarpeta=f"Ley_{numero_ley}"
+    )
+
+    if not drive_res:
+        raise HTTPException(status_code=500, detail="No se pudo subir a Google Drive. Verifique la autenticación ejecutando 'python auth_drive.py'.")
+
+    drive_link = drive_res.get("web_view_link", "")
+    drive_file_id = drive_res.get("file_id", "")
+
+    # Actualizar en Neon
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE sistema.proyecto_ley SET drive_link = %s, drive_file_id = %s WHERE id_proyecto = %s",
+        (drive_link, drive_file_id, id_proyecto)
+    )
+    conn.commit()
+    cur.close()
+
+    return {"success": True, "data": drive_res}
 
 
 if __name__ == "__main__":

@@ -38,9 +38,9 @@ agentes:
         "observaciones_forma": ["string"],
         "prioridad_sugerida": "ALTA" | "MEDIA" | "BAJA"
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.1
-    max_tokens: 1500
+    max_tokens: 350
     allow_delegation: false
     color: "#06B6D4"
     logo_url: "/robots/robot_distribuidor_hi.jpg"
@@ -56,20 +56,86 @@ agentes:
     rol: "Auditor Forense de Conformidad Literal contra la CPE 2009"
     tipo: "NIVEL_2"
     tipo_razonamiento: "Deducción Lógica Determinista y Control de Legalidad Literal"
+
     objetivo: >
       Cotejar de manera directa y literal los artículos del proyecto de ley contra los
       Arts. 1 al 410 de la Constitución Política del Estado Plurinacional de Bolivia (2009).
-      Identificar contradicciones normativas evidentes bajo el principio de Supremacía Constitucional (Art. 410 CPE).
+      Identificar contradicciones normativas evidentes bajo el principio de Supremacía
+      Constitucional (Art. 410 CPE). NO interpreta, NO pondera, NO valora oportunidad
+      política: solo verifica compatibilidad literal y competencial. Todo hallazgo debe
+      sustentarse en cita textual verificable; sin cita literal el hallazgo NO EXISTE.
+
     backstory: >
-      Eres un auditor forense de derecho constitucional boliviano. Tu única guía es el texto
-      literal de la Constitución de 2009. Analizas proposiciones normativas cotejándolas con
-      derechos fundamentales (Arts. 13-144), estructura del Estado (Arts. 145-268) y régimen
-      de competencias autonómicas (Arts. 297-304). Tu análisis es lógico y estricto:
-      no realizas interpretaciones políticas o de oportunidad; solo señalas incompatibilidad objetiva.
+      Eres un auditor forense de derecho constitucional boliviano. Tu única guía es el
+      texto literal de la Constitución de 2009. Analizas proposiciones normativas
+      cotejándolas con derechos fundamentales (Arts. 13-144), estructura del Estado
+      (Arts. 145-268) y régimen de competencias autonómicas (Arts. 297-304). Tu análisis
+      es lógico y estricto: no realizas interpretaciones políticas o de oportunidad;
+      solo señalas incompatibilidad objetiva. Cuando el caso exige ponderación de
+      derechos o valores en conflicto, NO decides: marcas REQUIERE_ANALISIS_DE_FONDO
+      y remites a revisión humana.
+
     restricciones_anti_alucinacion:
       - "PROHIBIDO inventar artículos o incisos de la CPE. Toda contradicción debe citar textualmente el número de artículo de la CPE."
       - "Diferencia estrictamente contradicciones DIRECTAS de meras observaciones de redacción."
       - "Clasifica la severidad con precisión: CRÍTICA (incompatibilidad frontal insalvable), GRAVE (conflicto competencial) o LEVE (ambigüedad formal)."
+      - "Si no puedes copiar literalmente 'texto_cpe_literal' desde el input, la clasificación DEBE ser NEUTRAL y 'verificado'=false."
+      - "PROHIBIDO parafrasear citas: 'texto_cpe_literal' y 'texto_proyecto_literal' deben ser copia exacta del texto fuente."
+      - "PROHIBIDO usar conocimiento constitucional externo al provisto en el contexto (artículos recuperados por las tools)."
+      - "PROHIBIDO emitir juicio de constitucionalidad de fondo o de oportunidad política."
+
+    reglas_deduccion:
+      - id: R1
+        nombre: "Prohibición vs. permiso"
+        descripcion: "Si la CPE PROHÍBE algo que el proyecto PERMITE u ORDENA, o viceversa → EN_CONTRA."
+      - id: R2
+        nombre: "Obligación vs. omisión"
+        descripcion: "Si la CPE IMPONE una obligación expresa que el proyecto OMITE o niega → EN_CONTRA."
+      - id: R3
+        nombre: "Jerarquía normativa"
+        descripcion: "Si el proyecto contradice una regla de supremacía constitucional (Art. 410 CPE) → EN_CONTRA."
+      - id: R4
+        nombre: "Competencia y ámbito"
+        descripcion: "Si el proyecto invade competencias exclusivas/concurrentes de otro nivel (Arts. 297-304 CPE) → EN_CONTRA con tipo_conflicto INVASION_COMPETENCIAS."
+      - id: R5
+        nombre: "Desarrollo o garantía"
+        descripcion: "Si el proyecto desarrolla, reglamenta o garantiza lo que la CPE manda → A_FAVOR."
+      - id: R6
+        nombre: "Ponderación"
+        descripcion: "Si la tensión exige ponderar derechos o valores en conflicto → REQUIERE_ANALISIS_DE_FONDO (no decide)."
+      - id: R7
+        nombre: "Sin tensión"
+        descripcion: "En cualquier otro caso → NEUTRAL."
+
+    protocolo_operativo:
+      - paso: 1
+        accion: "Recuperar artículos CPE candidatos mediante tool 'buscar_articulos_constitucion' (máx. 12)."
+      - paso: 2
+        accion: "Para cada artículo candidato, obtener texto íntegro con 'obtener_articulo_por_numero'."
+      - paso: 3
+        accion: "Cotejar el artículo del proyecto contra el artículo CPE aplicando las reglas_deduccion en orden R1→R7."
+      - paso: 4
+        accion: "Verificar cita literal de ambos textos. Sin cita literal → NEUTRAL y verificado=false."
+      - paso: 5
+        accion: "Clasificar severidad y tipo_conflicto. Persistir el hallazgo en el formato_salida_requerido."
+      - paso: 6
+        accion: "Si el caso requiere ponderación (R6), NO emitir juicio: marcar REQUIERE_ANALISIS_DE_FONDO en fundamentacion_general."
+
+    criterios_severidad:
+      bloqueante: >
+        Incompatibilidad frontal insalvable con derecho fundamental (Arts. 13-144 CPE),
+        con la supremacía constitucional (Art. 410 CPE) o con el núcleo esencial de una
+        competencia exclusiva. El proyecto NO puede subsistir sin reforma constitucional
+        o supresión del artículo.
+      grave: >
+        Conflicto competencial (Arts. 297-304 CPE) o invasión de ámbito que, sin ser
+        frontal, exige reforma del artículo del proyecto para alinearse a la CPE.
+      leve: >
+        Ambigüedad formal o defecto de técnica legislativa que no colisiona con el fondo
+        constitucional, pero debe corregirse.
+      ninguna: >
+        Sin tensión jurídica relevante; el artículo es compatible con la CPE.
+
     formato_salida_requerido: >
       {
         "valido": true | false,
@@ -81,26 +147,78 @@ agentes:
             "articulo_proyecto": "Art. X",
             "articulo_cpe": "Art. Y CPE",
             "texto_cpe_literal": "...",
-            "tipo_conflicto": "VULNERACION_DERECHO | INVASION_COMPETENCIAS | FORMA",
+            "texto_proyecto_literal": "...",
+            "tipo_conflicto": "VULNERACION_DERECHO | INVASION_COMPETENCIAS | FORMA | SUPREMACIA_CONSTITUCIONAL",
             "severidad": "leve" | "grave" | "bloqueante",
+            "regla_aplicada": "R1 | R2 | R3 | R4",
+            "explicacion": "...",
+            "verificado": true | false
+          }
+        ],
+        "requieren_analisis_fondo": [
+          {
+            "articulo_cpe": "Art. Z CPE",
+            "razon": "...",
+            "texto_cpe_literal": "..."
+          }
+        ],
+        "articulos_a_favor": [
+          {
+            "articulo_cpe": "Art. W CPE",
+            "texto_cpe_literal": "...",
             "explicacion": "..."
           }
         ],
+        "articulos_consultados": [
+          { "numero": "X", "titulo": "...", "extracto": "..." }
+        ],
         "fundamentacion_general": "..."
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.1
     max_tokens: 2500
     allow_delegation: false
     color: "#10B981"
     logo_url: "/robots/robot_constitucional_hi.jpg"
+
     capabilities:
       - control formal de legalidad
       - análisis de contradicción literal
       - verificación de competencias Art. 297 CPE
       - semaforización de severidad
+      - verificación de citas literales (candado anti-alucinación)
+      - clasificación en 4 estados (A_FAVOR / EN_CONTRA / NEUTRAL / REQUIERE_ANALISIS_DE_FONDO)
 
-  # ========== AGENTE 3: CONSISTENCIA NORMATIVA ==========
+    tools_permitidas:
+      - buscar_articulos_constitucion
+      - obtener_articulo_por_numero
+      - comparar_texto_constitucional
+
+    politica_degradacion:
+      sin_cita_literal: "NEUTRAL + verificado=false"
+      error_tool: "Registrar en fundamentacion_general y continuar con los artículos restantes; NUNCA inventar texto."
+      articulo_no_encontrado: "Omitir del análisis; registrar en articulos_consultados con extracto='NO_ENCONTRADO'."
+      caso_ambiguo: "REQUIERE_ANALISIS_DE_FONDO (no decidir)."
+
+    reglas_autoverificacion:
+      - "Antes de emitir un EN_CONTRA, verificar que 'texto_cpe_literal' existe textualmente en el artículo recuperado."
+      - "Antes de emitir un EN_CONTRA, verificar que 'texto_proyecto_literal' existe textualmente en el proyecto."
+      - "Si cualquiera de las dos citas falla → degradar a NEUTRAL con verificado=false."
+      - "Cada contradicción debe declarar la regla_aplicada (R1-R4). Sin regla declarada → NEUTRAL."
+      - "El campo confianza debe reflejar el porcentaje de contradicciones verificadas sobre el total de hallazgos; si no hay hallazgos verificables, confianza ≤ 0.60."
+
+    metricas_salida:
+      requiere_cita_literal: true
+      requiere_regla_aplicada: true
+      requiere_severidad: true
+      max_contradicciones_reportadas: 20
+      idioma: "es-BO"
+
+
+
+
+    # ========== AGENTE 3: CONSISTENCIA NORMATIVA ==========
   Consistencia_Normativa:
     nombre_agente: "Consistencia Normativa y Antinomias"
     rol: "Auditor Semántico Vectorial contra Leyes Vigentes de Bolivia"
@@ -135,7 +253,7 @@ agentes:
         ],
         "resumen_consistencia": "..."
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.1
     max_tokens: 2200
     allow_delegation: false
@@ -173,7 +291,7 @@ agentes:
         "agente_destino": "Distribuidor" | "Difusion_Ciudadana" | "Secretario_Camara" | null,
         "puntos_clave": ["string"]
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.2
     max_tokens: 1500
     allow_delegation: false
@@ -223,7 +341,7 @@ agentes:
         ],
         "dictamen_tecnico_resumen": "..."
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.1
     max_tokens: 2200
     allow_delegation: false
@@ -268,7 +386,7 @@ agentes:
         "plan_de_audiencias": "...",
         "instrucciones_a_secretaria": "..."
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.1
     max_tokens: 1800
     allow_delegation: false
@@ -312,7 +430,7 @@ agentes:
         "dictamen_fondo_detallado": "...",
         "enmiendas_de_fondo_sugeridas": ["string"]
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.1
     max_tokens: 2600
     allow_delegation: false
@@ -355,7 +473,7 @@ agentes:
         "alerta_presupuesto_tgn": "VERDE" | "AMARILLA" | "ROJA",
         "recomendacion_fiscal": "..."
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.1
     max_tokens: 2200
     allow_delegation: false
@@ -381,7 +499,7 @@ agentes:
       de los agentes evaluadores (constitucionalidad, consistencia, técnica), eliminas redundancias,
       preservas la literalidad de las citas y generas el Informe Oficial y Expediente Consolidado
       con razonamiento ampliado, listo para el tratamiento en comisión y plenario camaral.
-    modelo_llm: "nvidia/nemotron-3-super-120b-a12b"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.2
     max_tokens: 3000
     allow_delegation: false
@@ -436,7 +554,7 @@ agentes:
         ],
         "texto_aprobado_integro": "..."
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.0
     max_tokens: 2500
     allow_delegation: false
@@ -483,7 +601,7 @@ agentes:
         "requiere_comision_mixta": true | false,
         "texto_armonizado_propuesto": "..."
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.1
     max_tokens: 2200
     allow_delegation: false
@@ -531,7 +649,7 @@ agentes:
         "fundamentacion_decision": "...",
         "mensaje_a_la_asamblea": "..."
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.2
     max_tokens: 2500
     allow_delegation: false
@@ -573,7 +691,7 @@ agentes:
         "estado_norma": "VIGENTE",
         "url_publicacion_oficial": "http://www.gacetaoficialdebolivia.gob.bo/leyes/..."
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.0
     max_tokens: 1200
     allow_delegation: false
@@ -618,7 +736,7 @@ agentes:
           {"pregunta": "...", "respuesta": "..."}
         ]
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.3
     max_tokens: 2200
     allow_delegation: false
@@ -667,7 +785,7 @@ agentes:
         ],
         "recomendacion_parlamentaria": "..."
       }
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.1
     max_tokens: 2000
     allow_delegation: false
@@ -690,7 +808,7 @@ agentes:
       y ciudadanos proponentes con el estado del expediente y dictámenes adjuntos.
     backstory: >
       Garantizas el principio de publicidad procesal y notificación oportuna de los actos parlamentarios.
-    modelo_llm: "nvidia/llama-3.1-nemotron-70b-instruct"
+    modelo_llm: "openai/gpt-oss-20b"
     temperatura: 0.0
     max_tokens: 1500
     allow_delegation: false

@@ -12,7 +12,8 @@ import {
   Activity, 
   Scale, 
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  ExternalLink
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -283,11 +284,37 @@ export default function Expedientes() {
                     borderLeft: '3px solid #00B4D8',
                     padding: '12px 16px',
                     borderRadius: '0 8px 8px 0',
-                    marginBottom: '28px',
+                    marginBottom: '20px',
                   }}>
                     <p style={{ color: '#CBD5E1', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
                       {detalle.proyecto.resumen}
                     </p>
+                  </div>
+                )}
+
+                {detalle.proyecto.drive_link && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <a
+                      href={detalle.proyecto.drive_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: 'rgba(16, 185, 129, 0.15)',
+                        border: '1px solid rgba(16, 185, 129, 0.4)',
+                        padding: '9px 16px',
+                        borderRadius: '8px',
+                        color: '#34d399',
+                        fontSize: '0.86rem',
+                        fontWeight: 700,
+                        textDecoration: 'none'
+                      }}
+                    >
+                      <ExternalLink size={16} />
+                      <span>Ver Expediente / Documento en Google Drive</span>
+                    </a>
                   </div>
                 )}
 

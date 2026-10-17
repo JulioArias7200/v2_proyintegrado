@@ -198,13 +198,13 @@ class AgenteSecretarioCamara:
         es_rechazado = "RECHAZADO" in str(resultado)
         
         # Persistencia Neon (usando método transaccional si existe)
-        try:
-            if hasattr(self.neon, "guardar_insumo_legislativo"):
-                self.neon.guardar_insumo_legislativo(
-                    int(proyecto_id), "ACTA_DEBATE", data,
-                    "Secretario de Cámara", acta.get("estado_siguiente", "EN_TRAMITE_BICAMERAL")
-                )
-            else:
+        if hasattr(self.neon, "guardar_insumo_legislativo"):
+            self.neon.guardar_insumo_legislativo(
+                int(proyecto_id), "ACTA_DEBATE", data,
+                "Secretario de Cámara", acta.get("estado_siguiente", "EN_TRAMITE_BICAMERAL")
+            )
+        else:
+            try:
                 self.neon.insertar_observacion(
                     id_proyecto=int(proyecto_id),
                     tipo_obs="ACTA_DEBATE",
@@ -215,8 +215,8 @@ class AgenteSecretarioCamara:
                 )
                 nuevo_estado = "RECHAZADO_ORIGEN" if es_rechazado else "EN_TRAMITE_BICAMERAL"
                 self.neon.actualizar_estado_proyecto(int(proyecto_id), nuevo_estado, "Secretario de Cámara")
-        except Exception as err:
-            print(f"Aviso Neon Secretario: {err}")
+            except Exception as err:
+                print(f"Aviso Neon Secretario: {err}")
             
         # MongoDB logging en agent_executions
         try:

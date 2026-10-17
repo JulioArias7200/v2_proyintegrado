@@ -177,6 +177,12 @@ export const api = {
   getTextoConsolidado: (idProyecto) => request(`/proyectos/${idProyecto}/texto-consolidado`),
   generarPdfGaceta: (idProyecto) => request(`/proyectos/${idProyecto}/generar-pdf-gaceta`, { method: 'POST' }),
 
+  // GOOGLE DRIVE OAUTH2
+  getDriveEstado: () => request('/drive/estado'),
+  autorizarDrive: () => request('/drive/autorizar', { method: 'POST' }),
+  subirReporteDrive: (idProyecto) => request(`/drive/subir-reporte/${idProyecto}`, { method: 'POST' }),
+  subirLeyDrive: (idProyecto) => request(`/drive/subir-ley/${idProyecto}`, { method: 'POST' }),
+
   runPipelineCompleto: (data) =>
     request('/pipeline/pipeline_completo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 

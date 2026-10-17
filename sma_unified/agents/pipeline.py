@@ -84,11 +84,31 @@ def ejecutar_fase_1_clasificacion(
     solicitud_id: Optional[int] = None
 
     if categoria == "AGENTE_REGISTRO_LEGISLATIVO":
+        drive_link = (metadata_extra or {}).get("drive_link")
+        drive_file_id = (metadata_extra or {}).get("drive_file_id")
+
+        if not drive_link and nombre_archivo:
+            try:
+                base_dir = Path(__file__).resolve().parent.parent.parent
+                cand_path = base_dir / "uploaded_files" / nombre_archivo
+                if cand_path.exists():
+                    from sma_unified.utils.drive_uploader import upload_pdf_to_drive
+                    with open(cand_path, "rb") as f_up:
+                        up_bytes = f_up.read()
+                    d_res = upload_pdf_to_drive(up_bytes, nombre_archivo, categoria="proyectos_iniciales")
+                    if d_res:
+                        drive_link = d_res.get("web_view_link")
+                        drive_file_id = d_res.get("file_id")
+            except Exception as _e_auto_up:
+                logger.warning(f"Error subiendo proyecto inicial a Drive: {_e_auto_up}")
+
         id_proyecto = guardar_proyecto_ley(
             sesion_id=sesion_id,
             texto_documento=texto_documento,
             nombre_archivo=nombre_archivo,
             tipo_entrada=tipo_entrada,
+            drive_file_id=drive_file_id,
+            drive_link=drive_link,
         )
         registrar_bitacora(
             id_proyecto=id_proyecto,

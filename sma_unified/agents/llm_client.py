@@ -1,24 +1,18 @@
 """
-Cliente LLM resiliente para tareas de razonamiento (NVIDIA NIM)
-==================================================================
-Los modelos de terceros en el catálogo de NVIDIA NIM (sobre todo la familia
-GLM de Z.ai) rotan de versión con mucha frecuencia y quedan "end of life"
-(HTTP 410 Gone) de un día para otro, sin que el código tenga que cambiar de
-proveedor. Esta capa prueba, en orden, una lista de modelos candidatos y
-sigue automáticamente con el siguiente si el actual ya no está disponible
-— así una ingesta o una respuesta del chat no se cae solo porque NVIDIA
-retiró un modelo puntual.
-
-Uso:
-    contenido, modelo_usado = chat_completion_resiliente(
-        messages=[...], temperature=0.2, max_tokens=1000,
-    )
-
-Si el modelo configurado (`settings.LLM_MODEL_CONSISTENCIA`) deja de
-funcionar seguido, lo más simple es actualizar esa variable en el .env —
-esta capa es una red de seguridad, no un reemplazo de mantener el modelo
-al día.
+Cliente LLM resiliente para tareas de razonamiento y clasificación (NVIDIA NIM)
+================================================================================
+Implementa la arquitectura de alta resiliencia recomendada para producción:
+1. Selección de modelos de texto puro de ultra-baja latencia (evita multimodales/vision).
+2. Circuit Breaker: 3 fallos consecutivos abren el circuito por 30s para evitar
+   que un modelo defectuoso bloquee o ralentice el pipeline.
+3. Política de timeout robusta: connect=30s, read=90s para evitar falsos positivos
+   durante generaciones extensas normales.
+4. Soporte transparente para `response_format={"type": "json_object"}` con degradación
+   suave si un modelo específico no lo soporta.
+5. Registro continuo de latencias y métricas (P50, P95, tasa de timeouts y fallos).
 """
+import collections
+from datetime import datetime
 import json
 import re
 import time
@@ -36,7 +30,17 @@ from sma_unified.config import settings
 
 NVIDIA_API_BASE = "https://integrate.api.nvidia.com/v1"
 
-# Caché en memoria para los modelos disponibles en NVIDIA NIM
+# ── Circuit Breaker State ──────────────────────────────────────────────────
+CIRCUIT_FAILURE_THRESHOLD: int = 3
+CIRCUIT_COOLDOWN_SECONDS: float = 30.0
+
+_CIRCUIT_FAILURES: Dict[str, int] = collections.defaultdict(int)
+_CIRCUIT_OPEN_UNTIL: Dict[str, float] = collections.defaultdict(float)
+
+# ── Latency Metrics History (Últimas 250 llamadas) ──────────────────────────
+_LATENCY_HISTORY: collections.deque = collections.deque(maxlen=250)
+
+# ── Caché de Modelos Disponibles en NVIDIA NIM ─────────────────────────────
 _CACHE_MODELOS_ACTIVOS: Set[str] = set()
 _CACHE_TIMESTAMP: float = 0.0
 _CACHE_TTL_SEGUNDOS: float = 3600.0  # 1 hora
@@ -162,20 +166,17 @@ def extraer_json_de_llm(texto: str) -> Any:
         "clasificacion", "fundamento", "severidad", "fragmento_proyecto",
         "tipo_relacion", "justificacion", "sugerencia", "derogacion_tacita",
         "conflicto_especialidad", "riesgo", "articulo_inicio", "articulo_num",
-        "nombre_comision", "razon_asignacion"
+        "nombre_comision", "razon_asignacion", "categoria", "confianza"
     ]
     for k in claves_comunes:
-        # String value (maneja con o sin comilla de cierre)
         m_str = re.search(rf'"{k}"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"?', texto_limpio)
         if m_str and m_str.group(1).strip():
             recuperado[k] = m_str.group(1).strip()
             continue
-        # Boolean value
         m_bool = re.search(rf'"{k}"\s*:\s*(true|false)', texto_limpio, re.IGNORECASE)
         if m_bool:
             recuperado[k] = m_bool.group(1).lower() == "true"
             continue
-        # Number value
         m_num = re.search(rf'"{k}"\s*:\s*(-?\d+(?:\.\d+)?)', texto_limpio)
         if m_num:
             try:
@@ -223,26 +224,24 @@ def obtener_modelos_disponibles_nim(force_refresh: bool = False) -> Set[str]:
 
 def _lista_modelos_razonamiento() -> List[str]:
     """
-    Orden de preferencia de modelos activos en NVIDIA NIM API:
-    1. Modelos explícitamente configurados en el .env / settings.
-    2. Modelos vigentes probados de alta velocidad y fidelidad JSON.
-    3. Filtrado automático contra los modelos activos consultados en la API.
+    Orden de preferencia de modelos activos y probados en NVIDIA NIM API:
+    1. Modelo primario de alta velocidad configurado en .env (openai/gpt-oss-20b).
+    2. Modelos de respaldo de texto puro exclusivamente (sin modelos de visión multimodal).
+    3. Filtrado por estado de catálogo NVIDIA NIM.
     """
-    # 1. Prioridad absoluta: lo configurado en .env
     preferidos = [
         settings.LLM_MODEL_CONSISTENCIA,
         settings.LLM_MODEL_NVIDIA,
         settings.LLM_MODEL_CREW,
     ]
 
-    # 2. Modelos de respaldo modernos, comprobados activos, rápidos y 100% compatibles con JSON
+    # Respaldos de texto puro comprobados en producción (baja latencia y fidelidad JSON):
     respaldos_vigentes = [
-        "deepseek-ai/deepseek-v4-flash-0731",
-        "meta/llama-3.2-11b-vision-instruct",
-        "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "openai/gpt-oss-20b",
-        "z-ai/glm-5.3-flash",
-        "nvidia/nemotron-3-super-120b-a12b",
+        "openai/gpt-oss-20b",                           # ~2.0s P95 - Texto puro, excelente JSON
+        "stepfun-ai/step-5-preview",                     # ~1.7s P95 - Rápido y confiable
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", # ~2.2s P95 - Razonamiento ágil
+        "z-ai/glm-5.3",                                  # ~6.0s P95 - Razonamiento profundo
+        "nvidia/nemotron-3-super-120b-a12b",             # Respaldo de alta capacidad
     ]
 
     todos_candidatos = preferidos + respaldos_vigentes
@@ -255,7 +254,7 @@ def _lista_modelos_razonamiento() -> List[str]:
             vistos.add(m)
             candidatos_ordenados.append(m)
 
-    # 3. Filtrar con la lista dinámica de modelos si está disponible
+    # Filtrar contra catálogo si está accesible
     modelos_api = obtener_modelos_disponibles_nim()
     if modelos_api:
         candidatos_filtrados = [m for m in candidatos_ordenados if m in modelos_api]
@@ -274,24 +273,179 @@ def _parece_modelo_no_disponible(status_code: Optional[int], texto_error: str) -
     ])
 
 
+def _esta_circuito_abierto(modelo: str) -> Tuple[bool, float]:
+    """
+    Verifica si el Circuit Breaker para un modelo está actualmente abierto.
+    Retorna (abierto: bool, segundos_restantes: float).
+    """
+    tiempo_limite = _CIRCUIT_OPEN_UNTIL.get(modelo, 0.0)
+    ahora = time.time()
+    if tiempo_limite > ahora:
+        return True, round(tiempo_limite - ahora, 1)
+    return False, 0.0
+
+
+def _registrar_exito_circuito(modelo: str) -> None:
+    """Restablece los fallos consecutivos del modelo tras una respuesta exitosa."""
+    _CIRCUIT_FAILURES[modelo] = 0
+    _CIRCUIT_OPEN_UNTIL[modelo] = 0.0
+
+
+def _registrar_fallo_circuito(modelo: str, motivo: str) -> None:
+    """
+    Incrementa el contador de fallos consecutivos y abre el circuito si alcanza el umbral.
+    """
+    _CIRCUIT_FAILURES[modelo] += 1
+    fallos = _CIRCUIT_FAILURES[modelo]
+    if fallos >= CIRCUIT_FAILURE_THRESHOLD:
+        _CIRCUIT_OPEN_UNTIL[modelo] = time.time() + CIRCUIT_COOLDOWN_SECONDS
+        logger.error(
+            f"[Circuit Breaker] Modelo '{modelo}' acumuló {fallos} fallos consecutivos ({motivo}). "
+            f"CIRCUITO ABIERTO: se omitirá durante {CIRCUIT_COOLDOWN_SECONDS}s."
+        )
+    else:
+        logger.warning(
+            f"[Circuit Breaker] Modelo '{modelo}' falló ({fallos}/{CIRCUIT_FAILURE_THRESHOLD}): {motivo}"
+        )
+
+
+def _registrar_metrica_latencia(
+    modelo: str,
+    duracion: float,
+    status: str,
+    status_code: Optional[int] = None,
+    error_msg: Optional[str] = None,
+    usage: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Guarda un registro de latencia y estado en el búfer de métricas."""
+    registro = {
+        "timestamp": time.time(),
+        "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "modelo": modelo,
+        "duracion_segundos": round(duracion, 3),
+        "status": status,
+        "status_code": status_code,
+        "error": error_msg[:180] if error_msg else None,
+        "prompt_tokens": (usage or {}).get("prompt_tokens"),
+        "completion_tokens": (usage or {}).get("completion_tokens"),
+        "total_tokens": (usage or {}).get("total_tokens"),
+    }
+    _LATENCY_HISTORY.append(registro)
+
+
+def obtener_metricas_latencia_llm() -> Dict[str, Any]:
+    """
+    Calcula estadísticas detalladas de rendimiento (latencia P50, P95, tasa de éxito,
+    estado del Circuit Breaker) sobre las últimas llamadas registradas.
+    """
+    historial = list(_LATENCY_HISTORY)
+    ahora = time.time()
+
+    # Estado de Circuit Breakers
+    estado_circuitos = {}
+    todos_modelos = set(_lista_modelos_razonamiento()) | set(_CIRCUIT_FAILURES.keys())
+    for m in todos_modelos:
+        abierto, rest = _esta_circuito_abierto(m)
+        estado_circuitos[m] = {
+            "circuito_abierto": abierto,
+            "segundos_cooldown_restantes": rest,
+            "fallos_consecutivos": _CIRCUIT_FAILURES.get(m, 0),
+            "umbral": CIRCUIT_FAILURE_THRESHOLD,
+        }
+
+    # Métricas agregadas por modelo
+    stats_por_modelo: Dict[str, Any] = {}
+    for item in historial:
+        m = item["modelo"]
+        if m not in stats_por_modelo:
+            stats_por_modelo[m] = {
+                "total_llamadas": 0,
+                "exitosas": 0,
+                "timeouts": 0,
+                "errores": 0,
+                "latencias": [],
+            }
+        s = stats_por_modelo[m]
+        s["total_llamadas"] += 1
+        st = item["status"]
+        if st == "ok":
+            s["exitosas"] += 1
+            s["latencias"].append(item["duracion_segundos"])
+        elif st == "timeout":
+            s["timeouts"] += 1
+        else:
+            s["errores"] += 1
+
+    # Calcular P50, P95 y promedio
+    resumen_modelos = {}
+    for m, s in stats_por_modelo.items():
+        lats = sorted(s["latencias"])
+        n = len(lats)
+        p50 = round(lats[int(n * 0.5)], 2) if n > 0 else 0.0
+        p95 = round(lats[min(int(n * 0.95), n - 1)], 2) if n > 0 else 0.0
+        avg = round(sum(lats) / n, 2) if n > 0 else 0.0
+        resumen_modelos[m] = {
+            "total": s["total_llamadas"],
+            "exitosas": s["exitosas"],
+            "timeouts": s["timeouts"],
+            "errores": s["errores"],
+            "tasa_exito_pct": round((s["exitosas"] / s["total_llamadas"]) * 100, 1) if s["total_llamadas"] > 0 else 0.0,
+            "latencia_promedio_s": avg,
+            "latencia_p50_s": p50,
+            "latencia_p95_s": p95,
+        }
+
+    return {
+        "total_registros": len(historial),
+        "circuit_breakers": estado_circuitos,
+        "rendimiento_por_modelo": resumen_modelos,
+        "ultimas_llamadas": historial[-15:] if historial else [],
+    }
+
+
 def chat_completion_resiliente(
     messages: List[Dict[str, str]],
-    temperature: float = 0.3,
-    max_tokens: int = 1500,
+    temperature: float = 0.2,
+    max_tokens: int = 1200,
     modelos: Optional[List[str]] = None,
-    timeout: Optional[int] = None,
+    timeout: Optional[Any] = None,
+    response_format: Optional[Dict[str, str]] = None,
     **kwargs: Any,
 ) -> Tuple[str, str]:
     """
-    Llama al endpoint de chat de NVIDIA NIM probando una lista de modelos en
-    orden; si uno ya no está disponible (410/404/503), sigue con el siguiente.
-    Timeout acotado para respuesta ultra-rápida.
+    Llama al endpoint de chat de NVIDIA NIM probando una lista de modelos en orden
+    con Circuit Breaker activo, timeout ampliado (30s connect, 90s read) y registro
+    continuo de latencia.
     """
     modelos = modelos or _lista_modelos_razonamiento()
-    timeout_efectivo = timeout or 35  # 35s para dar tiempo suficiente a modelos grandes (30B-120B) en NVIDIA NIM
+
+    # Política de timeout recomendada: connect=30s, read=90s
+    if timeout is None:
+        timeout_efectivo = (30, 90)
+    elif isinstance(timeout, (int, float)):
+        timeout_efectivo = (30, int(timeout))
+    else:
+        timeout_efectivo = timeout
+
     ultimo_error: Optional[Exception] = None
 
     for modelo in modelos:
+        # 1. Verificar Circuit Breaker
+        abierto, seg_rest = _esta_circuito_abierto(modelo)
+        if abierto:
+            logger.warning(
+                f"[Circuit Breaker] Modelo '{modelo}' con circuito ABIERTO. "
+                f"Omitiendo directamente ({seg_rest}s restantes)..."
+            )
+            _registrar_metrica_latencia(
+                modelo=modelo,
+                duracion=0.0,
+                status="circuit_breaker_open",
+                error_msg=f"Circuito abierto por fallos consecutivos ({seg_rest}s restantes)",
+            )
+            continue
+
+        t_inicio = time.time()
         try:
             payload: Dict[str, Any] = {
                 "model": modelo,
@@ -299,30 +453,103 @@ def chat_completion_resiliente(
                 "temperature": temperature,
                 "max_tokens": max_tokens,
             }
+            if response_format:
+                payload["response_format"] = response_format
             payload.update(kwargs)
+
+            # Intentar llamada al endpoint de NVIDIA NIM
             resp = requests.post(
                 f"{NVIDIA_API_BASE}/chat/completions",
                 headers={"Authorization": f"Bearer {settings.NVIDIA_API_KEY}"},
                 json=payload,
                 timeout=timeout_efectivo,
             )
+            t_fin = time.time()
+            duracion = t_fin - t_inicio
+
+            # Manejar caso en que el modelo no soporte response_format (HTTP 400 específico)
+            if resp.status_code == 400 and response_format and "response_format" in resp.text.lower():
+                logger.info(f"Modelo '{modelo}' no soporta 'response_format', reintentando sin él...")
+                payload_sin_rf = dict(payload)
+                payload_sin_rf.pop("response_format", None)
+                resp = requests.post(
+                    f"{NVIDIA_API_BASE}/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.NVIDIA_API_KEY}"},
+                    json=payload_sin_rf,
+                    timeout=timeout_efectivo,
+                )
+                duracion = time.time() - t_inicio
+
+            # Verificar si el modelo fue retirado o no existe (404/410/503)
             if _parece_modelo_no_disponible(resp.status_code, resp.text):
-                logger.warning(f"Modelo '{modelo}' no disponible ({resp.status_code}), probando el siguiente...")
-                ultimo_error = RuntimeError(f"Modelo '{modelo}' no disponible: {resp.text[:300]}")
+                motivo = f"HTTP {resp.status_code} - modelo no disponible"
+                _registrar_fallo_circuito(modelo, motivo)
+                _registrar_metrica_latencia(
+                    modelo=modelo,
+                    duracion=duracion,
+                    status="error",
+                    status_code=resp.status_code,
+                    error_msg=resp.text,
+                )
+                ultimo_error = RuntimeError(f"Modelo '{modelo}' no disponible: {resp.text[:250]}")
                 continue
+
             resp.raise_for_status()
-            msg_obj = resp.json()["choices"][0]["message"]
-            contenido = msg_obj.get("content") or msg_obj.get("reasoning_content") or ""
+            datos_resp = resp.json()
+            msg_obj = datos_resp["choices"][0]["message"]
+            usage = datos_resp.get("usage")
+
+            # Priorizar contenido formal; si está vacío, usar reasoning_content
+            contenido = (msg_obj.get("content") or "").strip()
+            if not contenido:
+                contenido = (msg_obj.get("reasoning_content") or "").strip()
+
+            # Registrar éxito en Circuit Breaker y Métricas
+            _registrar_exito_circuito(modelo)
+            _registrar_metrica_latencia(
+                modelo=modelo,
+                duracion=duracion,
+                status="ok",
+                status_code=resp.status_code,
+                usage=usage,
+            )
+
             if modelo != modelos[0]:
-                logger.info(f"Se usó el modelo de respaldo '{modelo}' (el configurado '{modelos[0]}' no respondió).")
+                logger.info(f"Se usó el modelo de respaldo '{modelo}' ({duracion:.2f}s) en reemplazo del primario.")
+            else:
+                logger.debug(f"Respuesta exitosa de '{modelo}' en {duracion:.2f}s.")
+
             return contenido, modelo
+
+        except requests.exceptions.Timeout as e:
+            duracion = time.time() - t_inicio
+            motivo = f"ReadTimeout después de {duracion:.1f}s"
+            _registrar_fallo_circuito(modelo, motivo)
+            _registrar_metrica_latencia(
+                modelo=modelo,
+                duracion=duracion,
+                status="timeout",
+                error_msg=str(e),
+            )
+            ultimo_error = e
+            continue
+
         except requests.exceptions.RequestException as e:
-            logger.warning(f"Modelo '{modelo}' falló: {e}")
+            duracion = time.time() - t_inicio
+            motivo = f"RequestException: {e}"
+            _registrar_fallo_circuito(modelo, motivo)
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            _registrar_metrica_latencia(
+                modelo=modelo,
+                duracion=duracion,
+                status="error",
+                status_code=status_code,
+                error_msg=str(e),
+            )
             ultimo_error = e
             continue
 
     raise RuntimeError(
-        f"Ningún modelo de razonamiento disponible respondió (probados: {', '.join(modelos)}). "
+        f"Ningún modelo LLM de razonamiento disponible respondió (probados: {', '.join(modelos)}). "
         f"Último error: {ultimo_error}"
     )
-

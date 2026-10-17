@@ -320,15 +320,44 @@ def emitir_informe_pdf(
         filepath = os.path.join("uploaded_files/informes", filename)
         pdf.output(filepath)
 
+        drive_link = ""
+        drive_file_id = ""
+        try:
+            with open(filepath, "rb") as f_pdf:
+                pdf_bytes = f_pdf.read()
+            from sma_unified.utils.drive_uploader import upload_pdf_to_drive
+            drive_res = upload_pdf_to_drive(
+                file_bytes=pdf_bytes,
+                filename=filename,
+                categoria="reportes"
+            )
+            if drive_res:
+                drive_link = drive_res.get("web_view_link", "")
+                drive_file_id = drive_res.get("file_id", "")
+                logger.info(f"[EmisorResultados] 📁 Informe vinculado a Google Drive: {drive_link}")
+        except Exception as _e_drive:
+            logger.warning(f"[EmisorResultados] No se pudo subir reporte a Drive: {_e_drive}")
+
         duracion_ms = int((time.time() - t_inicio) * 1000)
-        marcar_completado(task_id, resultado={"pdf_path": filepath, "status": "success"}, duracion_ms=duracion_ms)
+        marcar_completado(
+            task_id,
+            resultado={
+                "pdf_path": filepath,
+                "status": "success",
+                "drive_link": drive_link,
+                "drive_file_id": drive_file_id
+            },
+            duracion_ms=duracion_ms
+        )
 
         logger.info(f"✅ Dictamen formal PDF generado exitosamente: {filepath} ({duracion_ms}ms)")
         return {
             "status": "success",
             "pdf_path": filepath,
             "filename": filename,
-            "duracion_ms": duracion_ms
+            "duracion_ms": duracion_ms,
+            "drive_link": drive_link,
+            "drive_file_id": drive_file_id
         }
     except Exception as e:
         marcar_error(task_id, str(e))
