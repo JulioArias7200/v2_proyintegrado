@@ -274,7 +274,7 @@ export default function AllAgentsResultsModal({
         }}>
           {filteredAgents.map((agent) => {
             const isDone = pipelineStep >= agent.doneAtStep;
-            const isActive = pipelineStep === agent.activeStep;
+            const isActive = pipelineStep >= agent.activeStep && pipelineStep < agent.doneAtStep;
             const resultData = getAgentResultData(agent.id);
             const isExpanded = expandedAgentId === agent.id;
             const Icon = AGENT_ICONS[agent.id] || Shield;

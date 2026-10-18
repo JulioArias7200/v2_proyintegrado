@@ -120,7 +120,7 @@ export const AGENTS_DEFINITION = [
     name: 'Concentrador, Emisor y Notificador', shortName: 'Concentrador & PDF',
     role: 'Síntesis, Dictamen PDF & Despacho',
     phaseKey: 'fase3', phaseName: 'Fase 3: Dictamen & Despacho',
-    theme: 'pink', activeStep: 6, doneAtStep: 7,
+    theme: 'pink', activeStep: 6, doneAtStep: 11,
     desc: 'Sintetiza de forma fidedigna los dictámenes técnicos, emite el Dictamen Oficial en PDF (letra negra formal) y despacha la notificación a los miembros de la comisión.',
     justificacion: 'Trazabilidad y fe pública: expediente consolidado con dictamen formal y notificación fehaciente.',
     garantiaEtica: 'Cadena de custodia intacta, síntesis probatoria y notificación fehaciente',
@@ -134,7 +134,7 @@ export const AGENTS_DEFINITION = [
     name: 'Secretario de Cámara', shortName: 'Secretario',
     role: 'Acta de Debate & Votaciones',
     phaseKey: 'fase4', phaseName: 'Fase 4: Debate y Votación',
-    theme: 'amber', activeStep: 7, doneAtStep: 8,
+    theme: 'amber', activeStep: 11, doneAtStep: 12,
     desc: 'Registra intervenciones, quórum legal, votaciones nominales (Grande y Detalle) y formaliza el acta.',
     justificacion: 'Transparencia parlamentaria: acta fidedigna del debate legislativo plenario.',
     garantiaEtica: 'Fe pública parlamentaria y registro nominal inalterable de votos',
@@ -148,7 +148,7 @@ export const AGENTS_DEFINITION = [
     name: 'Comunicación Bicameral', shortName: 'Bicameral',
     role: 'Trámite entre Cámaras',
     phaseKey: 'fase5', phaseName: 'Fase 5: Bicameral',
-    theme: 'sky', activeStep: 8, doneAtStep: 9,
+    theme: 'sky', activeStep: 12, doneAtStep: 13,
     desc: 'Compara versiones de ambas cámaras (Origen y Revisora) y decide ruta: Sanción o Comisión Mixta.',
     justificacion: 'Art. 163 CPE: coordinación obligatoria entre Cámara de Senadores y Diputados.',
     garantiaEtica: 'Equilibrio democrático y respeto estricto al trámite bicameral',
@@ -162,7 +162,7 @@ export const AGENTS_DEFINITION = [
     name: 'Veto y Promulgación', shortName: 'Veto/Promulg.',
     role: 'Decisión Ejecutiva Final',
     phaseKey: 'fase5', phaseName: 'Fase 5: Veto y Promulgación',
-    theme: 'rose', activeStep: 9, doneAtStep: 10,
+    theme: 'rose', activeStep: 13, doneAtStep: 14,
     desc: 'Evalúa criterios constitucionales del Ejecutivo y emite la resolución de Promulgación o Veto.',
     justificacion: 'Art. 163-167 CPE: potestad promulgatoria y veto presidencial del proyecto.',
     garantiaEtica: 'Motivación jurídica transparente y razonabilidad ejecutiva',
@@ -176,7 +176,7 @@ export const AGENTS_DEFINITION = [
     name: 'Publicación Oficial', shortName: 'Gaceta Oficial',
     role: 'Boletín & Gaceta Oficial',
     phaseKey: 'fase5', phaseName: 'Fase 5: Gaceta Oficial',
-    theme: 'indigo', activeStep: 10, doneAtStep: 11,
+    theme: 'indigo', activeStep: 14, doneAtStep: 15,
     desc: 'Genera número de ley, publica en Gaceta Oficial del Estado y emite boletín legislativo.',
     justificacion: 'Art. 164 CPE: publicidad registral oficial para presunción de conocimiento universal.',
     garantiaEtica: 'Publicidad registral oficial y presunción de conocimiento universal de la ley',
@@ -189,7 +189,7 @@ export const AGENTS_DEFINITION = [
 // ── Nodo circular individual ──
 function CircularAgentNode({ agent, pipelineStep, isInspected, onSelect, compact = false }) {
   const [hovered, setHovered] = useState(false);
-  const isActive = pipelineStep === agent.activeStep;
+  const isActive = (pipelineStep >= agent.activeStep && pipelineStep < agent.doneAtStep);
   const isDone   = pipelineStep >= agent.doneAtStep;
   const tc = INST_COLORS[agent.id] || INST_COLORS.distribuidor;
   const logoUrl = AGENT_LOGOS[agent.id];
@@ -935,7 +935,7 @@ export default function HorizontalAgentFlow({
             const isLastGroup = gi === renderGroups.length - 1;
             const representativeAgent = group.type === 'single' ? group.agent : group.agents[0];
             const isDone   = pipelineStep >= representativeAgent.doneAtStep;
-            const isActive = pipelineStep === representativeAgent.activeStep ||
+            const isActive = (pipelineStep >= representativeAgent.activeStep && pipelineStep < representativeAgent.doneAtStep) ||
               (group.type === 'parallel' && group.agents.some(a => pipelineStep === a.activeStep));
 
             return (

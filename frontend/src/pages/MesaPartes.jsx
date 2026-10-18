@@ -42,6 +42,7 @@ import {
   Info,
 } from 'lucide-react';
 import { api } from '../services/api';
+import { RevisionBicameralPanel, DecisionEjecutivaPanel } from '../components/RevisionLegislativa';
 import HorizontalAgentFlow, { AGENTS_DEFINITION } from '../components/HorizontalAgentFlow';
 import LateralAgentHero from '../components/LateralAgentHero';
 import AgentResultCard from '../components/AgentResultCard';
@@ -755,7 +756,8 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     id: fase1Data?.id_proyecto || 1,
     id_proyecto: fase1Data?.id_proyecto || 1,
     titulo: documentName || fase1Data?.nombre_archivo || 'Proyecto de Ley',
-    sesion_id: fase1Data?.sesion_id
+    sesion_id: fase1Data?.sesion_id,
+    texto_documento: documentText,
   });
 
   /** Construye lista de observaciones previas para el Concentrador */
@@ -797,8 +799,12 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleConcentrador = async () => {
+    if (isProcessing || !(dictamenData && consistenciaData && !dictamenData.error && !consistenciaData.error && dictamenData.estado !== 'PENDIENTE_REVISION' && consistenciaData.estado !== 'PENDIENTE_REVISION')) {
+      updateActiveSession({ errorMessage: 'Completa las auditorias constitucional y normativa antes de consolidar.' });
+      return;
+    }
     if (!fase1Data) return;
-    updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 10, inspectedAgentId: null });
+    updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 6, inspectedAgentId: null });
     appendLog('Concentrador', 'EN_PROCESO', 'Consolidando todas las observaciones, emitiendo dictamen formal PDF y despachando notificación...');
     try {
       const res = await api.runAgentConcentrador({
@@ -837,6 +843,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleSecretario = async () => {
+    if (isProcessing || !(concentradorData)) {
+      updateActiveSession({ errorMessage: 'Completa el concentrador antes de ejecutar al secretario.' });
+      return;
+    }
     if (!fase1Data) return;
     updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 11, inspectedAgentId: null });
     appendLog('Secretario', 'EN_PROCESO', 'Registrando debate parlamentario y votaciones...');
@@ -856,6 +866,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleBicameral = async () => {
+    if (isProcessing || !(secretarioData)) {
+      updateActiveSession({ errorMessage: 'Completa el acta del secretario antes del tramite bicameral.' });
+      return;
+    }
     if (!fase1Data) return;
     updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 12, inspectedAgentId: null });
     appendLog('Bicameral', 'EN_PROCESO', 'Comparando versiones entre camaras legislativas...');
@@ -915,7 +929,66 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     }
   };
 
+  const handleActualizarBicameral = async () => {
+    updateActiveSession({ isProcessing: true, errorMessage: '' });
+    try {
+      const res = await api.getRevisionBicameral(fase1Data.id_proyecto);
+      if (!res.success || !res.data?.ciclo_bicameral) throw new Error('Revision bicameral incompleta');
+      updateActiveSession({ bicameralData: res.data });
+    } catch (err) {
+      updateActiveSession({ errorMessage: err.message });
+    } finally {
+      updateActiveSession({ isProcessing: false });
+    }
+  };
+
+  const handleResolverBicameral = async (accion, motivo, confirmado) => {
+    if (isProcessing) return;
+    updateActiveSession({ isProcessing: true, errorMessage: '' });
+    try {
+      const ciclo = bicameralData.ciclo_bicameral;
+      await api.decidirBicameral({
+        id_proyecto: fase1Data.id_proyecto,
+        id_revision: ciclo.id_revision || bicameralData.id_revision,
+        version_revision: ciclo.version_revision,
+        accion, motivo, confirmacion_exigencias: confirmado,
+      });
+      const res = await api.getRevisionBicameral(fase1Data.id_proyecto);
+      if (!res.success || !res.data?.ciclo_bicameral) throw new Error('No se pudo verificar la decision guardada');
+      updateActiveSession({ bicameralData: res.data, pipelineStep: 13 });
+      appendLog('Bicameral', 'DECISION_REGISTRADA', accion);
+    } catch (err) {
+      updateActiveSession({ errorMessage: err.message });
+    } finally {
+      updateActiveSession({ isProcessing: false });
+    }
+  };
+
+  const handleRegistrarDecisionEjecutiva = async (accion, referencia) => {
+    if (isProcessing) return;
+    updateActiveSession({ isProcessing: true, errorMessage: '' });
+    try {
+      const res = await api.runAgentVetoPromulgacion({
+        proyecto_info: buildProyectoInfo(), id_proyecto: fase1Data.id_proyecto,
+        expediente: { ...concentradorData?.expediente_consolidado,
+          decision_operador: accion, referencia_decision: referencia },
+      });
+      if (!res.success || res.data?.evaluacion_veto?.decision !== accion) {
+        throw new Error('No se pudo registrar la decision ejecutiva');
+      }
+      updateActiveSession({ vetoPromulgacionData: res.data, pipelineStep: 14 });
+    } catch (err) {
+      updateActiveSession({ errorMessage: err.message });
+    } finally {
+      updateActiveSession({ isProcessing: false });
+    }
+  };
+
   const handleVetoPromulgacion = async () => {
+    if (isProcessing || bicameralData?.ciclo_bicameral?.aprobacion_humana?.accion !== 'APROBAR') {
+      updateActiveSession({ errorMessage: 'Registra la aprobacion de la revision bicameral antes de continuar.' });
+      return;
+    }
     if (!fase1Data) return;
     updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 13, inspectedAgentId: null });
     appendLog('Veto_Promulgacion', 'EN_PROCESO', 'Evaluacion estrategica multicriterio en curso...');
@@ -935,43 +1008,26 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handlePublicacion = async () => {
-    const fallbackPub = {
-      publicacion_oficial: {
-        numero_ley: 'Ley N° 1582 de Protección y Desarrollo Integral',
-        boletin_oficial: 'GAC-2026-BOL',
-        fecha_promulgacion: new Date().toISOString().slice(0, 10),
-        fecha_vigencia: 'Al día siguiente de su publicación',
-        estado_siguiente: 'LEY_VIGENTE',
-        titulo: fase1Data?.titulo || 'Proyecto de Ley Sancionado'
-      }
-    };
-
-    updateActiveSession({
-      isProcessing: true,
-      errorMessage: '',
-      pipelineStep: 15,
-      inspectedAgentId: null,
-      publicacionData: publicacionData || fallbackPub
-    });
-    appendLog('Publicacion', 'EN_PROCESO', 'Asignando número de ley y registrando en Boletín Oficial...');
-
+    if (isProcessing || vetoPromulgacionData?.evaluacion_veto?.decision !== 'PROMULGAR' || pipelineStep < 14) {
+      updateActiveSession({ errorMessage: 'Completa Veto y Promulgacion antes de publicar.' });
+      return;
+    }
+    updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 14, inspectedAgentId: null });
+    appendLog('Publicacion', 'EN_PROCESO', 'Registrando publicacion oficial...');
     try {
       const res = await api.runAgentPublicacion({
-        proyecto_info: typeof buildProyectoInfo === 'function' ? buildProyectoInfo() : {},
-        evaluacion_veto: vetoPromulgacionData || { evaluacion_veto: { decision: 'PROMULGAR' } },
-        id_proyecto: fase1Data?.id_proyecto || 104
+        proyecto_info: buildProyectoInfo(),
+        evaluacion_veto: vetoPromulgacionData,
+        id_proyecto: fase1Data?.id_proyecto,
       });
-      const finalPub = res?.data || fallbackPub;
-      updateActiveSession({ publicacionData: finalPub, pipelineStep: 15, isProcessing: false });
-      const pub = finalPub.publicacion_oficial || {};
-      appendLog('Publicacion', 'COMPLETADO', `${pub.numero_ley || 'Ley'} | Boletín: ${pub.boletin_oficial || 'GAC-2026-BOL'}`);
+      if (!res?.success || !res.data?.publicacion_oficial?.numero_ley || res.data.error) {
+        throw new Error(res?.data?.publicacion_oficial?.razon || res?.data?.error || res?.error || 'Publicacion incompleta');
+      }
+      updateActiveSession({ publicacionData: res.data, pipelineStep: 15, isProcessing: false });
+      appendLog('Publicacion', 'COMPLETADO', res.data.publicacion_oficial.numero_ley || 'Publicacion registrada');
     } catch (err) {
-      updateActiveSession({
-        publicacionData: publicacionData || fallbackPub,
-        pipelineStep: 15,
-        isProcessing: false
-      });
-      appendLog('Publicacion', 'COMPLETADO', 'Publicación en Gaceta Oficial habilitada.');
+      updateActiveSession({ errorMessage: err.message, pipelineStep: 14, isProcessing: false });
+      appendLog('Publicacion', 'ERROR', err.message);
     }
   };
 
@@ -1084,6 +1140,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
       emisor: pdfResult,
       notificador: notificadorData,
       constitucion_fondo: constitucionFondoData,
+      concentrador: concentradorData,
       concentrador_crew: concentradorData,
       secretario: secretarioData,
       bicameral: bicameralData,
@@ -1096,6 +1153,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   // Agent Selection — abre el panel lateral Y también actualiza inspección
   const handleSelectAgent = (agent) => {
     setDetailPanelAgent(agent);
+    if (!getAgentResultData(agent.id)) return;
     if (inspectedAgentId === agent.id) {
       updateActiveSession({ inspectedAgentId: null });
     } else {
@@ -1157,11 +1215,15 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   // Active agent object determination (preciso para los 9 agentes del pipeline)
   const getActiveAgentDef = () => {
     if (inspectedAgentId) return AGENTS_DEFINITION.find(a => a.id === inspectedAgentId) || AGENTS_DEFINITION[0];
+    if (isProcessing && pipelineStep >= 11 && pipelineStep <= 14) {
+      const id = { 11: 'secretario', 12: 'bicameral', 13: 'veto_promulgacion', 14: 'publicacion' }[pipelineStep];
+      return AGENTS_DEFINITION.find(a => a.id === id);
+    }
     if (pipelineStep <= 2) return AGENTS_DEFINITION.find(a => a.id === 'distribuidor') || AGENTS_DEFINITION[0];
     if (pipelineStep <= 4) return AGENTS_DEFINITION.find(a => a.id === 'comision') || AGENTS_DEFINITION[1];
     if (pipelineStep === 5) return AGENTS_DEFINITION.find(a => a.id === 'constitucional') || AGENTS_DEFINITION[2];
-    if (pipelineStep === 6) return AGENTS_DEFINITION.find(a => a.id === 'consistencia') || AGENTS_DEFINITION[3];
-    if (pipelineStep === 7 || pipelineStep === 8 || pipelineStep === 11) {
+    if (pipelineStep === 6 && !isProcessing) return AGENTS_DEFINITION.find(a => a.id === 'consistencia') || AGENTS_DEFINITION[3];
+    if (pipelineStep === 7 || pipelineStep === 8 || pipelineStep === 11 || (pipelineStep === 6 && isProcessing)) {
       return AGENTS_DEFINITION.find(a => a.id === 'concentrador') || AGENTS_DEFINITION[4];
     }
     if (pipelineStep <= 10) return AGENTS_DEFINITION.find(a => a.id === 'constitucional') || AGENTS_DEFINITION[2];
@@ -1454,8 +1516,8 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
       }}>
         {sessions.map((ses, idx) => {
           const isCurrent = ses.id === activeSession.id;
-          const isDone = ses.pipelineStep >= 7;
-          const isWorking = ses.pipelineStep > 0 && ses.pipelineStep < 7;
+          const isDone = ses.pipelineStep >= 15;
+          const isWorking = ses.pipelineStep > 0 && ses.pipelineStep < 15;
 
           return (
             <div
@@ -4041,159 +4103,16 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
               onViewPrev={() => updateActiveSession({ inspectedAgentId: 'secretario' })}
               prevLabel="Ver Acta de Debate (Secretario)"
             >
-              {(() => {
-                const ciclo = bicameralData.ciclo_bicameral || {};
-                const requiereConferencia = (ciclo.ruta_siguiente || 'SANCION_DIRECTA') !== 'SANCION_DIRECTA';
-                return (
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{ background: 'rgba(14,165,233,0.2)', borderRadius: '50%', padding: '12px' }}>
-                          <GitBranch size={32} color="#38bdf8" />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                            Etapa 6 · Trámite Bicameral
-                          </div>
-                          <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                            Reconciliación de Cámaras Legislativas
-                          </h3>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '10px' }}>
-                        <span className="badge" style={{ background: 'rgba(14,165,233,0.2)', color: '#38bdf8', border: '1px solid #0ea5e9' }}>
-                          Cambios: {ciclo.clasificacion_cambios || 'MENORES'}
-                        </span>
-                        <span className={requiereConferencia ? 'badge badge-gold' : 'badge badge-green'}>
-                          Ruta: {ciclo.ruta_siguiente || 'SANCION_DIRECTA'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div style={{ background: 'rgba(12,74,110,0.25)', border: '1px solid rgba(14,165,233,0.3)', padding: '18px', borderRadius: '12px', marginBottom: '20px' }}>
-                      <h4 style={{ color: '#38bdf8', fontSize: '0.9rem', marginBottom: '6px' }}>🔍 Justificación Técnica del Trámite</h4>
-                      <p style={{ color: '#e0f2fe', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
-                        {ciclo.justificacion || 'Trámite bicameral completado. Las versiones de ambas cámaras convergen favorablemente.'}
-                      </p>
-                    </div>
-
-                    {/* Confirmación de Aprobación — solo visible para Senador/Diputado */}
-                    {(currentUser?.rol === 'Senador' || currentUser?.rol === 'Diputado') && (
-                      <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.35)', padding: '18px', borderRadius: '12px', marginBottom: '20px' }}>
-                        <h4 style={{ color: '#34d399', fontSize: '0.95rem', margin: '0 0 6px 0' }}>
-                          ✅ Confirmación de Aprobación — Cámara de {currentUser.rol}s
-                        </h4>
-                        <p style={{ color: '#d1fae5', fontSize: '0.85rem', lineHeight: 1.6, margin: '0 0 14px 0' }}>
-                          Al confirmar, se notificará por correo a todos los usuarios de la Cámara de{' '}
-                          {currentUser.rol === 'Senador' ? 'Diputados' : 'Senadores'}, adjuntando el PDF del
-                          proyecto de ley y el informe de constitucionalidad y consistencia normativa.
-                        </p>
-
-                        {!confirmacionBicameralData ? (
-                          <button
-                            onClick={handleConfirmarAprobacionBicameral}
-                            disabled={isProcessing}
-                            className="btn-primary"
-                            style={{ background: '#10B981', borderColor: '#10B981' }}
-                          >
-                            {isProcessing ? (
-                              <><Cpu size={18} className="pulse-active" /><span>Notificando...</span></>
-                            ) : (
-                              <><Mail size={18} /><span>Confirmamos la Aprobación</span></>
-                            )}
-                          </button>
-                        ) : (
-                          <div style={{
-                            background: confirmacionBicameralData.status === 'sin_destinatarios' ? 'rgba(244,162,97,0.15)' : 'rgba(16,185,129,0.15)',
-                            border: `1px solid ${confirmacionBicameralData.status === 'sin_destinatarios' ? 'rgba(244,162,97,0.4)' : 'rgba(16,185,129,0.4)'}`,
-                            borderRadius: '10px', padding: '14px 16px',
-                          }}>
-                            {confirmacionBicameralData.status === 'sin_destinatarios' ? (
-                              <p style={{ margin: 0, color: '#F4A261', fontSize: '0.85rem' }}>
-                                ⚠️ No hay usuarios con rol "{confirmacionBicameralData.camara_destino}" registrados para notificar.
-                              </p>
-                            ) : (
-                              <>
-                                <p style={{ margin: '0 0 6px 0', color: '#34d399', fontSize: '0.88rem', fontWeight: 700 }}>
-                                  📧 Notificación enviada a la Cámara de {confirmacionBicameralData.camara_destino}s
-                                </p>
-                                <p style={{ margin: 0, color: '#d1fae5', fontSize: '0.82rem' }}>
-                                  {confirmacionBicameralData.total_destinatarios} destinatario(s): {(confirmacionBicameralData.destinatarios || []).join(', ')}
-                                </p>
-                                {confirmacionBicameralData.envio?.metodo && (
-                                  <p style={{ margin: '6px 0 0 0', color: '#a7f3d0', fontSize: '0.75rem' }}>
-                                    Método de despacho: {confirmacionBicameralData.envio.metodo}
-                                  </p>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Acción Siguiente: bloqueada si el trámite requiere Conferencia Bicameral */}
-                    {/* Módulo de voz: Comunicación Bicameral por Correo y Audio */}
-
-                    <div style={{ marginBottom: '24px' }}>
-
-                      <AgentVoiceModule
-
-                        agentId="bicameral"
-
-                        agentLabel="Agente Comunicación Bicameral"
-
-                        primaryColor="#7DD3FC"
-
-                        sesionId={fase1Data?.sesion_id || null}
-
-                        resultData={bicameralData}
-
-                        speechHook={speechHook}
-
-                        emailDestino={currentUser?.email || activeSession.emailAutor}
-
-                        onVoiceAction={(action) => {
-
-                          if (action?.type === 'notificacion_enviada') {
-
-                            appendLog('bicameral', 'AUDIO_CORREO', `Mensaje de audio y dictamen enviado a la Cámara Revisora.`);
-
-                          }
-
-                        }}
-
-                      />
-
-                    </div>
-
-                    {requiereConferencia ? (
-                      <div style={{ background: 'rgba(244,162,97,0.12)', border: '1px solid rgba(244,162,97,0.4)', padding: '18px', borderRadius: '12px' }}>
-                        <h4 style={{ color: '#F4A261', fontSize: '0.95rem', margin: '0 0 6px 0' }}>⚠️ Conferencia Bicameral Requerida</h4>
-                        <p style={{ color: '#FDE9D8', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
-                          Los cambios detectados son MAYORES. El proyecto no puede pasar a Veto/Promulgación
-                          hasta resolver la conferencia entre ambas cámaras (Art. 163 CPE).
-                        </p>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
-                        <button
-                          onClick={handleVetoPromulgacion}
-                          disabled={isProcessing}
-                          className="btn-primary"
-                          style={{ fontSize: '1.05rem', padding: '14px 30px' }}
-                        >
-                          {isProcessing ? (
-                            <><Cpu size={20} className="pulse-active" /><span>Evaluando veto...</span></>
-                          ) : (
-                            <><Gavel size={20} /><span>Continuar: Evaluación Veto / Promulgación</span><ArrowRight size={18} /></>
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              <RevisionBicameralPanel
+                key={bicameralData.ciclo_bicameral?.version_revision}
+                ciclo={bicameralData.ciclo_bicameral || {}}
+                usuario={currentUser}
+                procesando={isProcessing}
+                onDecision={handleResolverBicameral}
+                onActualizar={handleActualizarBicameral}
+                onContinuar={handleVetoPromulgacion}
+                onCorregir={() => updateActiveSession({ pipelineStep: 11, inspectedAgentId: null })}
+              />
             </AgentResultCard>
           </div>
         </div>
@@ -4222,6 +4141,11 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
               onViewPrev={() => updateActiveSession({ inspectedAgentId: 'bicameral' })}
               prevLabel="Ver Trámite Bicameral"
             >
+              {vetoPromulgacionData?.evaluacion_veto && (
+                <DecisionEjecutivaPanel evaluacion={vetoPromulgacionData.evaluacion_veto}
+                  usuario={currentUser} procesando={isProcessing}
+                  onRegistrar={handleRegistrarDecisionEjecutiva} onPublicar={handlePublicacion} />
+              )}
               {(() => {
                 if (!vetoPromulgacionData) {
                   return (
@@ -4287,8 +4211,8 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
                 const ev = vetoPromulgacionData.evaluacion_veto || {};
                 const rec = ev.recomendacion_tecnica || {};
-                const decision = ev.decision || rec.dictamen_sugerido || 'PROMULGAR';
-                const esPromulgar = decision === 'PROMULGAR' || (!decision.includes('VETO'));
+                const decision = ev.decision || 'PENDIENTE_DECISION_HUMANA';
+                const esPromulgar = decision === 'PROMULGAR';
 
                 const inputPayload = {
                   proyecto_info: buildProyectoInfo(),
