@@ -53,4 +53,18 @@ const sesion = render(mod.ActaSesionForm, { titulo: 'Origen', valor: {}, onChang
 assert.match(sesion, /Referencia del acta/);
 assert.match(sesion, /Votación en detalle/);
 assert.doesNotMatch(sesion, /value="87"/);
-console.log('5 escenarios de interfaz verificados.');
+// Simula la casilla marcada para verificar que las observaciones no bloquean Aprobar.
+let { code: codigoConfirmado } = await transformWithOxc(
+  fuente.replaceAll('const [confirmado, setConfirmado] = useState(false);',
+                   'const [confirmado, setConfirmado] = useState(true);'), fileURLToPath(archivo));
+for (const nombre of ['react', 'react/jsx-runtime', 'react/jsx-dev-runtime']) {
+  const destino = JSON.stringify(pathToFileURL(require.resolve(nombre)).href);
+  codigoConfirmado = codigoConfirmado.replaceAll('"' + nombre + '"', destino).replaceAll("'" + nombre + "'", destino);
+}
+const moduloConfirmado = await import('data:text/javascript;base64,' + Buffer.from(codigoConfirmado).toString('base64'));
+const conObservaciones = render(moduloConfirmado.RevisionBicameralPanel, {
+  ciclo: { ...ciclo, puede_aprobar: false }, usuario,
+});
+assert.doesNotMatch(boton(conObservaciones, 'Aprobar').atributos, /disabled/);
+assert.match(conObservaciones, /observaciones quedarán registradas/);
+console.log('6 escenarios de interfaz verificados.');

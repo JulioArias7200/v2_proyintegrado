@@ -326,14 +326,16 @@ class NeonDBClient:
             if accion == "APROBAR" and not antecedentes["insumos_vigentes"]:
                 raise ValueError("Los antecedentes corresponden a otro documento. Ejecutar nuevamente Concentrador y Secretario.")
             verificacion = evaluar_bicameral(ciclo["acta_secretario"], ciclo["expediente_consolidado"], ciclo["version_original"], ciclo["version_retornada"])
-            if accion == "APROBAR" and not verificacion["puede_aprobar"]:
-                raise ValueError("Existen requisitos pendientes. Enviar a revisión.")
+            observaciones = [v for v in verificacion.get("verificaciones_normativas", [])
+                             if v.get("estado") != "CUMPLE"]
             previa = self._ultimo_registro(cur, id_proyecto, "DECISION_BICAMERAL")
             if previa and previa["hallazgos"].get("id_revision") == id_revision:
                 if previa["hallazgos"]["accion"] == accion:
                     return previa["hallazgos"]
                 raise ValueError("Esta revisión ya fue resuelta. Ejecutar una nueva revisión.")
             decision = {"id_revision": id_revision, "version_revision": version_revision, "accion": accion,
+                        "aprobado_con_observaciones": accion == "APROBAR" and bool(observaciones),
+                        "observaciones_al_decidir": observaciones,
                         "motivo": motivo.strip(), "confirmacion_exigencias": confirmacion_exigencias,
                         "usuario_id": usuario["usuario_id"], "nombre_usuario": usuario["nombre_completo"],
                         "rol": usuario["rol"], "fecha": datetime.now(timezone.utc).isoformat(),

@@ -296,12 +296,14 @@ class PersistenciaTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.db.decidir(ciclo)
 
-    def test_backend_recalcula_no_confia_en_puede_aprobar(self):
+    def test_backend_permite_aprobar_y_registra_observaciones(self):
         guardado = self.db.registros[-1]["hallazgos"]["ciclo_bicameral"]
         guardado["acta_secretario"]["votacion_en_grande"]["favor"] = 0
         guardado["puede_aprobar"] = True
-        with self.assertRaises(ValueError):
-            self.db.decidir(self.ciclo)
+        decision = self.db.decidir(self.ciclo)
+        self.assertTrue(decision["aprobado_con_observaciones"])
+        self.assertTrue(decision["observaciones_al_decidir"])
+        self.assertEqual(decision["accion"], "APROBAR")
 
     def test_estado_y_decision_se_revierten_juntos_si_falla_bd(self):
         antes = copy.deepcopy(self.db.registros)

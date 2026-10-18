@@ -110,15 +110,16 @@ export function RevisionBicameralPanel({ ciclo, usuario, procesando, onDecision,
     </table></div>
     {decision ? <div role="status">
       <p>Decisión registrada por {decision.nombre_usuario} · {decision.fecha}</p>
+      {decision.aprobado_con_observaciones && <p>Aprobado con observaciones. Las verificaciones pendientes se conservan en el registro de la decisión.</p>}
       {decision.motivo && <p>Motivo: {decision.motivo}</p>}
     </div> : <>
-      {!ciclo.puede_aprobar && <p className="revision-pendiente">Hay requisitos pendientes. Corrija los antecedentes y ejecute una nueva revisión.</p>}
+      {!ciclo.puede_aprobar && <p className="revision-pendiente">Hay observaciones pendientes. Puede aprobar el expediente bajo su decisión; las observaciones quedarán registradas.</p>}
       {!autorizado && <p>Su rol no tiene permiso para resolver esta revisión.</p>}
       <label className="revision-check"><input type="checkbox" checked={confirmado} onChange={e => setConfirmado(e.target.checked)} disabled={procesando || !autorizado} />
-        Confirmo que revisé la autenticidad de las actas, la factibilidad y todas las exigencias nacionales e internacionales aplicables al proyecto.</label>
-      <label>Motivo para mandar a revisión<textarea value={motivo} onChange={e => setMotivo(e.target.value)} disabled={procesando} maxLength="5000" /></label>
+        Confirmo que revisé el expediente y sus observaciones para registrar mi decisión.</label>
+      <label>Motivo de la decisión (obligatorio para mandar a revisión)<textarea value={motivo} onChange={e => setMotivo(e.target.value)} disabled={procesando} maxLength="5000" /></label>
       <div className="revision-actions">
-        <button type="button" className="btn-primary" disabled={procesando || !autorizado || !ciclo.puede_aprobar || !confirmado}
+        <button type="button" className="btn-primary" disabled={procesando || !autorizado || !confirmado}
           onClick={() => onDecision('APROBAR', motivo, confirmado)}>Aprobar</button>
         <button type="button" className="btn-secondary" disabled={procesando || !autorizado || !motivo.trim()}
           onClick={() => onDecision('MANDAR_A_REVISION', motivo, false)}>Mandar a revisión</button>
