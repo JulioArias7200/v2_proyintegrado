@@ -16,6 +16,7 @@ from datetime import datetime
 import json
 import re
 import time
+from threading import BoundedSemaphore
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
@@ -29,6 +30,19 @@ except ImportError:
 from sma_unified.config import settings
 
 NVIDIA_API_BASE = "https://integrate.api.nvidia.com/v1"
+
+# Compartido por los dos agentes, incluso cuando corren en paralelo.
+_AUDITORIA_LLM_SLOTS = BoundedSemaphore(2)
+
+
+def chat_completion_auditoria(**kwargs: Any) -> Tuple[str, str]:
+    """Prioriza el respaldo que respondió y limita la carga conjunta a NVIDIA."""
+    modelos = list(dict.fromkeys([
+        "openai/gpt-oss-20b", settings.LLM_MODEL_CONSISTENCIA,
+    ]))
+    kwargs.update(modelos=modelos, timeout=(5, 45), max_model_attempts=2)
+    with _AUDITORIA_LLM_SLOTS:
+        return chat_completion_resiliente(**kwargs)
 
 # ── Circuit Breaker State ──────────────────────────────────────────────────
 CIRCUIT_FAILURE_THRESHOLD: int = 3
@@ -410,6 +424,7 @@ def chat_completion_resiliente(
     modelos: Optional[List[str]] = None,
     timeout: Optional[Any] = None,
     response_format: Optional[Dict[str, str]] = None,
+    max_model_attempts: Optional[int] = None,
     **kwargs: Any,
 ) -> Tuple[str, str]:
     """
@@ -418,6 +433,8 @@ def chat_completion_resiliente(
     continuo de latencia.
     """
     modelos = modelos or _lista_modelos_razonamiento()
+    if max_model_attempts is not None:
+        modelos = modelos[:max_model_attempts]
 
     # Política de timeout recomendada: connect=30s, read=90s
     if timeout is None:
@@ -433,6 +450,9 @@ def chat_completion_resiliente(
         # 1. Verificar Circuit Breaker
         abierto, seg_rest = _esta_circuito_abierto(modelo)
         if abierto:
+            ultimo_error = RuntimeError(
+                f"Modelo '{modelo}' suspendido por fallos previos ({seg_rest}s restantes)"
+            )
             logger.warning(
                 f"[Circuit Breaker] Modelo '{modelo}' con circuito ABIERTO. "
                 f"Omitiendo directamente ({seg_rest}s restantes)..."

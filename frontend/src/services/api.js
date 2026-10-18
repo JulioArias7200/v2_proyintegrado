@@ -37,7 +37,12 @@ async function request(endpoint, options = {}) {
       throw new Error(errorDetail);
     }
 
-    return await response.json();
+    const result = await response.json();
+    if (['/pipeline/agent_constitucional', '/pipeline/agent_consistencia'].includes(endpoint)
+      && (result.success === false || result.data?.error)) {
+      throw new Error(result.data?.error || result.error || 'No se pudo completar la auditoría');
+    }
+    return result;
   } catch (err) {
     console.error(`[API Error] ${endpoint}:`, err);
     throw err;

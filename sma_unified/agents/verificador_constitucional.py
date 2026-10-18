@@ -52,7 +52,7 @@ except ImportError:
     logger = logging.getLogger("verificador_constitucional")
 
 from sma_unified.config import settings
-from sma_unified.agents.llm_client import chat_completion_resiliente, extraer_json_de_llm
+from sma_unified.agents.llm_client import chat_completion_auditoria, extraer_json_de_llm
 from sma_unified.agents.embeddings_nvidia import embeber_pregunta
 from sma_unified.db.mongo_atlas import publicar_mensaje, marcar_en_proceso, marcar_completado, marcar_error
 from sma_unified.db.neon_postgres import (
@@ -266,15 +266,21 @@ class VerificadorConstitucional:
         )
 
         try:
-            contenido, _ = chat_completion_resiliente(
+            contenido, _ = chat_completion_auditoria(
                 messages=[
                     {"role": "system", "content": _SISTEMA_CRIBA},
                     {"role": "user",   "content": usuario},
                 ],
                 temperature=0.0,
+                timeout=(5, 30),
+                max_model_attempts=2,
                 max_tokens=MAX_TOKENS_CRIBA,
             )
             data = extraer_json_de_llm(contenido)
+            if not isinstance(data, dict):
+                raise ValueError("Respuesta constitucional invalida")
+            if data.get("c") not in {"A_FAVOR", "EN_CONTRA", "NEUTRAL", "RAF", "REQUIERE_ANALISIS_DE_FONDO"}:
+                raise ValueError("Criba constitucional incompleta")
             return {
                 "clasificacion": data.get("c", "NEUTRAL"),
                 "severidad":     data.get("s", "ninguna"),
@@ -283,7 +289,7 @@ class VerificadorConstitucional:
             }
         except Exception as e:
             logger.debug(f"[Criba] Art. {num}: fallback NEUTRAL por error LLM: {e}")
-            return {"clasificacion": "NEUTRAL", "severidad": "ninguna", "verificado": False, "_fase": "criba_fallback"}
+            return {"clasificacion": "NEUTRAL", "severidad": "ninguna", "verificado": False, "_fase": "criba_fallback", "pendiente_revision": True, "motivo": str(e)}
 
     # ── FASE B: Deep-check de candidatos ──────────────────────────────────────
 
@@ -308,18 +314,25 @@ class VerificadorConstitucional:
         )
 
         try:
-            contenido, _ = chat_completion_resiliente(
+            contenido, _ = chat_completion_auditoria(
                 messages=[
                     {"role": "system", "content": _SISTEMA_DEEPCHECK},
                     {"role": "user",   "content": usuario},
                 ],
                 temperature=0.0,
+                timeout=(5, 30),
+                max_model_attempts=2,
                 max_tokens=MAX_TOKENS_DEEPCHECK,
             )
             data = extraer_json_de_llm(contenido)
+            if not isinstance(data, dict):
+                raise ValueError("Respuesta constitucional invalida")
+            if data.get("clasificacion") not in {"A_FAVOR", "EN_CONTRA", "NEUTRAL", "REQUIERE_ANALISIS_DE_FONDO"}:
+                raise ValueError("Cotejo constitucional incompleto")
         except Exception as e:
             logger.warning(f"[DeepCheck] Art. {num}: fallback heurístico por error LLM: {e}")
-            data = self._fallback_heuristico(texto_proyecto, articulo_cpe)
+            return {"clasificacion": "PENDIENTE_REVISION", "verificado": False,
+                    "pendiente_revision": True, "motivo": str(e)}
 
         # Validación de citas: EN_CONTRA sin cita_constitucional → NEUTRAL
         if not data.get("cita_constitucional") and data.get("clasificacion") == "EN_CONTRA":
@@ -376,12 +389,14 @@ class VerificadorConstitucional:
         )
 
         try:
-            contenido, _ = chat_completion_resiliente(
+            contenido, _ = chat_completion_auditoria(
                 messages=[
                     {"role": "system", "content": _SISTEMA_ANALISIS_PROFUNDO},
                     {"role": "user",   "content": usuario},
                 ],
                 temperature=0.1,   # Leve creatividad para redacción corregida
+                timeout=(5, 30),
+                max_model_attempts=2,
                 max_tokens=MAX_TOKENS_ANALISIS,
             )
             analisis = extraer_json_de_llm(contenido)
@@ -399,6 +414,8 @@ class VerificadorConstitucional:
         except Exception as e:
             logger.warning(f"[AnálisisProfundo] Art. {num}: error LLM en Fase C: {e}")
             return {
+                "pendiente_revision": True,
+                "motivo": str(e),
                 "impacto_juridico":          "No se pudo completar el análisis profundo.",
                 "argumento_constitucional":  "No disponible (error en análisis).",
                 "argumento_defensa":         "No disponible.",
@@ -443,12 +460,14 @@ class VerificadorConstitucional:
         )
 
         try:
-            contenido, _ = chat_completion_resiliente(
+            contenido, _ = chat_completion_auditoria(
                 messages=[
                     {"role": "system", "content": _SISTEMA_ANALISIS_AFAVOR},
                     {"role": "user",   "content": usuario},
                 ],
                 temperature=0.1,
+                timeout=(5, 30),
+                max_model_attempts=2,
                 max_tokens=MAX_TOKENS_ANALISIS,
             )
             analisis = extraer_json_de_llm(contenido)
@@ -471,23 +490,8 @@ class VerificadorConstitucional:
             return analisis
         except Exception as e:
             logger.warning(f"[AnalisisAFavor] Art. {num}: error LLM: {e}")
-            return {
-                "justificacion_por_que": fundamento or (
-                    f"El proyecto de ley desarrolla positivamente el Art. {num} de la CPE, "
-                    "al consagrar disposiciones orientadas a la consecución de sus fines constitucionales."
-                ),
-                "evaluacion_detallada_articulos_parrafos": [
-                    {
-                        "articulo_proyecto": "Articulado del proyecto",
-                        "texto_parrafo": cita_proy or (texto_proyecto[:280] + "..."),
-                        "explicacion_concordancia": "Guarda coherencia material y funcional con los mandatos de este artículo de la Constitución."
-                    }
-                ],
-                "fortaleza_constitucional": "ALTA",
-                "principios_constitucionales_aplicados": ["Seguridad Jurídica", "Supremacía Constitucional"],
-                "articulos_cpe_conexos": [],
-                "recomendacion_blindaje": "Consolidar la remisión formal a la CPE en la exposición de motivos.",
-            }
+            return {"pendiente_revision": True, "motivo": str(e)}
+
 
     # ── Fallback heurístico (sin LLM) ─────────────────────────────────────────
 
@@ -677,14 +681,25 @@ class VerificadorConstitucional:
         def _cribar(art: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
             return art, self._cribar_relacion_cpe(texto_proyecto, art)
 
-        with ThreadPoolExecutor(max_workers=8) as exe:
+        with ThreadPoolExecutor(max_workers=2) as exe:
             cribados = list(exe.map(_cribar, articulos_cpe))
+
+        pendientes_revision = [
+            {"articulo_constitucional": art.get("numero"), "fase": "criba", "motivo": criba.get("motivo")}
+            for art, criba in cribados if criba.get("pendiente_revision")
+        ]
+        if not articulos_cpe:
+            pendientes_revision.append({"fase": "recuperacion", "motivo": "Sin articulos CPE disponibles"})
 
         candidatos_deep:    List[Tuple[Dict, Dict]] = []
         neutrales_directos: List[Tuple[Dict, Dict]] = []
 
         for art, criba in cribados:
+            if criba.get("pendiente_revision"):
+                continue
             c = criba.get("clasificacion", "NEUTRAL")
+            if c == "RAF":
+                c = "REQUIERE_ANALISIS_DE_FONDO"
             if c in ("EN_CONTRA", "REQUIERE_ANALISIS_DE_FONDO", "A_FAVOR"):
                 candidatos_deep.append((art, criba))
             else:
@@ -700,7 +715,7 @@ class VerificadorConstitucional:
             art, _ = art_criba
             return art, self._verificar_profundo_cpe(texto_proyecto, art)
 
-        with ThreadPoolExecutor(max_workers=6) as exe:
+        with ThreadPoolExecutor(max_workers=2) as exe:
             deep_resultados = list(exe.map(_deepcheck, candidatos_deep))
 
         # ── Consolidación Fase B ───────────────────────────────────────────────
@@ -715,6 +730,10 @@ class VerificadorConstitucional:
         afavor_para_fase_c:   List[Tuple[Dict, Dict, Dict]] = []  # (art, deep_result, entrada)
 
         for art, clasificacion in deep_resultados:
+            if clasificacion.get("pendiente_revision"):
+                pendientes_revision.append({"articulo_constitucional": art.get("numero"),
+                    "fase": "deep_check", "motivo": clasificacion.get("motivo")})
+                continue
             num       = art.get("numero", "")
             titulo    = art.get("titulo", "")
             texto_cpe = art.get("texto", "")
@@ -805,7 +824,7 @@ class VerificadorConstitucional:
             return self._analizar_afavor_profundo(texto_proyecto, art, deep_result)
 
         # Ejecución concurrente Fase C
-        with ThreadPoolExecutor(max_workers=6) as exe:
+        with ThreadPoolExecutor(max_workers=2) as exe:
             futuros_criticos = (
                 list(exe.map(_analizar_profundo_critico, criticos_para_fase_c))
                 if criticos_para_fase_c else []
@@ -814,6 +833,13 @@ class VerificadorConstitucional:
                 list(exe.map(_analizar_profundo_afavor, afavor_para_fase_c))
                 if afavor_para_fase_c else []
             )
+
+        for (art, _, _), analisis in zip(
+            criticos_para_fase_c + afavor_para_fase_c, futuros_criticos + futuros_afavor
+        ):
+            if analisis.get("pendiente_revision"):
+                pendientes_revision.append({"articulo_constitucional": art.get("numero"),
+                    "fase": "analisis_profundo", "motivo": analisis.get("motivo")})
 
         # Inyectar análisis profundo en hallazgos críticos
         for i, (_, _, entrada_ref) in enumerate(criticos_para_fase_c):
@@ -841,8 +867,12 @@ class VerificadorConstitucional:
             contradicciones, a_favor, requieren_fondo, articulos_consultados
         )
 
-        valido          = len(contradicciones) == 0
+        valido          = not pendientes_revision and len(contradicciones) == 0
         resultado_final = "ARTICULADO_VALIDO" if valido else "CONTRADICCIONES_DETECTADAS"
+        if pendientes_revision:
+            resultado_final = "PENDIENTE_REVISION"
+            resumen["nivel_riesgo"] = "DESCONOCIDO"
+            resumen["score_confianza"] = 0
         dist_sev        = resumen["distribucion_severidad"]
         severidad_maxima = (
             "bloqueante" if dist_sev["bloqueante"] > 0
@@ -852,6 +882,9 @@ class VerificadorConstitucional:
         )
 
         return {
+            "estado": "PENDIENTE_REVISION" if pendientes_revision else "COMPLETADO",
+            "pendientes_revision": pendientes_revision,
+            "total_pendientes": len(pendientes_revision),
             "resultado_final":          resultado_final,
             "valido":                   valido,
             "confianza":                resumen["score_confianza"],
@@ -898,7 +931,7 @@ def verificar_constitucionalidad(
             task_id_mongo=task_id,
         )
 
-        if persistir and id_proyecto:
+        if persistir and id_proyecto and not resultado.get("total_pendientes"):
             guardar_observacion_constitucional(
                 sesion_id=sesion_id,
                 dictamen=resultado,
@@ -911,7 +944,7 @@ def verificar_constitucionalidad(
 
             # ── Correcciones automáticas por cada contradicción CPE ──────────
             contradicciones_detectadas = resultado.get("contradicciones", [])
-            if contradicciones_detectadas:
+            if contradicciones_detectadas and not resultado.get("total_pendientes"):
                 email_autor = obtener_email_autor_proyecto(id_proyecto)
                 for contra in contradicciones_detectadas:
                     art_cpe = contra.get("articulo_constitucional", "")
@@ -943,7 +976,10 @@ def verificar_constitucionalidad(
                 )
 
         duracion_ms = int((time.time() - t0) * 1000)
-        marcar_completado(task_id, resultado={"valido": resultado["valido"]}, duracion_ms=duracion_ms)
+        if resultado.get("total_pendientes"):
+            marcar_error(task_id, "Auditoría pendiente de revisión por fallos del proveedor LLM")
+        else:
+            marcar_completado(task_id, resultado={"valido": resultado["valido"]}, duracion_ms=duracion_ms)
         resumen_ej = resultado.get("resumen_ejecutivo", {})
         logger.info(
             f"[VerificadorCPE] Completado: valido={resultado['valido']}, "

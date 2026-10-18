@@ -649,6 +649,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     });
     try {
       const res = await api.runAgentConstitucional(buildPayload());
+      if (res.data?.estado === 'PENDIENTE_REVISION') {
+        updateActiveSession({ dictamenData: res.data });
+        throw new Error(`Constitucional: ${res.data.total_pendientes} cotejos pendientes de revisión. Reintenta la auditoría.`);
+      }
       updateActiveSession({
         dictamenData: res.data,
         pipelineStep: 5,
@@ -670,6 +674,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     });
     try {
       const res = await api.runAgentConsistencia(buildPayload());
+      if (res.data?.estado === 'PENDIENTE_REVISION') {
+        updateActiveSession({ consistenciaData: res.data });
+        throw new Error(`Consistencia: ${res.data.total_pendientes} cotejos pendientes de revisión. Reintenta la auditoría.`);
+      }
       updateActiveSession({
         consistenciaData: res.data,
         pipelineStep: 6,
@@ -1106,10 +1114,28 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     appendLog('Auditoria_Paralela', 'EN_PROCESO', 'Iniciando Verificador Constitucional y Consistencia Normativa en paralelo...');
     try {
       const payload = buildPayload();
-      const [resConstitucional, resConsistencia] = await Promise.all([
-        api.runAgentConstitucional(payload),
-        api.runAgentConsistencia(payload)
+      const ejecutar = async (nombre, campo, llamada) => {
+        const res = await llamada(payload);
+        if (!res.success || !res.data || res.data.error) {
+          throw new Error(`${nombre}: ${res.data?.error || res.error || 'Respuesta incompleta'}`);
+        }
+        updateActiveSession({ [campo]: res.data });
+        if (res.data.estado === 'PENDIENTE_REVISION') {
+          appendLog(nombre, 'PENDIENTE_REVISION', `${res.data.total_pendientes} cotejos sin completar`);
+          throw new Error(`${nombre}: ${res.data.total_pendientes} cotejos pendientes de revisión. Reintenta la auditoría.`);
+        }
+        appendLog(nombre, 'COMPLETADO', 'Análisis terminado. Resultado disponible.');
+        return res;
+      };
+      const resultados = await Promise.allSettled([
+        ejecutar('Constitucional', 'dictamenData', api.runAgentConstitucional),
+        ejecutar('Consistencia', 'consistenciaData', api.runAgentConsistencia)
       ]);
+      const errores = resultados.filter(r => r.status === 'rejected');
+      if (errores.length) {
+        throw new Error(errores.map(r => r.reason.message).join('; '));
+      }
+      const [resConstitucional, resConsistencia] = resultados.map(r => r.value);
       updateActiveSession({
         dictamenData: resConstitucional.data,
         consistenciaData: resConsistencia.data,

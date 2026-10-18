@@ -1041,11 +1041,12 @@ def run_agent_constitucional(req: Phase2Request):
 
         if id_proyecto:
             try:
-                actualizar_proyecto_con_observacion(
-                    id_proyecto,
-                    resultado.get("id_observacion_neon"),
-                    resultado.get("valido", True),
-                )
+                if resultado.get("estado") != "PENDIENTE_REVISION":
+                    actualizar_proyecto_con_observacion(
+                        id_proyecto,
+                        resultado.get("id_observacion_neon"),
+                        resultado.get("valido", True),
+                    )
                 duracion_s = max(1, int(time.time() - t_inicio))
                 registrar_bitacora(
                     id_proyecto=id_proyecto,
@@ -1117,6 +1118,9 @@ def run_agent_consistencia(req: Phase2Request):
                 "nombre_archivo": req.nombre_archivo,
                 "task_id": resultado.get("task_id_consistencia"),
                 "hallazgos": resultado.get("hallazgos", []),
+                "estado": resultado.get("estado"),
+                "pendientes_revision": resultado.get("pendientes_revision", []),
+                "total_pendientes": resultado.get("total_pendientes", 0),
                 "resumen_por_tipo": resultado.get("resumen_por_tipo", {}),
                 "nivel_riesgo_global": resultado.get("nivel_riesgo_global", "NINGUNO"),
                 "total_hallazgos": resultado.get("total_hallazgos", 0),

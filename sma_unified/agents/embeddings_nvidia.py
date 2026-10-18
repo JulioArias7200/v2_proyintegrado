@@ -39,7 +39,13 @@ _client = None
 def _get_client():
     global _client
     if _client is None and HAS_OPENAI:
-        _client = OpenAI(base_url=settings.NVIDIA_BASE_URL, api_key=settings.NVIDIA_API_KEY)
+        # Los reintentos los controla generar_embeddings; no duplicarlos en el SDK.
+        _client = OpenAI(
+            base_url=settings.NVIDIA_BASE_URL,
+            api_key=settings.NVIDIA_API_KEY,
+            timeout=30.0,
+            max_retries=0,
+        )
     return _client
 
 
@@ -108,4 +114,4 @@ def generar_embeddings(
 
 def embeber_pregunta(pregunta: str) -> List[float]:
     """Embedding de una sola consulta (input_type='query')."""
-    return generar_embeddings([pregunta], input_type="query")[0]
+    return generar_embeddings([pregunta], input_type="query", reintentos=2)[0]

@@ -43,7 +43,7 @@ from sma_unified.config import (
     AGENTE_CONSISTENCIA,
     TIPOS_RELACION_CONSISTENCIA,
 )
-from sma_unified.agents.llm_client import chat_completion_resiliente
+from sma_unified.agents.llm_client import chat_completion_auditoria
 from sma_unified.agents.embeddings_nvidia import embeber_pregunta
 from sma_unified.utils.parser_normativa import parsear_articulos
 from sma_unified.db.mongo_atlas import (
@@ -153,55 +153,31 @@ class AgenteConsistenciaNormativa:
         )
 
         try:
-            contenido, _modelo = chat_completion_resiliente(
+            contenido, _modelo = chat_completion_auditoria(
                 messages=[
                     {"role": "system", "content": prompt_sistema},
                     {"role": "user", "content": prompt_usuario},
                 ],
                 temperature=0.0,
+                timeout=(5, 30),
+                max_model_attempts=2,
                 max_tokens=1500,
             )
             from sma_unified.agents.llm_client import extraer_json_de_llm
             data = extraer_json_de_llm(contenido)
+            if not isinstance(data, dict) or data.get("tipo_relacion") not in TIPOS_RELACION_CONSISTENCIA:
+                raise ValueError("Clasificacion normativa incompleta o invalida")
+            data["verificado"] = True
         except Exception as e:
-            logger.warning(f"Fallback heurístico en _clasificar_relacion (consistencia) por error LLM: {e}")
-            similitud = float(candidato.get("similitud", 0.5))
-            txt_n = texto_nuevo.lower()
-            txt_v = (candidato.get("texto") or "").lower()
-
-            if similitud > 0.75:
-                tipo = "repeticion"
-                just = f"Alta similitud semántica ({int(similitud*100)}%) con {candidato['documento']} (Art. {candidato['numero']}). Posible duplicación o derogación tácita."
-                sug = "Evaluar si el proyecto abroga o sustituye expresamente este artículo vigente."
-                derog = True
-                conflicto_esp = False
-                riesgo = "medio"
-            elif similitud > 0.55:
-                tipo = "complementario"
-                just = f"Relación normativa cercana ({int(similitud*100)}% similitud) con {candidato['documento']} (Art. {candidato['numero']}). Regulan la misma materia."
-                sug = "Verificar armonización terminológica entre ambos cuerpos normativos."
-                derog = False
-                conflicto_esp = True
-                riesgo = "bajo"
-            else:
-                tipo = "vacio_llenado"
-                just = f"Coincidencia temática inicial con {candidato['documento']}. El proyecto parece complementar o desarrollar aspectos no cubiertos por la norma vigente."
-                sug = "Mantener redacción verificando no alterar procedimientos vigentes."
-                derog = False
-                conflicto_esp = False
-                riesgo = "ninguno"
-
-            data = {
-                "tipo_relacion": tipo,
-                "justificacion": just,
-                "sugerencia": sug,
-                "derogacion_tacita": derog,
-                "conflicto_especialidad": conflicto_esp,
-                "riesgo": riesgo,
+            logger.warning(f"[Consistencia] Cotejo pendiente por error LLM: {e}")
+            return {
+                "tipo_relacion": "pendiente_revision",
+                "verificado": False,
+                "estado": "PENDIENTE_REVISION",
+                "motivo": str(e),
+                "justificacion": "No se pudo completar el cotejo con IA.",
+                "riesgo": "desconocido",
             }
-
-        if data.get("tipo_relacion") not in TIPOS_RELACION_CONSISTENCIA:
-            data["tipo_relacion"] = "sin_relacion"
 
         return data
 
@@ -251,7 +227,7 @@ class AgenteConsistenciaNormativa:
             clasificacion = self._clasificar_relacion(texto_nuevo, cand)
             return cand, clasificacion
 
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             evaluaciones_paralelas = list(executor.map(_evaluar_candidato_normativo, candidatos_unicos))
 
         resultados: List[Dict[str, Any]] = []
@@ -267,6 +243,9 @@ class AgenteConsistenciaNormativa:
                 "norma": candidato["documento"],
                 "similitud": round(float(candidato["similitud"]), 4),
                 "tipo_relacion": tipo_relacion,
+                "verificado": clasificacion.get("verificado", False),
+                "estado": clasificacion.get("estado", "COMPLETADO"),
+                "motivo": clasificacion.get("motivo"),
                 "justificacion": clasificacion.get("justificacion", ""),
                 "sugerencia": clasificacion.get("sugerencia", ""),
                 "derogacion_tacita": clasificacion.get("derogacion_tacita", False),
@@ -275,7 +254,7 @@ class AgenteConsistenciaNormativa:
             }
             resultados.append(resultado)
 
-            if persistir:
+            if persistir and resultado["verificado"]:
                 guardar_analisis_consistencia(
                     articulo_nuevo_texto=texto_nuevo,
                     articulo_candidato_id=None,
@@ -317,7 +296,10 @@ class AgenteConsistenciaNormativa:
         resultados: List[Dict[str, Any]] = []
         vistos_hallazgos = set()
 
-        for unidad in unidades:
+        for indice, unidad in enumerate(unidades, start=1):
+            logger.info(
+                f"[Consistencia] Artículo {unidad['numero']} ({indice}/{len(unidades)}): iniciando cotejo"
+            )
             hallazgos = self.analizar_articulo(
                 unidad["texto"],
                 articulo_proyecto_numero=unidad["numero"],
@@ -326,6 +308,10 @@ class AgenteConsistenciaNormativa:
                 task_id_mongo=task_id_mongo,
                 id_proyecto=id_proyecto,
                 persistir=persistir,
+            )
+            logger.info(
+                f"[Consistencia] Artículo {unidad['numero']} ({indice}/{len(unidades)}): "
+                f"{len(hallazgos)} hallazgos"
             )
             for h in hallazgos:
                 clave = (h.get("articulo_proyecto"), h.get("norma"), h.get("numero_articulo"), h.get("tipo_relacion"))
@@ -414,7 +400,16 @@ def verificar_consistencia_normativa(
             id_proyecto=id_proyecto,
             persistir=persistir,
         )
+        pendientes = [h for h in hallazgos if not h.get("verificado")]
+        hallazgos = [h for h in hallazgos if h.get("verificado")]
         resumen = agente.generar_resumen(hallazgos)
+        resumen.update(
+            pendientes_revision=pendientes,
+            total_pendientes=len(pendientes),
+            estado="PENDIENTE_REVISION" if pendientes else "COMPLETADO",
+        )
+        if pendientes:
+            resumen["nivel_riesgo_global"] = "DESCONOCIDO"
 
     except Exception as e:
         duracion_ms = int((time.time() - t0) * 1000)
@@ -432,11 +427,14 @@ def verificar_consistencia_normativa(
         }
 
     duracion_ms = int((time.time() - t0) * 1000)
-    marcar_completado(
-        task_id,
-        resultado={"total_hallazgos": len(hallazgos), **resumen},
-        duracion_ms=duracion_ms,
-    )
+    if pendientes:
+        marcar_error(task_id, "Auditoría pendiente de revisión por fallos del proveedor LLM")
+    else:
+        marcar_completado(
+            task_id,
+            resultado={"total_hallazgos": len(hallazgos), **resumen},
+            duracion_ms=duracion_ms,
+        )
     logger.info(
         f"Consistencia normativa: {len(hallazgos)} hallazgos | "
         f"Riesgo: {resumen['nivel_riesgo_global']} [{duracion_ms}ms]"
@@ -451,6 +449,8 @@ def verificar_consistencia_normativa(
                 "nombre_archivo": nombre_archivo,
                 "task_id": task_id,
                 "hallazgos": hallazgos,
+                "pendientes_revision": pendientes,
+                "estado": resumen["estado"],
                 "resumen_por_tipo": resumen.get("resumen_por_tipo", {}),
                 "nivel_riesgo_global": resumen.get("nivel_riesgo_global", "NINGUNO"),
                 "total_hallazgos": len(hallazgos),
@@ -467,7 +467,7 @@ def verificar_consistencia_normativa(
     # ── Persistir correcciones automáticas por hallazgos críticos ────────────────────
     tipos_criticos = {"contradiccion", "repeticion"}
     hallazgos_criticos = [h for h in hallazgos if (h.get("tipo_relacion") in tipos_criticos or h.get("tipo") in tipos_criticos)]
-    if id_proyecto and hallazgos_criticos:
+    if id_proyecto and hallazgos_criticos and not pendientes:
         email_autor = obtener_email_autor_proyecto(id_proyecto)
         for hallazgo in hallazgos_criticos:
             norma_nombre = hallazgo.get("norma") or hallazgo.get("norma_vigente") or hallazgo.get("ley_referencia") or ""
