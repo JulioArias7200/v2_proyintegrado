@@ -66,7 +66,7 @@ from sma_unified.db.neon_postgres import (
 TOP_K_CPE             = 18    # Artículos CPE a recuperar (ampliado a 18 para mayor cobertura)
 UMBRAL_CPE            = 0.40  # Similitud mínima (más permisivo → mayor cobertura)
 MAX_CHARS_BLOQUE      = 2500  # Chars máximos para embedding
-MAX_TOKENS_CRIBA      = 220   # Fase A: cribado rápido (JSON compacto)
+MAX_TOKENS_CRIBA      = 800   # Fase A: cribado rápido (JSON compacto)
 MAX_TOKENS_DEEPCHECK  = 900   # Fase B: deep-check con citas extendidas
 MAX_TOKENS_ANALISIS   = 1400  # Fase C: análisis profundo por hallazgo
 MAX_CHARS_CPE_TEXTO   = 800   # Texto CPE enviado al LLM (completo)
@@ -247,11 +247,36 @@ class VerificadorConstitucional:
 
     # ── FASE A: Cribado rápido ─────────────────────────────────────────────────
 
+    def _solicitar_criba_json(self, usuario: str) -> Dict[str, Any]:
+        """Reintenta una respuesta mal formada una vez, sin repetir fallos de red."""
+        for intento in range(2):
+            try:
+                contenido, _ = chat_completion_auditoria(
+                    messages=[
+                        {"role": "system", "content": _SISTEMA_CRIBA},
+                        {"role": "user", "content": usuario},
+                    ],
+                    temperature=0.0,
+                    max_tokens=MAX_TOKENS_CRIBA * (intento + 1),
+                    response_format={"type": "json_object"},
+                )
+                data = extraer_json_de_llm(contenido)
+                clases = {"A_FAVOR", "EN_CONTRA", "NEUTRAL", "RAF", "REQUIERE_ANALISIS_DE_FONDO"}
+                if (not isinstance(data, dict) or data.get("c") not in clases
+                    or data.get("s") not in {"bloqueante", "grave", "leve", "ninguna"}
+                    or not isinstance(data.get("ok"), bool)):
+                    raise ValueError("Criba constitucional incompleta o invalida")
+                return data
+            except ValueError:
+                if intento == 1:
+                    raise
+                logger.warning("[Criba] Formato JSON invalido; reintentando una vez con mayor presupuesto de tokens")
+
     def _cribar_relacion_cpe(
         self, texto_proyecto: str, articulo_cpe: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Prompt compacto de cribado (220 tokens máx).
+        Cribado estructurado con un reintento de formato.
         Devuelve {'clasificacion', 'severidad', 'verificado', '_fase'}.
         Los artículos NEUTRAL con ok=True se descartan sin segunda pasada.
         """
@@ -266,21 +291,7 @@ class VerificadorConstitucional:
         )
 
         try:
-            contenido, _ = chat_completion_auditoria(
-                messages=[
-                    {"role": "system", "content": _SISTEMA_CRIBA},
-                    {"role": "user",   "content": usuario},
-                ],
-                temperature=0.0,
-                timeout=(5, 30),
-                max_model_attempts=2,
-                max_tokens=MAX_TOKENS_CRIBA,
-            )
-            data = extraer_json_de_llm(contenido)
-            if not isinstance(data, dict):
-                raise ValueError("Respuesta constitucional invalida")
-            if data.get("c") not in {"A_FAVOR", "EN_CONTRA", "NEUTRAL", "RAF", "REQUIERE_ANALISIS_DE_FONDO"}:
-                raise ValueError("Criba constitucional incompleta")
+            data = self._solicitar_criba_json(usuario)
             return {
                 "clasificacion": data.get("c", "NEUTRAL"),
                 "severidad":     data.get("s", "ninguna"),
@@ -288,7 +299,7 @@ class VerificadorConstitucional:
                 "_fase":         "criba",
             }
         except Exception as e:
-            logger.debug(f"[Criba] Art. {num}: fallback NEUTRAL por error LLM: {e}")
+            logger.debug(f"[Criba] Art. {num}: pendiente por error LLM o formato JSON: {e}")
             return {"clasificacion": "NEUTRAL", "severidad": "ninguna", "verificado": False, "_fase": "criba_fallback", "pendiente_revision": True, "motivo": str(e)}
 
     # ── FASE B: Deep-check de candidatos ──────────────────────────────────────

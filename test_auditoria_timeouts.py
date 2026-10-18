@@ -1,5 +1,6 @@
 """Pruebas aisladas de red: no requieren credenciales ni escriben en la BD."""
 import ast
+import json
 from pathlib import Path
 import time
 import typing
@@ -40,7 +41,7 @@ class AuditoriaTimeoutTests(unittest.TestCase):
             '_registrar_exito_circuito': Mock(),
             '_registrar_metrica_latencia': Mock(),
             '_parece_modelo_no_disponible': lambda *_: False,
-            'logger': Mock(), 'time': time,
+            'logger': Mock(), 'time': time, '_MODELOS_RETIRADOS': set(),
         })
 
     def test_timeout_no_recorre_todos_los_modelos(self):
@@ -56,6 +57,27 @@ class AuditoriaTimeoutTests(unittest.TestCase):
         respuesta.json.return_value = {'choices': [{'message': {'content': '{}'}}]}
         post = Mock(side_effect=[TimeoutError(), respuesta])
         self.assertEqual(self.cliente(post)([], max_model_attempts=2), ('{}', 'b'))
+
+    def test_circuitos_abiertos_no_consumen_intentos(self):
+        respuesta = Mock(status_code=200)
+        respuesta.json.return_value = {'choices': [{'message': {'content': '{}'}}]}
+        post = Mock(return_value=respuesta)
+        cliente = self.cliente(post)
+        cliente.__globals__['_esta_circuito_abierto'] = lambda modelo: (modelo in {'a', 'b'}, 20)
+        self.assertEqual(cliente([], max_model_attempts=2), ('{}', 'c'))
+        self.assertEqual(post.call_count, 1)
+
+    def test_http_410_excluye_modelo_en_llamadas_posteriores(self):
+        retirado = Mock(status_code=410, text='modelo retirado')
+        respuesta = Mock(status_code=200)
+        respuesta.json.return_value = {'choices': [{'message': {'content': '{}'}}]}
+        post = Mock(side_effect=[retirado, respuesta, respuesta])
+        cliente = self.cliente(post)
+        cliente.__globals__['_parece_modelo_no_disponible'] = lambda codigo, _: codigo == 410
+        self.assertEqual(cliente([], modelos=['a', 'b']), ('{}', 'b'))
+        self.assertIn('a', cliente.__globals__['_MODELOS_RETIRADOS'])
+        self.assertEqual(cliente([], modelos=['a', 'b']), ('{}', 'b'))
+        self.assertEqual([c.kwargs['json']['model'] for c in post.call_args_list], ['a', 'b', 'b'])
 
     def test_sdk_no_duplica_reintentos(self):
         constructor = Mock()
@@ -74,7 +96,8 @@ class AuditoriaTimeoutTests(unittest.TestCase):
         def responder(**kwargs):
             nonlocal activos, maximo
             self.assertEqual(kwargs['modelos'][0], 'openai/gpt-oss-20b')
-            self.assertEqual(kwargs['timeout'], (5, 45))
+            self.assertNotIn('z-ai/glm-5.2', kwargs['modelos'])
+            self.assertEqual(kwargs['timeout'], (30, 60))
             with lock:
                 activos += 1
                 maximo = max(maximo, activos)
@@ -84,7 +107,8 @@ class AuditoriaTimeoutTests(unittest.TestCase):
             return '{}', 'prueba'
         funcion = cargar_funcion('llm_client.py', 'chat_completion_auditoria', {
             '_AUDITORIA_LLM_SLOTS': BoundedSemaphore(2),
-            'settings': SimpleNamespace(LLM_MODEL_CONSISTENCIA='respaldo'),
+            '_lista_modelos_razonamiento': lambda: ['respaldo', 'z-ai/glm-5.2', 'openai/gpt-oss-20b'],
+            '_MODELOS_RETIRADOS': {'z-ai/glm-5.2'},
             'chat_completion_resiliente': responder,
         })
         with ThreadPoolExecutor(max_workers=8) as pool:
@@ -154,6 +178,39 @@ class AuditoriaTimeoutTests(unittest.TestCase):
         resultado = clase()._verificar_profundo_cpe('proyecto', {'numero': '1', 'texto': 'CPE'})
         self.assertEqual(resultado['clasificacion'], 'PENDIENTE_REVISION')
         self.assertFalse(resultado['verificado'])
+
+    def test_criba_reintenta_solo_respuesta_json_invalida(self):
+        llamada = Mock(side_effect=[('Texto sin JSON', 'modelo'),
+                                   ('{"c":"NEUTRAL","s":"ninguna","ok":true}', 'modelo')])
+        clase = cargar_agente('verificador_constitucional.py', 'VerificadorConstitucional', {
+            'chat_completion_auditoria': llamada, 'extraer_json_de_llm': json.loads,
+        })
+        resultado = clase()._cribar_relacion_cpe('proyecto', {'numero': '9', 'texto': 'CPE'})
+        self.assertTrue(resultado['verificado'])
+        self.assertNotIn('pendiente_revision', resultado)
+        self.assertEqual(llamada.call_count, 2)
+        self.assertEqual(llamada.call_args.kwargs['response_format'], {'type': 'json_object'})
+        self.assertGreater(llamada.call_args_list[1].kwargs['max_tokens'],
+                           llamada.call_args_list[0].kwargs['max_tokens'])
+
+    def test_criba_dos_respuestas_invalidas_quedan_pendientes(self):
+        llamada = Mock(return_value=('{}', 'modelo'))
+        clase = cargar_agente('verificador_constitucional.py', 'VerificadorConstitucional', {
+            'chat_completion_auditoria': llamada, 'extraer_json_de_llm': json.loads,
+        })
+        resultado = clase()._cribar_relacion_cpe('proyecto', {'numero': '11', 'texto': 'CPE'})
+        self.assertTrue(resultado['pendiente_revision'])
+        self.assertFalse(resultado['verificado'])
+        self.assertEqual(llamada.call_count, 2)
+
+    def test_auditoria_no_usa_razonamiento_como_respuesta_final(self):
+        respuesta = Mock(status_code=200)
+        respuesta.json.return_value = {'choices': [{'finish_reason': 'length',
+            'message': {'content': '', 'reasoning_content': 'razonamiento incompleto'}}]}
+        post = Mock(return_value=respuesta)
+        with self.assertRaisesRegex(ValueError, 'respuesta final'):
+            self.cliente(post)([], require_final_content=True)
+        self.assertNotIn('require_final_content', post.call_args.kwargs['json'])
 
 
 if __name__ == '__main__':

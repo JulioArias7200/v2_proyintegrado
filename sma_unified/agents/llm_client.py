@@ -33,15 +33,22 @@ NVIDIA_API_BASE = "https://integrate.api.nvidia.com/v1"
 
 # Compartido por los dos agentes, incluso cuando corren en paralelo.
 _AUDITORIA_LLM_SLOTS = BoundedSemaphore(2)
+# Retiro confirmado por HTTP 410 en el proveedor; se amplía durante la sesión.
+_MODELOS_RETIRADOS: Set[str] = {"z-ai/glm-5.2"}
 
 
 def chat_completion_auditoria(**kwargs: Any) -> Tuple[str, str]:
     """Prioriza el respaldo que respondió y limita la carga conjunta a NVIDIA."""
-    modelos = list(dict.fromkeys([
-        "openai/gpt-oss-20b", settings.LLM_MODEL_CONSISTENCIA,
-    ]))
-    kwargs.update(modelos=modelos, timeout=(5, 45), max_model_attempts=2)
     with _AUDITORIA_LLM_SLOTS:
+        # La lista general filtra el catálogo NIM; no confiar en un .env antiguo.
+        disponibles = _lista_modelos_razonamiento()
+        modelos = sorted(disponibles, key=lambda m: m != "openai/gpt-oss-20b")
+        modelos = [m for m in modelos if m not in _MODELOS_RETIRADOS]
+        if not modelos:
+            raise RuntimeError("No hay modelos de auditoría disponibles en el catálogo NIM")
+        # connect también afecta la negociación TLS: 5s era insuficiente.
+        kwargs.update(modelos=modelos, timeout=(30, 60), max_model_attempts=2,
+                      require_final_content=True)
         return chat_completion_resiliente(**kwargs)
 
 # ── Circuit Breaker State ──────────────────────────────────────────────────
@@ -425,6 +432,7 @@ def chat_completion_resiliente(
     timeout: Optional[Any] = None,
     response_format: Optional[Dict[str, str]] = None,
     max_model_attempts: Optional[int] = None,
+    require_final_content: bool = False,
     **kwargs: Any,
 ) -> Tuple[str, str]:
     """
@@ -433,8 +441,6 @@ def chat_completion_resiliente(
     continuo de latencia.
     """
     modelos = modelos or _lista_modelos_razonamiento()
-    if max_model_attempts is not None:
-        modelos = modelos[:max_model_attempts]
 
     # Política de timeout recomendada: connect=30s, read=90s
     if timeout is None:
@@ -445,8 +451,12 @@ def chat_completion_resiliente(
         timeout_efectivo = timeout
 
     ultimo_error: Optional[Exception] = None
+    intentos = 0
 
     for modelo in modelos:
+        if modelo in _MODELOS_RETIRADOS:
+            ultimo_error = RuntimeError(f"Modelo '{modelo}' retirado del proveedor")
+            continue
         # 1. Verificar Circuit Breaker
         abierto, seg_rest = _esta_circuito_abierto(modelo)
         if abierto:
@@ -465,6 +475,9 @@ def chat_completion_resiliente(
             )
             continue
 
+        if max_model_attempts is not None and intentos >= max_model_attempts:
+            break
+        intentos += 1
         t_inicio = time.time()
         try:
             payload: Dict[str, Any] = {
@@ -502,6 +515,8 @@ def chat_completion_resiliente(
 
             # Verificar si el modelo fue retirado o no existe (404/410/503)
             if _parece_modelo_no_disponible(resp.status_code, resp.text):
+                if resp.status_code == 410:
+                    _MODELOS_RETIRADOS.add(modelo)
                 motivo = f"HTTP {resp.status_code} - modelo no disponible"
                 _registrar_fallo_circuito(modelo, motivo)
                 _registrar_metrica_latencia(
@@ -521,6 +536,11 @@ def chat_completion_resiliente(
 
             # Priorizar contenido formal; si está vacío, usar reasoning_content
             contenido = (msg_obj.get("content") or "").strip()
+            if not contenido and require_final_content:
+                raise ValueError(
+                    "El modelo no entregó una respuesta final "
+                    f"(finish_reason={datos_resp['choices'][0].get('finish_reason')})"
+                )
             if not contenido:
                 contenido = (msg_obj.get("reasoning_content") or "").strip()
 

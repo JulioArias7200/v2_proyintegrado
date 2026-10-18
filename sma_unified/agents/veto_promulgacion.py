@@ -29,13 +29,8 @@ class AgenteVetoPromulgacion:
         
         try:
             ciclo = self.neon.obtener_aprobacion_bicameral(int(proyecto_id))
-        except Exception:
-            ciclo = {
-                "id_revision": 1,
-                "texto_sancionado": expediente.get("texto_sancionado") or proyecto_info.get("texto") or "Texto sancionado",
-                "hash_texto_sancionado": "sha256_mock",
-                "aprobacion_humana": {"accion": "APROBAR", "usuario_id": 1}
-            }
+        except Exception as e:
+            raise ValueError(f"Se requiere una aprobacion bicameral vigente y guardada: {e}") from e
         decision = expediente.get("decision_operador")
         if decision is not None and decision not in ("PROMULGAR", "VETAR_TOTAL", "VETAR_PARCIAL"):
             raise ValueError("Decisión no válida: usar PROMULGAR, VETAR_TOTAL o VETAR_PARCIAL")
@@ -84,6 +79,8 @@ class AgenteVetoPromulgacion:
         try:
             resultado["id_registro"] = self.neon.guardar_evaluacion_ejecutiva(int(proyecto_id), ciclo, resultado, usuario_registrador)
         except Exception as e_ev:
+            if decision:
+                raise RuntimeError(f"No se pudo guardar la decisión ejecutiva: {e_ev}") from e_ev
             print(f"Aviso guardando evaluacion ejecutiva: {e_ev}")
             resultado["id_registro"] = 1
         try:

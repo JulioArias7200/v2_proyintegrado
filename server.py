@@ -470,15 +470,9 @@ def consultar_revision_bicameral(id_proyecto: int, usuario=Depends(usuario_revis
     except ValueError as e:
         raise HTTPException(409, str(e))
     except Exception as e:
-        return {"success": True, "data": {
-            "ciclo_bicameral": {
-                "proyecto_id": id_proyecto,
-                "estado_siguiente": "PENDIENTE_APROBACION_HUMANA",
-                "puede_aprobar": True,
-                "verificaciones_normativas": []
-            },
-            "puede_continuar": False
-        }}
+        logger.error(f"Error consultando revision bicameral: {e}")
+        raise HTTPException(500, "No se pudo consultar la revision bicameral guardada")
+
 
 
 @app.post("/api/pipeline/decision_bicameral")
@@ -495,13 +489,9 @@ def decidir_bicameral(req: DecisionBicameralRequest, usuario=Depends(usuario_rev
     except ValueError as e:
         raise HTTPException(409, str(e))
     except Exception as e:
-        return {"success": True, "data": {
-            "id_revision": req.id_revision,
-            "accion": req.accion,
-            "motivo": req.motivo,
-            "usuario_id": usuario.get("usuario_id", 1),
-            "estado": "APROBADO_REVISION_HUMANA" if req.accion == "APROBAR" else "EN_REVISION"
-        }}
+        logger.error(f"Error guardando decision bicameral: {e}")
+        raise HTTPException(500, "No se pudo guardar la decision bicameral; no se registro una aprobacion")
+
 
 
 @app.post("/api/auth/register")
@@ -1641,7 +1631,9 @@ def confirmar_aprobacion_bicameral_endpoint(req: ConfirmarAprobacionBicameralReq
 
 
 @app.post("/api/pipeline/agent_veto_promulgacion")
-async def run_agent_veto_promulgacion_endpoint(payload: Dict[str, Any]):
+async def run_agent_veto_promulgacion_endpoint(
+    payload: Dict[str, Any], authorization: Optional[str] = Header(default=None)
+):
     """
     Etapa 7: Agente Veto y Promulgación
     Evaluación estratégica multicriterio del Órgano Ejecutivo.
@@ -1655,9 +1647,11 @@ async def run_agent_veto_promulgacion_endpoint(payload: Dict[str, Any]):
         id_proyecto = payload.get("id_proyecto") or proyecto_info.get("id_proyecto") or proyecto_info.get("id")
 
         agente = AgenteVetoPromulgacion()
+        usuario_registrador = usuario_revision(authorization) if expediente.get("decision_operador") else None
         resultado = agente.ejecutar(
             expediente=expediente,
-            proyecto_info=proyecto_info
+            proyecto_info=proyecto_info,
+            usuario_registrador=usuario_registrador,
         )
 
         if id_proyecto:
@@ -1674,6 +1668,10 @@ async def run_agent_veto_promulgacion_endpoint(payload: Dict[str, Any]):
                 logger.warning(f"Error registrando bitácora Veto/Promulgación: {be}")
 
         return {"success": True, "data": resultado}
+    except HTTPException:
+        raise
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         logger.error(f"Error en endpoint Veto/Promulgacion: {e}")
         raise HTTPException(status_code=500, detail=str(e))
