@@ -919,11 +919,20 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
         pdf_proyecto_filename: uploadStats?.saved_as || null,
         pdf_informe_filename: pdfResult?.filename || null,
       });
-      updateActiveSession({ confirmacionBicameralData: res.data, isProcessing: false });
+      if (!res.success || !res.data) throw new Error(res.error || 'Respuesta de envío incompleta');
+      updateActiveSession({ confirmacionBicameralData: {
+        ...res.data, id_revision: bicameralData?.ciclo_bicameral?.id_revision,
+      }, isProcessing: false });
+      if (res.data.status === 'sin_destinatarios') {
+        updateActiveSession({ errorMessage: res.data.mensaje });
+        appendLog('Confirmacion_Bicameral', 'SIN_DESTINATARIOS', res.data.mensaje);
+        return;
+      }
       const destino = res.data?.camara_destino || 'la camara opuesta';
       const total = res.data?.total_destinatarios ?? 0;
       appendLog('Confirmacion_Bicameral', 'COMPLETADO', `Notificados ${total} usuario(s) de la Camara de ${destino}s`);
     } catch (err) {
+      updateActiveSession({ confirmacionBicameralData: { status: 'error', mensaje: err.message } });
       updateActiveSession({ errorMessage: err.message || 'Error al confirmar la aprobacion bicameral', isProcessing: false });
       appendLog('Confirmacion_Bicameral', 'ERROR', err.message);
     }
@@ -957,6 +966,11 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
       if (!res.success || !res.data?.ciclo_bicameral) throw new Error('No se pudo verificar la decision guardada');
       updateActiveSession({ bicameralData: res.data, pipelineStep: 13 });
       appendLog('Bicameral', 'DECISION_REGISTRADA', accion);
+      if (accion === 'APROBAR' && res.data.ciclo_bicameral.aprobacion_humana?.accion === 'APROBAR'
+          && !(confirmacionBicameralData?.status === 'notificado'
+          && confirmacionBicameralData.id_revision === ciclo.id_revision)) {
+        await handleConfirmarAprobacionBicameral();
+      }
     } catch (err) {
       updateActiveSession({ errorMessage: err.message });
     } finally {
@@ -4113,6 +4127,22 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                 onContinuar={handleVetoPromulgacion}
                 onCorregir={() => updateActiveSession({ pipelineStep: 11, inspectedAgentId: null })}
               />
+              {bicameralData.ciclo_bicameral?.aprobacion_humana?.accion === 'APROBAR' && (
+                <section className="revision-panel" aria-live="polite">
+                  <h3>Correo a la otra cámara</h3>
+                  {confirmacionBicameralData?.status === 'notificado' ? (
+                    <p>Correo enviado a {confirmacionBicameralData.camara_destino}: {(confirmacionBicameralData.destinatarios || []).join(', ')}.</p>
+                  ) : (
+                    <>
+                      <p>{confirmacionBicameralData?.mensaje || 'La aprobación está registrada. El envío de correo está pendiente.'}</p>
+                      <button type="button" className="btn-secondary" disabled={isProcessing}
+                        onClick={handleConfirmarAprobacionBicameral}>
+                        {isProcessing ? 'Enviando...' : 'Enviar correo a la otra cámara'}
+                      </button>
+                    </>
+                  )}
+                </section>
+              )}
             </AgentResultCard>
           </div>
         </div>

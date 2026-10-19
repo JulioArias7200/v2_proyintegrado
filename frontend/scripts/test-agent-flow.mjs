@@ -15,7 +15,7 @@ for (const [step, id] of [[12, 'secretario'], [13, 'bicameral'], [14, 'veto_prom
 
 const source = readFileSync(new URL('../src/pages/MesaPartes.jsx', import.meta.url), 'utf8');
 function handler(name, context) {
-  const start = source.indexOf(`  const ${name} = async () => {`);
+  const start = source.indexOf(`  const ${name} = async `);
   const end = source.indexOf('\n  };', start) + 5;
   const fn = source.slice(start, end).trim();
   return Function(...Object.keys(context), `${fn}; return ${name};`)(...Object.values(context));
@@ -61,3 +61,20 @@ assert.ok(source.includes('onDecision={handleResolverBicameral}'));
 assert.ok(source.includes('onRegistrar={handleRegistrarDecisionEjecutiva}'));
 assert.ok(source.includes('texto_documento: documentText'));
 console.log('Revision humana -> Veto -> decision documentada -> Publicacion: OK');
+
+for (const accion of ['APROBAR', 'MANDAR_A_REVISION']) {
+  let envios = 0;
+  await handler('handleResolverBicameral', {
+    isProcessing: false, fase1Data: { id_proyecto: 1 },
+    bicameralData: { ciclo_bicameral: { id_revision: 7, version_revision: 'v' } },
+    confirmacionBicameralData: null,
+    updateActiveSession: () => {}, appendLog: () => {},
+    handleConfirmarAprobacionBicameral: async () => { envios++; },
+    api: {
+      decidirBicameral: async () => ({ success: true }),
+      getRevisionBicameral: async () => ({ success: true, data: { ciclo_bicameral: { aprobacion_humana: { accion } } } }),
+    },
+  })(accion, 'motivo', true);
+  assert.equal(envios, accion === 'APROBAR' ? 1 : 0);
+}
+console.log('Aprobacion bicameral llama al envio; devolucion no envia: OK');

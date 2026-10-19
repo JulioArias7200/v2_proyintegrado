@@ -27,6 +27,7 @@ from sma_unified.db.mongo_atlas import publicar_mensaje, marcar_en_proceso, marc
 from sma_unified.db.neon_postgres import get_conn, registrar_bitacora, obtener_correcciones_proyecto
 
 import smtplib
+import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
@@ -65,7 +66,7 @@ def enviar_correo_gmail_smtp(
     pdf_filenames: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
-    Envía el correo directamente usando Gmail SMTP (smtp.gmail.com:587 con TLS).
+    Envía por Gmail SMTP con TLS directo (465) y alternativa STARTTLS (587).
     Requiere GMAIL_USER y GMAIL_APP_PASSWORD (Contraseña de Aplicación de Google).
     Adjunta uno o varios PDFs: pasa `pdf_filename` (uno) y/o `pdf_filenames` (varios);
     ambos se combinan y se buscan tanto en uploaded_files/informes/ como en uploaded_files/.
@@ -89,56 +90,83 @@ def enviar_correo_gmail_smtp(
     adjuntos = [n for n in ([pdf_filename] if pdf_filename else []) + (pdf_filenames or []) if n]
 
     resultados = []
-    try:
-        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=20)
-        server.starttls()
-        server.login(gmail_user, gmail_pass)
-
-        for dest in valid_recipients:
-            try:
-                msg = MIMEMultipart("mixed")
-                msg["Subject"] = asunto
-                msg["From"] = f"{from_name} <{gmail_user}>"
-                msg["To"] = dest
-
-                # Cuerpo HTML
-                msg_html = MIMEText(html_content, "html", "utf-8")
-                msg.attach(msg_html)
-
-                # Adjuntar PDF(s)
-                for nombre_pdf in adjuntos:
-                    pdf_path = _resolver_ruta_adjunto(nombre_pdf)
-                    if pdf_path:
-                        with open(pdf_path, "rb") as f:
-                            part = MIMEApplication(f.read(), Name=nombre_pdf)
-                            part["Content-Disposition"] = f'attachment; filename="{nombre_pdf}"'
-                            msg.attach(part)
-
-                server.sendmail(gmail_user, [dest], msg.as_string())
-                logger.info(f"📧 [Gmail SMTP] Correo enviado exitosamente a {dest}")
-                resultados.append({"email": dest, "success": True, "status": "Enviado vía Gmail SMTP"})
-            except Exception as e_ind:
-                logger.error(f"❌ [Gmail SMTP] Error enviando a {dest}: {e_ind}")
-                resultados.append({"email": dest, "success": False, "error": str(e_ind)})
-
-        server.quit()
-        total_ok = sum(1 for r in resultados if r.get("success"))
-        return {
-            "enviado": total_ok > 0,
-            "metodo": "gmail_smtp",
-            "total_enviados": total_ok,
-            "total_intentados": len(valid_recipients),
-            "detalle": resultados,
-            "from_email": gmail_user
-        }
-    except Exception as e:
-        logger.error(f"❌ [Gmail SMTP] Error de conexión: {e}")
-        return {
-            "enviado": False,
-            "metodo": "gmail_smtp",
-            "error": str(e),
-            "destinatarios": valid_recipients
-        }
+    for dest in valid_recipients:
+        server = None
+        etapa = "preparar mensaje"
+        try:
+            # Preparar adjuntos antes de conectar evita que SMTP expire mientras se leen.
+            msg = MIMEMultipart("mixed")
+            msg["Subject"] = asunto
+            msg["From"] = f"{from_name} <{gmail_user}>"
+            msg["To"] = dest
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+            for nombre_pdf in adjuntos:
+                pdf_path = _resolver_ruta_adjunto(nombre_pdf)
+                if pdf_path:
+                    with open(pdf_path, "rb") as f:
+                        part = MIMEApplication(f.read(), Name=nombre_pdf)
+                        part["Content-Disposition"] = f'attachment; filename="{nombre_pdf}"'
+                        msg.attach(part)
+            contenido = msg.as_string()
+            # Una conexion por destinatario; no reutilizar una conexion desconectada.
+            for puerto in (465, 587):
+                try:
+                    etapa = f"conectar TLS puerto {puerto}"
+                    contexto_tls = ssl.create_default_context()
+                    if puerto == 465:
+                        server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=60, context=contexto_tls)
+                    else:
+                        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=60)
+                        server.ehlo()
+                        etapa = "negociar STARTTLS puerto 587"
+                        server.starttls(context=contexto_tls)
+                    server.ehlo()
+                    etapa = f"autenticar puerto {puerto}"
+                    server.login(gmail_user, gmail_pass)
+                    break
+                except smtplib.SMTPAuthenticationError:
+                    raise
+                except (smtplib.SMTPServerDisconnected, OSError):
+                    if server is not None:
+                        try:
+                            server.close()
+                        except Exception:
+                            pass
+                        server = None
+                    if puerto == 587:
+                        raise
+                    logger.warning(f"[Gmail SMTP] Fallo en {etapa}; probando STARTTLS 587 antes de enviar")
+            # No reintentar tras DATA: Gmail podria haber aceptado el mensaje.
+            etapa = f"transmitir mensaje puerto {puerto}"
+            rechazados = server.sendmail(gmail_user, [dest], contenido)
+            if rechazados:
+                raise RuntimeError(f"Destinatario rechazado por SMTP: {dest}")
+            resultados.append({"email": dest, "success": True, "status": "Aceptado por Gmail SMTP"})
+            logger.info(f"[Gmail SMTP] Correo aceptado para {dest}")
+        except Exception as e:
+            error = f"{etapa}: {type(e).__name__}: {e}"
+            logger.error(f"[Gmail SMTP] Error enviando a {dest}: {error}")
+            resultados.append({"email": dest, "success": False, "error": error})
+        finally:
+            if server is not None:
+                try:
+                    server.quit()
+                except Exception:
+                    # Un fallo en QUIT no invalida un mensaje ya aceptado por SMTP.
+                    try:
+                        server.close()
+                    except Exception:
+                        pass
+    total_ok = sum(1 for r in resultados if r.get("success"))
+    return {
+        "enviado": total_ok > 0,
+        "metodo": "gmail_smtp",
+        "total_enviados": total_ok,
+        "total_intentados": len(valid_recipients),
+        "detalle": resultados,
+        "from_email": gmail_user,
+        "error": "; ".join(r["error"] for r in resultados if not r.get("success")) or None,
+    }
 
 
 def enviar_correo_hibrido(
@@ -152,19 +180,21 @@ def enviar_correo_hibrido(
     Despacha el correo usando la mejor vía disponible, con TOKEN DE GOOGLE / GMAIL como PRIMERA PRIORIDAD:
     1. Si GMAIL_APP_PASSWORD o GMAIL_USER está configurado, usa Gmail SMTP directo (Token de Google).
     2. Si SendGrid está configurado como alternativa, intenta SendGrid.
-    3. Si ambos fallan o no están configurados, registra la simulación formal.
+    3. Si ambos fallan o no están configurados, devuelve el error real sin simular un envío.
     Acepta un solo PDF (`pdf_filename`) y/o varios (`pdf_filenames`) como adjuntos.
     """
     gmail_pass = (os.getenv("GMAIL_APP_PASSWORD") or os.getenv("SMTP_PASSWORD") or "").strip().replace(" ", "")
     gmail_user = (os.getenv("GMAIL_USER") or os.getenv("SMTP_USER") or "").strip()
     sendgrid_key = (os.getenv("SENDGRID_API_KEY") or "").strip()
 
+    errores = []
     # Prioridad 1: Token de Google / Gmail SMTP directo
     if gmail_user and gmail_pass:
         logger.info(f"📧 [Token Google] Despachando correo vía Gmail SMTP ({gmail_user}) a: {destinatarios}")
         res_gmail = enviar_correo_gmail_smtp(asunto, destinatarios, html_content, pdf_filename, pdf_filenames)
         if res_gmail.get("enviado"):
             return res_gmail
+        errores.append(res_gmail.get("error") or "Gmail SMTP no acepto el mensaje")
         logger.warning(f"⚠️ Envío con Token de Google reportó error: {res_gmail.get('error')}. Intentando alternativa...")
 
     # Prioridad 2: SendGrid API
@@ -172,14 +202,14 @@ def enviar_correo_hibrido(
         res_sg = enviar_correo_sendgrid(asunto, destinatarios, html_content, pdf_filename, pdf_filenames)
         if res_sg.get("enviado"):
             return res_sg
+        errores.append(res_sg.get("error") or res_sg.get("mensaje") or "SendGrid no acepto el mensaje")
 
-    # Fallback de simulación estructurada
     return {
-        "enviado": True,
-        "metodo": "despacho_institucional_registrado",
-        "mensaje": "Mensaje formal HTML certificado y registrado en bitácora.",
+        "enviado": False,
+        "metodo": "sin_envio",
+        "error": "; ".join(errores) or "Configure GMAIL_USER y GMAIL_APP_PASSWORD o SendGrid para enviar correos",
         "destinatarios": destinatarios,
-        "total_enviados": len(destinatarios),
+        "total_enviados": 0,
     }
 
 

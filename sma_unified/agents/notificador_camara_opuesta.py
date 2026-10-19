@@ -224,6 +224,12 @@ def notificar_camara_opuesta(
             pdf_filenames=pdf_adjuntos,
         )
 
+        if (not resultado_envio.get("enviado") or resultado_envio.get("metodo") in
+                {"despacho_institucional_registrado", "simulacion_local"}):
+            raise RuntimeError(
+                resultado_envio.get("error") or
+                "El correo no fue enviado. Verifique Gmail SMTP o SendGrid; un registro local no es un envío."
+            )
         duracion_ms = int((time.time() - t_inicio) * 1000)
         resultado = {
             "status": "notificado",
