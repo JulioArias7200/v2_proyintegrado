@@ -125,6 +125,8 @@ export const api = {
   getSession: () => request('/auth/session'),
   logout: () => request('/auth/logout', { method: 'POST' }),
   getRevisionBicameral: (id) => request(`/pipeline/revision_bicameral/${id}`),
+  getCertificadoBicameralPdfUrl: (id) => `${BASE_URL}/pipeline/revision_bicameral/${id}/documento_pdf`,
+  getFichaBicameral: (id) => request(`/pipeline/revision_bicameral/${id}/ficha_resumen`),
   decidirBicameral: (data) =>
     request('/pipeline/decision_bicameral', {
       method: 'POST',

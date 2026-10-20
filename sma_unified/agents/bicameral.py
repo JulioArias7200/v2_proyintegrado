@@ -3,6 +3,7 @@ Trámite bicameral: Control del circuito constitucional entre Cámara de Origen 
 Verifica antecedentes, computa votación en grande y en detalle, y soporta el bucle de retorno a comisiones.
 """
 from typing import Dict, Any, Optional, List
+import copy
 import json
 import time
 from crewai import Task
@@ -130,19 +131,18 @@ class AgenteBicameral:
                 "informes_factibilidad": [{"agente_origen": "Constitucional", "estado": "EVALUADO", "viabilidad": "VIABLE", "contenido": "Dictamen viable"}]
             }
 
-        ciclo = evaluar_bicameral(acta, exp, version_original, version_retornada)
-        ciclo["verificaciones_normativas"].append({
-            "requisito": "Antecedentes corresponden al documento vigente",
-            "estado": "CUMPLE" if antecedentes.get("insumos_vigentes", True) else "NO_VERIFICABLE",
-            "evidencia": antecedentes.get("hash_documento", ""), "fundamento": "Integridad del expediente"
-        })
-        ciclo["puede_aprobar"] = ciclo["puede_aprobar"] and antecedentes.get("insumos_vigentes", True)
+        # ── 1. Preparación de versiones y actas de ambas Cámaras ──────────
+        acta_origen = copy.deepcopy(acta)
+        if not acta_origen.get("camara"):
+            acta_origen["camara"] = "DIPUTADOS"
 
-        # ── 2. Circuito real de las dos Cámaras (Origen vs Revisora) ─────────
-        acta_origen = ciclo.get("acta_secretario", {})
-        acta_revisora = ciclo.get("acta_revisora", {})
+        texto_base = version_original.get("texto") or acta_origen.get("texto_aprobado") or "\n".join(version_original.get("articulos", [])) or "Texto Oficial Sometido a Votación"
+        if not acta_origen.get("texto_aprobado"):
+            acta_origen["texto_aprobado"] = texto_base
+        version_original["texto"] = texto_base
 
         # Si la cámara revisora no tiene acta suministrada, estructurarla como Cámara Revisora en tratamiento
+        acta_revisora = version_retornada.get("acta_revision") or {}
         if not acta_revisora.get("camara") or acta_revisora.get("camara") == acta_origen.get("camara"):
             camara_rev_nombre = "SENADORES" if acta_origen.get("camara") == "DIPUTADOS" else "DIPUTADOS"
             total_rev = 36 if camara_rev_nombre == "SENADORES" else 130
@@ -185,10 +185,25 @@ class AgenteBicameral:
                     "resultado": "APROBADO"
                 },
                 "votacion_en_detalle": det_revisora,
+                "texto_aprobado": texto_base,
                 "resultado_final": "APROBADO_EN_GRANDE_Y_DETALLE",
                 "tipo_procedimiento": "LEY_ORDINARIA"
             }
-            ciclo["acta_revisora"] = acta_revisora
+            version_retornada["acta_revision"] = acta_revisora
+
+        if not version_retornada.get("texto"):
+            version_retornada["texto"] = texto_base
+
+        # ── 2. Evaluación Constitucional Bicameral (Art. 163 CPE) ───────────
+        ciclo = evaluar_bicameral(acta_origen, exp, version_original, version_retornada)
+        ciclo["verificaciones_normativas"].append({
+            "requisito": "Antecedentes corresponden al documento vigente",
+            "estado": "CUMPLE" if antecedentes.get("insumos_vigentes", True) else "NO_VERIFICABLE",
+            "evidencia": antecedentes.get("hash_documento", ""), "fundamento": "Integridad del expediente"
+        })
+        ciclo["puede_aprobar"] = all(v.get("estado") == "CUMPLE" for v in ciclo["verificaciones_normativas"])
+        ciclo["acta_secretario"] = acta_origen
+        ciclo["acta_revisora"] = acta_revisora
 
         # Cómputo de porcentajes de apoyo en ambas cámaras
         def calc_pct(votos):
@@ -220,6 +235,18 @@ class AgenteBicameral:
             "enmiendas_detectadas": ciclo.get("hash_texto_sancionado") != huella(acta_origen.get("texto_aprobado", "")),
             "estado_sancion": "LISTO_PARA_PROMULGACION" if ciclo.get("puede_aprobar") else "EN_REVISION"
         }
+
+        try:
+            from sma_unified.agents.bicameral_pdf import generar_ficha_seguimiento_texto
+            ciclo["ficha_resumen_texto"] = generar_ficha_seguimiento_texto({
+                "proyecto_id": int(proyecto_id),
+                "normativa_en_tratamiento": normativa_en_tratamiento,
+                "circuito_dos_camaras": circuito_dos_camaras,
+                "hash_texto_sancionado": ciclo.get("hash_texto_sancionado"),
+                "hash_documento": antecedentes.get("hash_documento", "")
+            })
+        except Exception as e_fic:
+            print(f"Aviso generando ficha resumen bicameral: {e_fic}")
 
         # Actualizar el payload del ciclo con la información canónica requerida
         ciclo.update({

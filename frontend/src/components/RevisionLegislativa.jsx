@@ -16,7 +16,8 @@ import {
   ArrowRight,
   HelpCircle,
   Copy,
-  Check
+  Check,
+  Download
 } from 'lucide-react';
 
 const visible = (valor) => (valor == null || valor === '' ? 'No informado' : String(valor));
@@ -293,6 +294,8 @@ export function RevisionBicameralPanel({
   const [mostrarModalDevolucion, setMostrarModalDevolucion] = useState(false);
   const [verTextoDoc, setVerTextoDoc] = useState(false);
   const [copiadoTexto, setCopiadoTexto] = useState(false);
+  const [verFicha, setVerFicha] = useState(false);
+  const [copiadoFicha, setCopiadoFicha] = useState(false);
 
   const decision = ciclo.aprobacion_humana;
   const rolEfectivo = usuario?.rol || 'Senador';
@@ -300,6 +303,20 @@ export function RevisionBicameralPanel({
   const expediente = ciclo.expediente_consolidado || {};
   const normativa = ciclo.normativa_en_tratamiento || {};
   const circuito = ciclo.circuito_dos_camaras || {};
+
+  const handleCopiarFicha = () => {
+    const texto = ciclo.ficha_resumen_texto || '';
+    if (texto) {
+      navigator.clipboard.writeText(texto);
+      setCopiadoFicha(true);
+      setTimeout(() => setCopiadoFicha(false), 3000);
+    }
+  };
+
+  const handleDescargarPdf = () => {
+    const id = ciclo.proyecto_id || 136;
+    window.open(`/api/pipeline/revision_bicameral/${id}/documento_pdf`, '_blank');
+  };
 
   const handleEjecutarDevolucion = () => {
     if (!motivoDevolucion.trim()) return;
@@ -402,6 +419,155 @@ export function RevisionBicameralPanel({
             }}>
               {ciclo.acta_secretario?.texto_documento || ciclo.acta_secretario?.texto_aprobado || ciclo.texto_sancionado || 'Texto íntegro no disponible en el expediente.'}
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── EXPEDIENTE Y DOCUMENTACIÓN OFICIAL DE SANCIÓN BICAMERAL (COPIA Y ARCHIVO) ── */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%)',
+        border: '1.5px solid rgba(56, 189, 248, 0.35)',
+        borderRadius: '10px',
+        padding: '16px 20px',
+        marginBottom: '20px',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <Award size={18} style={{ color: '#38bdf8' }} />
+              <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#ffffff', fontWeight: 700 }}>
+                Certificado Oficial de Sanción Legislativa (Art. 163 CPE)
+              </h3>
+              <span style={{
+                background: ciclo.puede_aprobar ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)',
+                color: ciclo.puede_aprobar ? '#86efac' : '#fde047',
+                border: `1px solid ${ciclo.puede_aprobar ? '#22c55e' : '#eab308'}`,
+                fontSize: '0.72rem',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                fontWeight: 700
+              }}>
+                {ciclo.puede_aprobar ? 'LISTO PARA PROMULGACIÓN' : 'EN TRÁMITE'}
+              </span>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8' }}>
+              Documento formal para copia, seguimiento, archivo legislativo y remisión a la Presidencia del Estado Plurinacional.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={handleCopiarFicha}
+              className="btn-secondary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: copiadoFicha ? 'rgba(34, 197, 94, 0.25)' : 'rgba(30, 41, 59, 0.9)',
+                borderColor: copiadoFicha ? '#22c55e' : 'rgba(56, 189, 248, 0.4)',
+                color: copiadoFicha ? '#86efac' : '#ffffff',
+                padding: '8px 14px',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+              title="Copiar texto oficial formateado para libros de actas o archivo"
+            >
+              {copiadoFicha ? <Check size={15} style={{ color: '#86efac' }} /> : <Copy size={15} />}
+              <span>{copiadoFicha ? '¡Ficha Copiada al Portapapeles!' : 'Copiar Ficha de Seguimiento'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDescargarPdf}
+              className="btn-primary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'linear-gradient(90deg, #0284c7 0%, #0369a1 100%)',
+                padding: '8px 16px',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+              title="Descargar Certificado Oficial en formato PDF con membrete y sello digital"
+            >
+              <Download size={15} />
+              <span>Descargar Certificado Oficial (PDF)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setVerFicha(!verFicha)}
+              className="btn-secondary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: verFicha ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.8)',
+                borderColor: verFicha ? '#38bdf8' : 'rgba(148, 163, 184, 0.3)',
+                color: verFicha ? '#38bdf8' : '#cbd5e1',
+                padding: '8px 14px',
+                fontSize: '0.82rem',
+                cursor: 'pointer'
+              }}
+            >
+              <FileText size={15} />
+              <span>{verFicha ? 'Ocultar Ficha' : 'Ver Ficha de Archivo'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Visor desplegable de la Ficha de Seguimiento */}
+        {verFicha && (
+          <div style={{
+            marginTop: '14px',
+            background: '#020617',
+            border: '1px solid rgba(56, 189, 248, 0.25)',
+            borderRadius: '8px',
+            padding: '14px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 700 }}>
+                TEXTO BASE REGISTRADO PARA ARCHIVO Y REMISIÓN (ART. 163 CPE)
+              </span>
+              <button
+                type="button"
+                onClick={handleCopiarFicha}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#38bdf8',
+                  fontSize: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                <Copy size={13} /> {copiadoFicha ? 'Copiado' : 'Copiar todo'}
+              </button>
+            </div>
+            <pre style={{
+              margin: 0,
+              fontSize: '0.78rem',
+              color: '#e2e8f0',
+              fontFamily: 'Consolas, Monaco, monospace',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              maxHeight: '340px',
+              overflowY: 'auto',
+              lineHeight: 1.45,
+              background: '#090d16',
+              padding: '12px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255, 255, 255, 0.05)'
+            }}>
+              {ciclo.ficha_resumen_texto || 'Cargando ficha oficial de seguimiento...'}
+            </pre>
           </div>
         )}
       </div>

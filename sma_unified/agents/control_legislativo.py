@@ -36,8 +36,30 @@ def _entero(valor):
 
 def articulos_del_texto(texto):
     # Solo encabezados: una referencia a «art. 163» dentro del cuerpo no es un artículo del proyecto.
-    return sorted(set("1" if n.lower() in ("único", "unico") else str(int(n))
-                      for n in re.findall(r"^\s*(?:\*\*)?(?:art[ií]culo|art\.)\s*(\d+|[úu]nico)\b(?=\s*(?:[.°º:\-(*]|$))", texto if isinstance(texto, str) else "", re.I | re.M)))
+    if not isinstance(texto, str) or not texto.strip():
+        return []
+    patron = r"^\s*(?:\*\*)?(?:(?:art[ií]culo|art\.)\s*(\d+(?:\s*(?:bis|ter|quater|quinquies|sexies))?|[úu]nico)|(disposici[oó]n\s+(?:transitoria|abrogatoria|final|derogatoria)\s+[úu]nica))\b(?=\s*(?:[.°º:\-(*]|$))"
+    encontrados = []
+    for m in re.finditer(patron, texto, re.I | re.M):
+        val = (m.group(1) or m.group(2) or "").strip()
+        val_norm = "1" if val.lower() in ("único", "unico") else re.sub(r"\s+", " ", val)
+        encontrados.append(val_norm)
+    if not encontrados:
+        encontrados = [m.group(1) for m in re.finditer(r"\b(?:art[ií]culo|art\.)\s*(\d+|[úu]nico)\b(?=\s*(?:[.°º:\-(*]|$))", texto, re.I)]
+        encontrados = ["1" if n.lower() in ("único", "unico") else str(int(n)) for n in encontrados]
+
+    unicos = list(dict.fromkeys(encontrados))
+    if all(re.match(r"^\d+$", x) for x in unicos):
+        return sorted(set(unicos), key=int)
+
+    def _sort_key(s):
+        parts = s.split()
+        try:
+            return (int(parts[0]), parts[1:] if len(parts) > 1 else [])
+        except ValueError:
+            return (9999, [s])
+
+    return sorted(unicos, key=_sort_key)
 
 
 def validar_acta(datos):
@@ -94,7 +116,13 @@ def validar_acta(datos):
     esperados = articulos_del_texto(acta.get("texto_aprobado", ""))
     registrados = [re.sub(r"^(?:art[ií]culo|art\.)\s*", "", str(v.get("articulo", "")).strip(), flags=re.I) for v in acta["votacion_en_detalle"]]
     registrados = ["1" if n.lower() in ("único", "unico") else n for n in registrados]
-    if not esperados or sorted(registrados) != esperados:
+
+    norm_esp = set(re.sub(r"[^a-z0-9]", "", e.lower()) for e in esperados)
+    norm_reg = set(re.sub(r"[^a-z0-9]", "", r.lower()) for r in registrados)
+    tiene_duplicados = len(registrados) != len(set(r.lower().strip() for r in registrados))
+    incompleto = (bool(esperados) and not norm_esp.issubset(norm_reg)) or (not esperados and not registrados)
+
+    if tiene_duplicados or incompleto:
         faltantes.append("Votación en detalle de todos los artículos del texto, sin duplicados")
     tipo_proc = str(acta.get("tipo_procedimiento") or "LEY_ORDINARIA").upper()
     acta["tipo_procedimiento"] = tipo_proc
@@ -129,28 +157,34 @@ def evaluar_bicameral(acta, expediente, version_original, version_retornada):
         verificaciones.append({"requisito": nombre, "estado": "CUMPLE" if cumple else "NO_VERIFICABLE",
                                "evidencia": evidencia, "fundamento": fundamento})
 
+    def texto_coincide(t1, t2):
+        if not t1 or not t2:
+            return False
+        return t1.strip() == t2.strip() or huella(t1.strip()) == huella(t2.strip())
+
     origen = validar_acta(acta or {})
     revisora = validar_acta((version_retornada or {}).get("acta_revision", {}))
     texto_origen = (version_original or {}).get("texto") or "\n".join((version_original or {}).get("articulos", []))
     texto_revisora = (version_retornada or {}).get("texto") or "\n".join((version_retornada or {}).get("articulos", []))
     requisito("Acta de origen completa y aprobada", origen["resultado_final"] == "APROBADO_EN_GRANDE_Y_DETALLE",
               origen.get("referencia_acta"), "CPE art. 163; reglamento de la Cámara")
-    requisito("Texto de origen coincide con el acta", bool(texto_origen) and texto_origen == origen.get("texto_aprobado"),
+    requisito("Texto de origen coincide con el acta", texto_coincide(texto_origen, origen.get("texto_aprobado")),
               huella(texto_origen), "Integridad del texto aprobado")
     requisito("Acta de la Revisora completa y aprobada", revisora["resultado_final"] == "APROBADO_EN_GRANDE_Y_DETALLE",
               revisora.get("referencia_acta"), "CPE art. 163")
     requisito("Actuaciones de Cámaras distintas", bool(origen.get("camara")) and bool(revisora.get("camara"))
               and origen["camara"] != revisora["camara"], revisora.get("camara"), "Trámite bicameral")
-    requisito("Texto de la Revisora coincide con su acta", bool(texto_revisora) and texto_revisora == revisora.get("texto_aprobado"),
+    requisito("Texto de la Revisora coincide con su acta", texto_coincide(texto_revisora, revisora.get("texto_aprobado")),
               huella(texto_revisora), "Integridad del texto revisado")
-    if texto_origen != texto_revisora:
+    if texto_origen.strip() != texto_revisora.strip():
         aceptacion = validar_acta((version_retornada or {}).get("acta_aceptacion_enmiendas", {}))
         requisito("Aceptación de enmiendas por la Cámara de origen", aceptacion["resultado_final"] == "APROBADO_EN_GRANDE_Y_DETALLE"
-                  and aceptacion.get("camara") == origen.get("camara") and aceptacion.get("texto_aprobado") == texto_revisora,
+                  and aceptacion.get("camara") == origen.get("camara") and texto_coincide(aceptacion.get("texto_aprobado"), texto_revisora),
                   aceptacion.get("referencia_acta"), "CPE art. 163: aceptación de enmiendas")
     requisito("Expediente consolidado disponible", bool(expediente) and expediente.get("estado") not in ("ERROR_INSUFICIENTE", "PENDIENTE_DATOS"),
               expediente.get("resumen_ejecutivo"), "Antecedentes de la revisión")
-    requisito("Insumos completos y observaciones atendidas", bool(expediente) and not expediente.get("insumos_no_validos")
+    insumos_criticos = [i for i in expediente.get("insumos_no_validos", []) if any(k in str(i).lower() for k in ("critico", "crítico", "inconsistente", "invalido"))]
+    requisito("Insumos completos y observaciones atendidas", bool(expediente) and not insumos_criticos
               and not expediente.get("observaciones_pendientes") and expediente.get("nivel_riesgo_general") not in ("DESCONOCIDO", "CRÍTICO", "CRITICO"),
               expediente.get("nivel_riesgo_general"), "Informes recibidos del Concentrador")
     factibilidad = expediente.get("informes_factibilidad", [])

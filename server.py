@@ -694,17 +694,60 @@ def cerrar_sesion_revision(authorization: Optional[str] = Header(default=None)):
 @app.get("/api/pipeline/revision_bicameral/{id_proyecto}")
 def consultar_revision_bicameral(id_proyecto: int, usuario=Depends(usuario_revision)):
     from sma_unified.db.neon_client import get_neon_client
+    from sma_unified.agents.bicameral_pdf import generar_ficha_seguimiento_texto
 
     try:
+        data = get_neon_client().obtener_revision_bicameral(id_proyecto)
+        ciclo = data.get("ciclo_bicameral") or {}
+        if not ciclo.get("ficha_resumen_texto"):
+            try:
+                ciclo["ficha_resumen_texto"] = generar_ficha_seguimiento_texto(ciclo)
+            except Exception:
+                pass
         return {
             "success": True,
-            "data": get_neon_client().obtener_revision_bicameral(id_proyecto),
+            "data": data,
         }
     except ValueError as e:
         raise HTTPException(409, str(e))
     except Exception as e:
         logger.error(f"Error consultando revision bicameral: {e}")
         raise HTTPException(500, "No se pudo consultar la revision bicameral guardada")
+
+
+@app.get("/api/pipeline/revision_bicameral/{id_proyecto}/documento_pdf")
+def descargar_certificado_bicameral_pdf(id_proyecto: int, usuario=Depends(usuario_revision)):
+    from fastapi.responses import Response
+    from sma_unified.db.neon_client import get_neon_client
+    from sma_unified.agents.bicameral_pdf import generar_certificado_sancion_pdf
+
+    try:
+        data = get_neon_client().obtener_revision_bicameral(id_proyecto)
+        ciclo = data.get("ciclo_bicameral") or {}
+        pdf_bytes = generar_certificado_sancion_pdf(ciclo)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=Certificado_Sancion_Bicameral_{id_proyecto}.pdf"}
+        )
+    except Exception as e:
+        logger.error(f"Error generando PDF de sancion bicameral: {e}")
+        raise HTTPException(500, f"No se pudo generar el certificado PDF: {e}")
+
+
+@app.get("/api/pipeline/revision_bicameral/{id_proyecto}/ficha_resumen")
+def consultar_ficha_bicameral(id_proyecto: int, usuario=Depends(usuario_revision)):
+    from sma_unified.db.neon_client import get_neon_client
+    from sma_unified.agents.bicameral_pdf import generar_ficha_seguimiento_texto
+
+    try:
+        data = get_neon_client().obtener_revision_bicameral(id_proyecto)
+        ciclo = data.get("ciclo_bicameral") or {}
+        texto = ciclo.get("ficha_resumen_texto") or generar_ficha_seguimiento_texto(ciclo)
+        return {"success": True, "data": {"ficha_texto": texto}}
+    except Exception as e:
+        logger.error(f"Error obteniendo ficha bicameral: {e}")
+        raise HTTPException(500, f"No se pudo obtener la ficha de seguimiento: {e}")
 
 
 @app.post("/api/pipeline/decision_bicameral")
