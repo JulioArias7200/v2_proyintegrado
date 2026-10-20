@@ -2260,7 +2260,9 @@ async def run_agent_publicacion_endpoint(payload: Dict[str, Any], usuario=Depend
 
         agente = AgentePublicacionOficial()
         resultado = agente.ejecutar(
-            evaluacion_veto=evaluacion_veto, proyecto_info=proyecto_info
+            evaluacion_veto=evaluacion_veto,
+            proyecto_info=proyecto_info,
+            numero_ley_personalizado=payload.get("numero_ley_personalizado"),
         )
 
         if id_proyecto:

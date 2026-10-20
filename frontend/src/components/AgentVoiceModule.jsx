@@ -200,11 +200,17 @@ export function buildTTSText(agentId, resultData) {
       }
       case "publicacion": {
         const pub = resultData.publicacion_oficial || resultData;
-        const num = pub.numero_ley || "Ley Oficial del Estado Plurinacional";
+        const rawNum = pub.numero_ley_str || (pub.numero_ley ? `Ley N° ${pub.numero_ley}` : "Ley Oficial del Estado Plurinacional");
+        const num = String(rawNum).toLowerCase().includes("ley") ? rawNum : `Ley N° ${rawNum}`;
         const bol = pub.boletin_oficial || "Gaceta Oficial del Estado Plurinacional de Bolivia";
-        const tit = pub.titulo || "Ley sancionada";
+        let tit = pub.titulo || "Ley sancionada";
+        // Sanitizar título para locución institucional fluida sin extensiones técnicas de archivo
+        tit = tit.replace(/\.(pdf|docx|txt)$/i, "").trim();
+        if (/^PL-[A-Z0-9-]+$/i.test(tit)) {
+          tit = `Proyecto de Ley ${tit}`;
+        }
         const vig = pub.fecha_vigencia || "desde la fecha de su publicación";
-        return `Gaceta Oficial del Estado Plurinacional de Bolivia. Certificación de publicación de la ${num}. Título oficial: ${tit}. En plena vigencia ${vig}. Norma promulgada de observancia general y cumplimiento obligatorio en todo el territorio nacional.`;
+        return `Gaceta Oficial del Estado Plurinacional de Bolivia. Se certifica la publicación oficial de la ${num}, correspondiente a: ${tit}. En plena vigencia a partir del ${vig}, adquiriendo observancia general y cumplimiento obligatorio en todo el territorio nacional.`;
       }
       default:
         return typeof resultData === "string" ? resultData : JSON.stringify(resultData).substring(0, 200);

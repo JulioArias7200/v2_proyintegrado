@@ -797,7 +797,9 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
   const buildProyectoInfo = () => ({
     id: fase1Data?.id_proyecto || 1,
     id_proyecto: fase1Data?.id_proyecto || 1,
-    titulo: documentName || fase1Data?.nombre_archivo || 'Proyecto de Ley',
+    titulo: (fase1Data?.titulo && !fase1Data.titulo.toLowerCase().endsWith('.pdf') ? fase1Data.titulo : null)
+      || concentradorData?.expediente_consolidado?.titulo
+      || (documentName ? documentName.replace(/\.(pdf|docx|txt)$/i, '') : 'Proyecto de Ley'),
     sesion_id: fase1Data?.sesion_id,
     texto_documento: documentText,
   });
@@ -1049,11 +1051,18 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
     }
   };
 
-  const handleRegistrarDecisionEjecutiva = async (accion, referencia, motivoVeto = '') => {
+  const handleRegistrarDecisionEjecutiva = async (accion, referencia, motivoVeto = '', numeroLeyManual = '') => {
     if (readOnly) return;
     if (isProcessing) return;
     updateActiveSession({ isProcessing: true, errorMessage: '' });
     try {
+      let numPersonalizado = numeroLeyManual?.trim() || '';
+      if (!numPersonalizado && referencia) {
+        const digits = referencia.replace(/\D/g, '');
+        if (digits.length >= 1 && digits.length <= 6) {
+          numPersonalizado = digits;
+        }
+      }
       const res = await api.runAgentVetoPromulgacion({
         proyecto_info: buildProyectoInfo(),
         id_proyecto: fase1Data?.id_proyecto,
@@ -1061,14 +1070,25 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
           ...concentradorData?.expediente_consolidado,
           decision_operador: accion,
           referencia_decision: referencia,
+          numero_ley_personalizado: numPersonalizado,
           pliego_objeciones: motivoVeto ? [{ motivo_objecion: motivoVeto }] : []
         },
       });
       if (!res.success || (res.data?.evaluacion_veto?.decision !== accion && !res.data?.evaluacion_veto?.decision?.includes(accion))) {
         throw new Error('No se pudo registrar la decisión ejecutiva');
       }
-      updateActiveSession({ vetoPromulgacionData: res.data, pipelineStep: 14 });
-      appendLog('Veto_Promulgacion', 'DECISION_REGISTRADA', `${accion}: ${referencia}`);
+      const dataConLey = {
+        ...res.data,
+        numero_ley_personalizado: numPersonalizado,
+        evaluacion_veto: {
+          ...res.data?.evaluacion_veto,
+          decision: accion,
+          referencia_decision: referencia,
+          numero_ley_personalizado: numPersonalizado
+        }
+      };
+      updateActiveSession({ vetoPromulgacionData: dataConLey, pipelineStep: 14 });
+      appendLog('Veto_Promulgacion', 'DECISION_REGISTRADA', `${accion}: ${referencia}${numPersonalizado ? ` | Ley: ${numPersonalizado}` : ''}`);
     } catch (err) {
       updateActiveSession({ errorMessage: err.message });
     } finally {
@@ -1110,10 +1130,17 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
     updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 14, inspectedAgentId: null });
     appendLog('Publicacion', 'EN_PROCESO', 'Registrando publicacion oficial...');
     try {
+      const numPersonalizado =
+        vetoPromulgacionData?.numero_ley_personalizado ||
+        vetoPromulgacionData?.evaluacion_veto?.numero_ley_personalizado ||
+        (vetoPromulgacionData?.evaluacion_veto?.referencia_decision?.replace(/\D/g, '') || null) ||
+        (vetoPromulgacionData?.referencia_decision?.replace(/\D/g, '') || null);
+
       const res = await api.runAgentPublicacion({
         proyecto_info: buildProyectoInfo(),
         evaluacion_veto: vetoPromulgacionData,
         id_proyecto: fase1Data?.id_proyecto,
+        numero_ley_personalizado: numPersonalizado
       });
       if (!res?.success || !res.data?.publicacion_oficial?.numero_ley || res.data.error) {
         throw new Error(res?.data?.publicacion_oficial?.razon || res?.data?.error || res?.error || 'Publicacion incompleta');
@@ -5214,10 +5241,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                         Estado Plurinacional de Bolivia — Proceso Legislativo Concluido
                       </div>
                       <h2 style={{ fontSize: '2.2rem', color: '#ffffff', fontWeight: 900, margin: '8px 0 12px 0' }}>
-                        {pub.numero_ley || 'Ley Sancionada y Promulgada'}
+                        {pub.numero_ley_str || (pub.numero_ley ? (String(pub.numero_ley).toLowerCase().includes('ley') ? pub.numero_ley : `Ley N° ${pub.numero_ley}`) : 'Ley Sancionada y Promulgada')}
                       </h2>
                       <p style={{ color: '#e0e7ff', fontSize: '1.05rem', maxWidth: '750px', margin: '0 auto' }}>
-                        {pub.titulo || 'Proyecto de Ley'}
+                        {String(pub.titulo || 'Proyecto de Ley').replace(/\.(pdf|docx|txt)$/i, '')}
                       </p>
                     </div>
 

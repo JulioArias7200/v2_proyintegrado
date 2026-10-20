@@ -768,6 +768,7 @@ export function DecisionEjecutivaPanel({
   onPublicar
 }) {
   const [referencia, setReferencia] = useState('');
+  const [numeroLeyManual, setNumeroLeyManual] = useState('');
   const [accion, setAccion] = useState('PROMULGAR');
   const [confirmado, setConfirmado] = useState(false);
   const [motivoVeto, setMotivoVeto] = useState('');
@@ -920,7 +921,7 @@ export function DecisionEjecutivaPanel({
             Registro Formal de la Decisión Presidencial (Art. 164 CPE)
           </h4>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: accion === 'PROMULGAR' ? 'repeat(auto-fit, minmax(220px, 1fr))' : 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginBottom: '16px' }}>
             <label>
               Decisión del Presidente del Estado
               <select value={accion} onChange={(e) => setAccion(e.target.value)}>
@@ -931,13 +932,24 @@ export function DecisionEjecutivaPanel({
             </label>
 
             <label>
-              Número de Decreto o Nota de Devolución
+              Número de Decreto de Promulgación
               <input
                 value={referencia}
                 onChange={(e) => setReferencia(e.target.value)}
-                placeholder="Ej. Decreto Supremo N° 5280 o CITE-PRES-089-2026"
+                placeholder="Ej. Decreto Presidencial N° 5280"
               />
             </label>
+
+            {accion === 'PROMULGAR' && (
+              <label>
+                Número de Ley Oficial (Opcional)
+                <input
+                  value={numeroLeyManual}
+                  onChange={(e) => setNumeroLeyManual(e.target.value)}
+                  placeholder="Ej. 1234 o Ley N° 1234 (vacío = correlativo Gaceta)"
+                />
+              </label>
+            )}
           </div>
 
           {accion !== 'PROMULGAR' && (
@@ -976,7 +988,7 @@ export function DecisionEjecutivaPanel({
                 fontWeight: 800
               }}
               disabled={procesando || !confirmado || !referencia.trim() || (accion !== 'PROMULGAR' && !motivoVeto.trim())}
-              onClick={() => onRegistrar(accion, referencia, motivoVeto)}
+              onClick={() => onRegistrar(accion, referencia, motivoVeto, numeroLeyManual)}
             >
               {accion === 'PROMULGAR' ? 'Registrar Promulgación Oficial' : 'Registrar Veto y Devolver a la ALP'}
             </button>

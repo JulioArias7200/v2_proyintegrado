@@ -15,6 +15,7 @@ Reglas anti-alucinación:
 """
 
 import os
+import re
 import hashlib
 import json
 import time
@@ -171,11 +172,11 @@ class AgentePublicacionOficial:
             except Exception:
                 self.agent = None
 
-    def ejecutar(self, evaluacion_veto: Dict, proyecto_info: Dict) -> Dict:
+    def ejecutar(self, evaluacion_veto: Dict, proyecto_info: Dict, **kwargs) -> Dict:
         """
         Pipeline determinista de 5 pasos:
           1. Validar confirmación de promulgación.
-          2. Leer numeración oficial desde Neon.
+          2. Leer numeración oficial desde Neon (o aplicar número explícito del operador).
           3. Calcular fecha de vigencia con regla configurada.
           4. Formatear con plantilla oficial.
           5. Integrar en BD Normativa + MongoDB.
@@ -184,6 +185,19 @@ class AgentePublicacionOficial:
         id_proyecto = int(proyecto_info.get("id") or proyecto_info.get("id_proyecto") or 0)
         titulo = proyecto_info.get("titulo") or proyecto_info.get("titulo_proyecto") or "Ley Plurinacional"
         texto_ley = proyecto_info.get("texto_documento", "")
+
+        # Sanitizar título (remover extensiones de archivo como .pdf o .docx)
+        if isinstance(titulo, str) and titulo.lower().endswith(('.pdf', '.docx', '.txt')):
+            titulo_limpio = (
+                proyecto_info.get("objeto")
+                or proyecto_info.get("titulo_descriptivo")
+                or proyecto_info.get("resumen_ejecutivo")
+                or titulo.rsplit('.', 1)[0]
+            )
+            if titulo_limpio and len(str(titulo_limpio)) < 180 and not str(titulo_limpio).lower().endswith(('.pdf', '.docx')):
+                titulo = str(titulo_limpio)
+            else:
+                titulo = titulo.rsplit('.', 1)[0]
 
         # ── PASO 1: VALIDACIÓN DE INSUMOS ────────────────────────────────────
         valido, razon = _validar_confirmacion_promulgacion(evaluacion_veto, texto_ley)
@@ -205,28 +219,74 @@ class AgentePublicacionOficial:
                 "publicacion_oficial": error_resp
             }
 
-        # ── PASO 2: NUMERACIÓN desde Registro Oficial (Neon / contador) ───────
+        # ── Conexión a Neon y Recuperación de Metadatos Oficiales ────────────
         conn = None
         try:
             conn = get_conn()
-            numero_ley_int = _obtener_siguiente_numero_ley(conn)
-        except Exception as e:
-            logger.warning(f"[Publicacion] Error en Registro de Numeración: {e}")
-            error_resp = {
-                "estado": "ERROR_NUMERACION_NO_DISPONIBLE",
-                "numero_ley": None,
-                "fecha_vigencia": "NO_DISPONIBLE",
-                "hash_texto": "NO_DISPONIBLE",
-                "proyecto_id": str(id_proyecto),
-                "razon": str(e),
-            }
-            return {
-                "estado": "ERROR_NUMERACION_NO_DISPONIBLE",
-                "numero_ley": None,
-                "fecha_vigencia": "NO_DISPONIBLE",
-                "hash_texto": "NO_DISPONIBLE",
-                "publicacion_oficial": error_resp
-            }
+        except Exception as ce:
+            logger.warning(f"[Publicacion] Conexión inicial a Neon falló: {ce}")
+
+        # Si el título actual es un nombre de archivo o código técnico, consultar el título oficial registrado en Neon
+        if id_proyecto and conn:
+            try:
+                cur_t = conn.cursor()
+                cur_t.execute("SELECT titulo, objeto FROM sistema.proyecto_ley WHERE id_proyecto = %s", (id_proyecto,))
+                row_t = cur_t.fetchone()
+                if row_t:
+                    db_tit = row_t[0]
+                    if db_tit and not str(db_tit).lower().endswith(('.pdf', '.docx', '.txt')):
+                        titulo = str(db_tit).strip()
+                    elif row_t[1]:
+                        titulo = str(row_t[1]).strip()
+                cur_t.close()
+            except Exception as e:
+                logger.warning(f"[Publicacion] No se pudo leer título oficial de Neon: {e}")
+
+        # ── PASO 2: NUMERACIÓN (Manual del Operador o Registro Oficial Neon) ──
+        numero_manual_str = (
+            kwargs.get("numero_ley_personalizado")
+            or evaluacion_veto.get("numero_ley_personalizado")
+            or evaluacion_veto.get("evaluacion_veto", {}).get("numero_ley_personalizado")
+            or evaluacion_veto.get("referencia_decision")
+            or evaluacion_veto.get("evaluacion_veto", {}).get("referencia_decision")
+        )
+
+        numero_manual_int = None
+        if numero_manual_str:
+            digits = re.sub(r'[^\d]', '', str(numero_manual_str))
+            if digits:
+                try:
+                    parsed_int = int(digits)
+                    if 0 < parsed_int < 1000000:
+                        numero_manual_int = parsed_int
+                except ValueError:
+                    numero_manual_int = None
+
+        if numero_manual_int is not None:
+            numero_ley_int = numero_manual_int
+            logger.info(f"[Publicacion] Número de ley asignado formalmente por el operador: {numero_ley_int}")
+        else:
+            try:
+                if not conn:
+                    conn = get_conn()
+                numero_ley_int = _obtener_siguiente_numero_ley(conn)
+            except Exception as e:
+                logger.warning(f"[Publicacion] Error en Registro de Numeración: {e}")
+                error_resp = {
+                    "estado": "ERROR_NUMERACION_NO_DISPONIBLE",
+                    "numero_ley": None,
+                    "fecha_vigencia": "NO_DISPONIBLE",
+                    "hash_texto": "NO_DISPONIBLE",
+                    "proyecto_id": str(id_proyecto),
+                    "razon": str(e),
+                }
+                return {
+                    "estado": "ERROR_NUMERACION_NO_DISPONIBLE",
+                    "numero_ley": None,
+                    "fecha_vigencia": "NO_DISPONIBLE",
+                    "hash_texto": "NO_DISPONIBLE",
+                    "publicacion_oficial": error_resp
+                }
 
         # ── PASO 3: VIGENCIA (regla determinista estricta: publicacion + N dias) ─
         fecha_promulgacion = datetime.now().strftime("%Y-%m-%d")
