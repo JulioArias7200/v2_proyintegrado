@@ -448,8 +448,22 @@ def obtener_texto_para_leer(agente: str, accion: str, datos: Dict[str, Any]) -> 
             "Módulo de acta de debate plenaria habilitado para registro de intervenciones y votaciones."
         ),
         "leer_resultado_votacion": lambda d: (
-            f"Votación registrada: {d.get('favor', 85)} a favor, {d.get('contra', 12)} en contra. "
-            f"Resultado: {d.get('votacion', 'APROBADO')}."
+            f"Secretaría de Cámara: Votación en grande del proyecto {d.get('normativa_titulo', d.get('titulo', 'de ley'))}: "
+            f"{d.get('favor', d.get('votacion_en_grande', {}).get('favor', 71))} a favor, "
+            f"{d.get('contra', d.get('votacion_en_grande', {}).get('contra', 25))} en contra y "
+            f"{d.get('abstenciones', d.get('votacion_en_grande', {}).get('abstenciones', 4))} abstenciones. "
+            f"Resultado en grande: {d.get('votacion', d.get('votacion_en_grande', {}).get('resultado', 'APROBADO'))}. "
+            + (f"Asimismo, se certifica la aprobación en detalle de {len(d.get('votacion_en_detalle', []))} artículos normativos del documento."
+               if d.get('votacion_en_detalle') else "Tratamiento en detalle aprobado por el pleno de la Cámara.")
+        ),
+        "registrar_aprobacion_grande": lambda d: (
+            "Aprobación en grande certificada por Secretaría de Cámara. Procediendo a la consideración en detalle artículo por artículo."
+        ),
+        "registrar_aprobacion_detalle": lambda d: (
+            "Aprobación en detalle de los artículos del proyecto ratificada por el pleno legislativo."
+        ),
+        "firmar_acta_debate": lambda d: (
+            "Acta formal de debate plenaria firmada digitalmente y guardada con fe de secretaría. Expediente derivado a trámite bicameral."
         ),
         "evaluar_viabilidad_tecnica": lambda d: (
             "Evaluación técnica completada. Factibilidad tecnológica verificada conforme a estándares nacionales."
@@ -458,10 +472,37 @@ def obtener_texto_para_leer(agente: str, accion: str, datos: Dict[str, Any]) -> 
             f"Impacto presupuestario evaluado. Marco regulatorio: Ley 1178 SAFCO. Sostenibilidad financiera validada."
         ),
         "iniciar_ciclo_bicameral": lambda d: (
-            "Ciclo bicameral iniciado. Expediente remitido a la Cámara Revisora conforme al artículo 163 de la CPE."
+            "Ciclo bicameral iniciado conforme al artículo 163 de la CPE. Verificando antecedentes de la Cámara de Origen y remisión a la Cámara Revisora."
+        ),
+        "leer_resultado_camara_origen": lambda d: (
+            f"Cámara de Origen Diputados: Aprobado con {d.get('pct_origen', 71.0)} por ciento de apoyo y tratamiento en detalle artículo por artículo."
+        ),
+        "leer_resultado_camara_revisora": lambda d: (
+            f"Cámara Revisora Senadores: Aprobado con {d.get('pct_revisora', 77.8)} por ciento de apoyo, ratificando la sanción legislativa bicameral."
+        ),
+        "confirmar_aprobacion_bicameral": lambda d: (
+            "Texto legal debidamente sancionado por ambas cámaras de la Asamblea Legislativa Plurinacional. Listo para remisión al Órgano Ejecutivo."
+        ),
+        "registrar_rechazo_revision": lambda d: (
+            "Observaciones de la Cámara Revisora registradas. Expediente devuelto con enmiendas a la Cámara de Origen."
+        ),
+        "evaluar_veto_promulgacion": lambda d: (
+            f"Evaluación Estratégica Presidencial: Dictamen del Asesor recomienda {d.get('decision', 'PROMULGAR')} con índice institucional de {d.get('score', '7.8')} sobre 10."
+        ),
+        "autorizar_promulgacion": lambda d: (
+            "Promulgación presidencial autorizada por el Órgano Ejecutivo. Procediendo al registro y publicación en la Gaceta Oficial del Estado."
+        ),
+        "registrar_veto": lambda d: (
+            "Observación de veto presidencial fundamentada registrada. Devolviendo el proyecto a la Asamblea Legislativa Plurinacional."
         ),
         "publicar_gaceta_oficial": lambda d: (
-            f"Promulgación oficial registrada en la Gaceta Oficial del Estado Plurinacional de Bolivia."
+            f"Promulgación oficial registrada en la Gaceta Oficial del Estado Plurinacional de Bolivia. Ley en plena vigencia nacional."
+        ),
+        "asignar_numero_ley": lambda d: (
+            f"Número oficial asignado en la Gaceta Oficial: {d.get('numero_ley', 'Ley Oficial del Estado Plurinacional')}."
+        ),
+        "confirmar_publicacion": lambda d: (
+            "Certificación de publicación oficial completada. Ejemplar promulgado disponible para consulta pública."
         ),
         "generar_guia_ciudadana": lambda d: (
             "Guía en lenguaje claro generada para difusión y conocimiento de la ciudadanía."

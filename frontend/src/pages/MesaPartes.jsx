@@ -358,6 +358,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
   // ── Pestañas técnicas para el Agente de Veto y Promulgación ──
   const [vetoActiveTab, setVetoActiveTab] = useState('dictamen');
   const [copiedVetoJson, setCopiedVetoJson] = useState(false);
+  const [copiedDebateText, setCopiedDebateText] = useState(false);
 
   const cargarNormativas = async () => {
     setIsLoadingNormativas(true);
@@ -524,6 +525,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
     gacetaPdfData,
     showTextoConsolidadoModal,
     textoConsolidadoInfo,
+    showDocumentoDebate = false,
     inspectedAgentId,
     // CrewAI extended pipeline
     constitucionFondoData,
@@ -1024,26 +1026,56 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
     }
   };
 
-  const handleRegistrarDecisionEjecutiva = async (accion, referencia) => {
+  const handleDevolverComision = async (motivo) => {
+    if (isProcessing) return;
+    updateActiveSession({ isProcessing: true, errorMessage: '' });
+    try {
+      const idProyecto = fase1Data?.id_proyecto || activeSession?.proyectoId || 1;
+      await api.devolverComision({
+        id_proyecto: idProyecto,
+        motivo: motivo || 'Devuelto por contradicciones detectadas en trámite bicameral',
+        sesion_id: activeSession?.id
+      });
+      appendLog('Bicameral', 'BUCLE_DEVOLUCION_COMISION', motivo);
+      // Regresar visualmente al paso de Comisión / Concentrador (Step 11) con notificación
+      updateActiveSession({
+        pipelineStep: 11,
+        inspectedAgentId: 'concentrador_crew',
+        errorMessage: `↩️ Expediente devuelto formalmente a Comisión: "${motivo.substring(0, 120)}..."`,
+        isProcessing: false
+      });
+    } catch (err) {
+      updateActiveSession({ errorMessage: err.message, isProcessing: false });
+    }
+  };
+
+  const handleRegistrarDecisionEjecutiva = async (accion, referencia, motivoVeto = '') => {
     if (readOnly) return;
     if (isProcessing) return;
     updateActiveSession({ isProcessing: true, errorMessage: '' });
     try {
       const res = await api.runAgentVetoPromulgacion({
-        proyecto_info: buildProyectoInfo(), id_proyecto: fase1Data.id_proyecto,
-        expediente: { ...concentradorData?.expediente_consolidado,
-          decision_operador: accion, referencia_decision: referencia },
+        proyecto_info: buildProyectoInfo(),
+        id_proyecto: fase1Data?.id_proyecto,
+        expediente: {
+          ...concentradorData?.expediente_consolidado,
+          decision_operador: accion,
+          referencia_decision: referencia,
+          pliego_objeciones: motivoVeto ? [{ motivo_objecion: motivoVeto }] : []
+        },
       });
-      if (!res.success || res.data?.evaluacion_veto?.decision !== accion) {
-        throw new Error('No se pudo registrar la decision ejecutiva');
+      if (!res.success || (res.data?.evaluacion_veto?.decision !== accion && !res.data?.evaluacion_veto?.decision?.includes(accion))) {
+        throw new Error('No se pudo registrar la decisión ejecutiva');
       }
       updateActiveSession({ vetoPromulgacionData: res.data, pipelineStep: 14 });
+      appendLog('Veto_Promulgacion', 'DECISION_REGISTRADA', `${accion}: ${referencia}`);
     } catch (err) {
       updateActiveSession({ errorMessage: err.message });
     } finally {
       updateActiveSession({ isProcessing: false });
     }
   };
+
 
   const handleVetoPromulgacion = async () => {
     if (readOnly) return;
@@ -4083,32 +4115,206 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                       </div>
                     </div>
 
-                    {/* Tabla de Votaciones */}
-                    <div style={{ background: 'rgba(15,23,42,0.85)', padding: '18px', borderRadius: '12px', border: '1px solid rgba(0,180,216,0.25)', marginBottom: '20px' }}>
-                      <h4 style={{ color: '#00B4D8', fontSize: '0.95rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        🗳️ Resultados de Votación Nominal
+                    {/* TÍTULO DE LA NORMATIVA EN TRATAMIENTO Y VISOR DEL DOCUMENTO ANALIZADO */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, rgba(30,58,138,0.3) 0%, rgba(15,23,42,0.85) 100%)',
+                      border: '1px solid rgba(56,189,248,0.35)',
+                      padding: '16px 20px',
+                      borderRadius: '12px',
+                      marginBottom: '16px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                        <div style={{ flex: 1, minWidth: '280px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <span style={{ fontSize: '0.72rem', color: '#7dd3fc', fontWeight: 700, letterSpacing: '0.05em' }}>
+                              NORMATIVA EN DEBATE PLENARIO:
+                            </span>
+                            <span style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600 }}>
+                              Expediente: {fase1Data?.numero_expediente || `PL-${fase1Data?.id_proyecto || 136}/2026`}
+                            </span>
+                          </div>
+                          <h4 style={{ margin: '4px 0 8px 0', color: '#ffffff', fontSize: '1.1rem', fontWeight: 700, lineHeight: 1.4 }}>
+                            {acta.normativa_titulo || fase1Data?.nombre_archivo || 'Proyecto de Ley en Plenaria'}
+                          </h4>
+                          <div style={{ display: 'flex', gap: '16px', fontSize: '0.8rem', color: '#94a3b8', flexWrap: 'wrap' }}>
+                            <span>Archivo Base: <strong style={{ color: '#e2e8f0' }}>{fase1Data?.nombre_archivo || 'PL-CS-010-2023-2024.pdf'}</strong></span>
+                            <span>Artículos en Votación: <strong style={{ color: '#86efac' }}>{(acta.votacion_en_detalle || []).length} artículos registrados</strong></span>
+                          </div>
+                        </div>
+
+                        {/* Botones de acción del documento */}
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => updateActiveSession({ showDocumentoDebate: !showDocumentoDebate })}
+                            className="btn-secondary"
+                            style={{
+                              padding: '8px 16px',
+                              fontSize: '0.82rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              background: showDocumentoDebate ? 'rgba(56,189,248,0.25)' : 'rgba(30,41,59,0.85)',
+                              borderColor: showDocumentoDebate ? '#38bdf8' : 'rgba(148,163,184,0.3)',
+                              color: showDocumentoDebate ? '#38bdf8' : '#ffffff',
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <BookOpen size={16} />
+                            <span>{showDocumentoDebate ? 'Ocultar Documento Analizado' : 'Ver Documento Analizado'}</span>
+                          </button>
+
+                          {fase1Data?.archivo_pdf && (
+                            <a
+                              href={`/uploaded_files/${fase1Data.archivo_pdf}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn-secondary"
+                              style={{
+                                padding: '8px 14px',
+                                fontSize: '0.82rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                textDecoration: 'none',
+                                color: '#e2e8f0',
+                                background: 'rgba(30,41,59,0.7)',
+                                border: '1px solid rgba(148,163,184,0.25)',
+                                borderRadius: '8px'
+                              }}
+                              title="Abrir el PDF original en nueva pestaña"
+                            >
+                              <ExternalLink size={15} />
+                              <span>PDF Original</span>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Visor interactivo del texto analizado */}
+                      {showDocumentoDebate && (
+                        <div style={{
+                          marginTop: '16px',
+                          background: 'rgba(15,23,42,0.95)',
+                          border: '1px solid rgba(56,189,248,0.3)',
+                          borderRadius: '10px',
+                          padding: '16px'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <FileText size={18} color="#38bdf8" />
+                              <span style={{ fontSize: '0.82rem', color: '#38bdf8', fontWeight: 700, letterSpacing: '0.04em' }}>
+                                CONTENIDO ÍNTEGRO DEL DOCUMENTO NORMATIVO ANALIZADO:
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const texto = acta.texto_documento || acta.texto_aprobado || documentText || '';
+                                navigator.clipboard.writeText(texto);
+                                setCopiedDebateText(true);
+                                setTimeout(() => setCopiedDebateText(false), 2000);
+                              }}
+                              className="btn-secondary"
+                              style={{ padding: '5px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                            >
+                              {copiedDebateText ? <Check size={14} color="#86efac" /> : <Copy size={14} />}
+                              <span>{copiedDebateText ? '¡Copiado al portapapeles!' : 'Copiar Texto Completo'}</span>
+                            </button>
+                          </div>
+
+                          <div style={{
+                            maxHeight: '450px',
+                            overflowY: 'auto',
+                            background: 'rgba(2,6,23,0.75)',
+                            padding: '16px 18px',
+                            borderRadius: '8px',
+                            fontSize: '0.84rem',
+                            color: '#e2e8f0',
+                            lineHeight: 1.65,
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                            whiteSpace: 'pre-wrap',
+                            border: '1px solid rgba(148,163,184,0.15)'
+                          }}>
+                            {acta.texto_documento || acta.texto_aprobado || documentText || 'No hay texto disponible para este documento.'}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 1. RESULTADOS DEL ANÁLISIS EN GRANDE */}
+                    {acta.votacion_en_grande && (
+                      <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(0,180,216,0.3)', marginBottom: '16px' }}>
+                        <h4 style={{ color: '#00B4D8', fontSize: '0.95rem', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          🟦 Resultados del análisis en grande (Votación General)
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                          <div style={{ background: 'rgba(30,41,59,0.7)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>A Favor</span>
+                            <div style={{ color: '#8AC926', fontSize: '1.25rem', fontWeight: 800 }}>{acta.votacion_en_grande.favor ?? 0}</div>
+                          </div>
+                          <div style={{ background: 'rgba(30,41,59,0.7)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>En Contra</span>
+                            <div style={{ color: '#f87171', fontSize: '1.25rem', fontWeight: 800 }}>{acta.votacion_en_grande.contra ?? 0}</div>
+                          </div>
+                          <div style={{ background: 'rgba(30,41,59,0.7)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Abstenciones</span>
+                            <div style={{ color: '#F4A261', fontSize: '1.25rem', fontWeight: 800 }}>{acta.votacion_en_grande.abstenciones ?? 0}</div>
+                          </div>
+                          <div style={{ background: 'rgba(30,41,59,0.7)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Resultado</span>
+                            <div style={{ color: acta.votacion_en_grande.resultado === 'APROBADO' ? '#8AC926' : '#f87171', fontSize: '1rem', fontWeight: 800 }}>
+                              {acta.votacion_en_grande.resultado || 'APROBADO'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2. RESULTADOS DEL ANÁLISIS EN DETALLE */}
+                    <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(134,239,172,0.25)', marginBottom: '16px' }}>
+                      <h4 style={{ color: '#86efac', fontSize: '0.95rem', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        🟩 Resultados del análisis en detalle (artículo por artículo)
                       </h4>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
-                        {votaciones.map((v, idx) => (
+                        {(acta.votacion_en_detalle && acta.votacion_en_detalle.length > 0 ? acta.votacion_en_detalle : votaciones).map((v, idx) => (
                           <div key={idx} style={{
                             background: 'rgba(30,41,59,0.7)',
-                            padding: '14px',
+                            padding: '12px 14px',
                             borderRadius: '10px',
                             border: '1px solid rgba(148,163,184,0.2)'
                           }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                              <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.9rem' }}>{v.articulo}</span>
-                              <span className="badge badge-green">{v.votacion}</span>
+                              <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.9rem' }}>
+                                {v.etiqueta || (v.articulo ? (String(v.articulo).toLowerCase().startsWith('disposicion') ? v.articulo : `Art. ${v.articulo}`) : `Art. ${idx + 1}`)}
+                              </span>
+                              <span className="badge badge-green">{v.resultado || v.votacion || 'APROBADO'}</span>
                             </div>
+                            {v.epigrafe && !(v.etiqueta && v.etiqueta.includes(v.epigrafe)) && (
+                              <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '6px' }}>
+                                {v.epigrafe}
+                              </div>
+                            )}
                             <div style={{ display: 'flex', gap: '12px', fontSize: '0.82rem', color: '#cbd5e1' }}>
-                              <span>A favor: <strong style={{ color: '#8AC926' }}>{v.favor}</strong></span>
-                              <span>En contra: <strong style={{ color: '#f87171' }}>{v.contra}</strong></span>
-                              <span>Abstención: <strong style={{ color: '#F4A261' }}>{v.abstenciones}</strong></span>
+                              <span>A favor: <strong style={{ color: '#8AC926' }}>{v.favor ?? 0}</strong></span>
+                              <span>En contra: <strong style={{ color: '#f87171' }}>{v.contra ?? 0}</strong></span>
+                              <span>Abstención: <strong style={{ color: '#F4A261' }}>{v.abstenciones ?? 0}</strong></span>
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
+
+                    {/* ANTECEDENTES DE COMISIÓN CONSOLIDADOS */}
+                    {acta.antecedentes_comision_consolidados && (
+                      <div style={{ background: 'rgba(15,23,42,0.7)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(56,189,248,0.2)', marginBottom: '16px', fontSize: '0.82rem', color: '#cbd5e1' }}>
+                        <span style={{ color: '#7dd3fc', fontWeight: 700 }}>Antecedentes Consolidados de Comisión:</span>{' '}
+                        Comisión de origen: <strong>{acta.antecedentes_comision_consolidados.comision_origen || 'Comisión Ordinaria'}</strong>.
+                        Se integraron las observaciones técnicas y constitucionales previas para la versión final remitida al Pleno.
+                      </div>
+                    )}
+
 
                     {/* Acuerdos */}
                     {acta.acuerdos && acta.acuerdos.length > 0 && (
@@ -4151,6 +4357,18 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                         />)}
 
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={handleSecretario}
+                        disabled={isProcessing}
+                        className="btn-secondary"
+                        style={{ fontSize: '0.95rem', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                        title="Re-ejecutar Secretario para recargar todos los artículos extraídos del documento"
+                      >
+                        <RotateCcw size={18} />
+                        <span>Re-procesar Acta con Artículos Reales</span>
+                      </button>
 
                       <button
                         onClick={handleBicameral}
@@ -4204,6 +4422,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                 onDecision={handleResolverBicameral}
                 onActualizar={handleActualizarBicameral}
                 onContinuar={handleVetoPromulgacion}
+                onDevolverComision={handleDevolverComision}
                 onCorregir={() => updateActiveSession({ pipelineStep: 11, inspectedAgentId: null })}
               />
               {bicameralData.ciclo_bicameral?.aprobacion_humana?.accion === 'APROBAR' && (

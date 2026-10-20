@@ -193,7 +193,11 @@ export const api = {
   runAgentBicameral: (data) =>
     request('/pipeline/agent_bicameral', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
+  devolverComision: (data) =>
+    request('/pipeline/devolver_comision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
   runAgentVetoPromulgacion: (data) =>
+
     request('/pipeline/agent_veto_promulgacion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
   runAgentPublicacion: (data) =>
