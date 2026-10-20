@@ -2,7 +2,8 @@
  * Cliente de API REST para SMA Congreso (FastAPI Backend)
  */
 
-const API_BASE_URL = 'http://127.0.0.1:8085/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+export const BACKEND_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -33,7 +34,9 @@ async function request(endpoint, options = {}) {
         errorDetail = Array.isArray(errorJson.detail)
           ? errorJson.detail.map(d => d.msg).join('; ')
           : errorJson.detail || errorDetail;
-      } catch (e) {}
+      } catch (e) {
+        if ([500, 502, 503, 504].includes(response.status)) errorDetail = 'No se pudo conectar con el backend. Compruebe que está iniciado en el puerto 8085 (VITE_BACKEND_TARGET).';
+      }
       throw new Error(errorDetail);
     }
 
@@ -102,6 +105,23 @@ export async function confirmarChatAccion(sesionId) {
 }
 
 export const api = {
+  reanudarCasoCiudadano: (id) => request(`/ciudadana/presentaciones/${encodeURIComponent(id)}/reanudar`, { method: 'POST' }),
+  getCasosCompartidos: async () => {
+    const data = [];
+    let offset = 0;
+    do {
+      const res = await request(`/casos?offset=${offset}&limit=50`);
+      data.push(...res.data);
+      offset = res.next_offset;
+    } while (offset != null);
+    return { success: true, data };
+  },
+  guardarCasoCompartido: (id, snapshot, version) => request(`/casos/${encodeURIComponent(id)}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ snapshot, version }),
+  }),
+  presentarCasoCiudadano: (data) => request('/ciudadana/presentaciones', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+  }),
   getSession: () => request('/auth/session'),
   logout: () => request('/auth/logout', { method: 'POST' }),
   getRevisionBicameral: (id) => request(`/pipeline/revision_bicameral/${id}`),

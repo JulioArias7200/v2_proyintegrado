@@ -10,6 +10,7 @@ Orquesta el flujo de procesamiento de documentos en 2 fases con punto de control
 
 import uuid
 import time
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 try:

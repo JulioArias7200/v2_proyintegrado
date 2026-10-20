@@ -1241,21 +1241,27 @@ def ejecutar_concentrador_emisor_notificador(
     """
     insumos = []
     if datos_constitucionales:
+        pendiente_cpe = bool(datos_constitucionales.get("error") or datos_constitucionales.get("estado") == "PENDIENTE_REVISION")
         insumos.append({
             "agente_origen": "Agente_Verificador_Constitucional",
             "hallazgos": datos_constitucionales.get("contradicciones", []) or datos_constitucionales.get("hallazgos", []),
-            "confianza": datos_constitucionales.get("confianza", 0.95),
-            "nivel_confianza": datos_constitucionales.get("confianza", 0.95),
-            "valido": datos_constitucionales.get("valido", True),
+            "confianza": 0 if pendiente_cpe else datos_constitucionales.get("confianza", 0.95),
+            "nivel_confianza": 0 if pendiente_cpe else datos_constitucionales.get("confianza", 0.95),
+            "valido": False if pendiente_cpe else datos_constitucionales.get("valido", True),
+            "estado": "PENDIENTE_REVISION" if pendiente_cpe else "COMPLETADO",
+            "pendientes_revision": datos_constitucionales.get("pendientes_revision", []),
             "resumen": datos_constitucionales.get("resumen", ""),
         })
 
     if datos_consistencia:
+        pendiente_normas = bool(datos_consistencia.get("error") or datos_consistencia.get("estado") == "PENDIENTE_REVISION")
         insumos.append({
             "agente_origen": "Agente_Consistencia_Normativa",
             "hallazgos": datos_consistencia.get("hallazgos", []),
-            "confianza": 0.90,
-            "nivel_confianza": 0.90,
+            "confianza": 0 if pendiente_normas else 0.90,
+            "nivel_confianza": 0 if pendiente_normas else 0.90,
+            "estado": "PENDIENTE_REVISION" if pendiente_normas else "COMPLETADO",
+            "pendientes_revision": datos_consistencia.get("pendientes_revision", []),
             "nivel_riesgo_global": datos_consistencia.get("nivel_riesgo_global", "OK"),
             "resumen": f"Total hallazgos: {datos_consistencia.get('total_hallazgos', 0)}",
         })

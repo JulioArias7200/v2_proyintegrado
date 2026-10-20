@@ -18,6 +18,7 @@ function handler(name, context) {
   const start = source.indexOf(`  const ${name} = async `);
   const end = source.indexOf('\n  };', start) + 5;
   const fn = source.slice(start, end).trim();
+  context = { readOnly: false, ...context };
   return Function(...Object.keys(context), `${fn}; return ${name};`)(...Object.values(context));
 }
 for (const scenario of ['missing', 'pending', 'failure', 'success']) {

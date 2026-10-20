@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Literal
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query, Body, Header, Depends
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query, Body, Header, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -417,15 +417,11 @@ def usuario_revision(authorization: Optional[str] = Header(default=None)):
             (usuario_id,))
         if usuarios:
             return usuarios[0]
-    except Exception:
-        pass
-    return {
-        "usuario_id": usuario_id,
-        "nombre_completo": "Revisor Legislativo",
-        "correo_electronico": "revisor@congreso.gob.bo",
-        "rol": "Senador",
-        "activo": True
-    }
+    except Exception as e:
+        logger.error(f"No se pudo validar el usuario de la sesion: {e}")
+        raise HTTPException(503, "No se pudo validar la sesión en la base de datos")
+    raise HTTPException(401, "Usuario inactivo o no encontrado. Inicie sesión nuevamente")
+
 
 
 class DecisionBicameralRequest(BaseModel):
@@ -435,6 +431,178 @@ class DecisionBicameralRequest(BaseModel):
     accion: Literal["APROBAR", "MANDAR_A_REVISION"]
     motivo: str = Field(default="", max_length=5000)
     confirmacion_exigencias: bool = False
+
+
+def legislador_revision(usuario=Depends(usuario_revision)):
+    if usuario.get("rol") not in {"Senador", "Diputado"}:
+        raise HTTPException(403, "Solo un Diputado o Senador puede continuar después del Concentrador")
+    return usuario
+
+
+class CasoCompartidoRequest(BaseModel):
+    snapshot: Dict[str, Any]
+    version: int = Field(default=0, ge=0)
+
+
+class PresentacionCiudadanaRequest(BaseModel):
+    titulo: str = Field(min_length=3, max_length=200)
+    texto: str = Field(min_length=10, max_length=300000)
+    tipo: Literal["consulta", "iniciativa"]
+    camara_destino: Literal["Diputados", "Senadores", "Ambas"]
+    nombre_archivo: Optional[str] = None
+
+
+@app.get("/api/casos")
+def listar_casos_compartidos(offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
+                            usuario=Depends(usuario_revision)):
+    from sma_unified.db.casos_compartidos import coleccion, publico
+    docs = list(coleccion().find({}).sort("actualizado", -1).skip(offset).limit(limit + 1))
+    return {"success": True, "data": [publico(d) for d in docs[:limit]],
+            "next_offset": offset + limit if len(docs) > limit else None}
+
+
+@app.put("/api/casos/{caso_id}")
+def guardar_caso_compartido(caso_id: str, req: CasoCompartidoRequest, usuario=Depends(usuario_revision)):
+    from sma_unified.db.casos_compartidos import guardar
+    try:
+        return {"success": True, "data": guardar(caso_id, req.snapshot, req.version, usuario)}
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+def _procesar_caso_ciudadano(caso_id, req, usuario, reanudar=False):
+    from sma_unified.db.casos_compartidos import coleccion
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    col = coleccion()
+    snapshot = col.find_one({"_id": caso_id})["snapshot"]
+    avisos = []
+
+    def progreso(estado, **patch):
+        snapshot.update(patch)
+        logger.info(f"[Caso {caso_id}] {estado} | activos={snapshot.get('agentesEnProceso', [])}")
+        snapshot.setdefault("pipelineLog", []).append({"etapa": estado, "estado": "EN_PROCESO" if snapshot.get("agentesEnProceso") else "COMPLETADO",
+            "msg": estado.replace("_", " "), "ts": datetime.now(timezone.utc).isoformat()})
+        col.update_one({"_id": caso_id}, {"$set": {"snapshot": snapshot.copy(), "estado": estado,
+            "actualizado": datetime.now(timezone.utc).isoformat()}, "$inc": {"version": 1}})
+
+    try:
+        fase = snapshot.get("fase1Data") if reanudar else None
+        if not fase or not all(fase.get(k) for k in ("sesion_id", "task_id_inicial", "task_id_distribuidor")):
+            fase = run_phase1_classification(Phase1Request(texto=req.texto, nombre_archivo=req.nombre_archivo or req.titulo,
+                tipo_entrada="Iniciativa ciudadana" if req.tipo == "iniciativa" else "Consulta ciudadana",
+                metadata_extra={"autor_usuario_id": usuario["usuario_id"], "camara_destino": req.camara_destino,
+                                "email_autor": usuario.get("correo_electronico"), "nombre_autor": usuario.get("nombre_completo")}))["data"]
+        fase["id_proyecto"] = _resolve_id_proyecto(fase["sesion_id"], fase.get("id_proyecto"), req.texto, req.titulo)
+        if not fase["id_proyecto"]:
+            raise ValueError("No se pudo registrar el expediente en PostgreSQL")
+        progreso("DISTRIBUIDOR_COMPLETADO", fase1Data=fase, pipelineStep=2, agentesEnProceso=[])
+        es_iniciativa = req.tipo == "iniciativa" or fase.get("categoria") == "AGENTE_REGISTRO_LEGISLATIVO"
+        logger.info(f"[Caso ciudadano {caso_id}] Tipo declarado: {req.tipo}; clasificación: {fase.get('categoria')}; ruta: {'legislativa completa' if es_iniciativa else 'consulta ciudadana'}")
+        if es_iniciativa:
+            categoria = "AGENTE_REGISTRO_LEGISLATIVO"
+            progreso("RUTA_LEGISLATIVA", tipoProcesamiento="iniciativa", selectedCategory=categoria)
+            payload = Phase2Request(sesion_id=fase["sesion_id"], task_id_inicial=fase["task_id_inicial"],
+                task_id_distribuidor=fase["task_id_distribuidor"], categoria=categoria,
+                agente_destino_nombre="Agente_Comision_Legislativa", texto_documento=req.texto,
+                nombre_archivo=req.nombre_archivo or req.titulo, id_proyecto=fase["id_proyecto"])
+            progreso("COMISION_EN_PROCESO", pipelineStep=3, agentesEnProceso=["comision"])
+            comision = run_agent_comision(payload)["data"]
+            progreso("AUDITORIAS_EN_PROCESO", comisionData=comision, selectedCategory=categoria, pipelineStep=4, agentesEnProceso=["constitucional", "consistencia"])
+
+            def auditar(agente_id, ejecutar):
+                logger.info(f"[Caso {caso_id}] INICIO agente={agente_id} proyecto={fase['id_proyecto']}")
+                inicio = time.monotonic()
+                try:
+                    resultado = ejecutar(payload)
+                    data = resultado.get("data") if isinstance(resultado, dict) else None
+                    if not isinstance(data, dict):
+                        raise ValueError(f"{agente_id}: el agente no devolvió un resultado estructurado")
+                    logger.info(f"[Caso {caso_id}] FIN agente={agente_id} estado={data.get('estado', 'COMPLETADO')} duracion={time.monotonic() - inicio:.1f}s")
+                    return resultado
+                except Exception as e:
+                    logger.error(f"[Caso {caso_id}] ERROR agente={agente_id}: {getattr(e, 'detail', e)}")
+                    raise
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                cpe_future = pool.submit(auditar, "constitucional", run_agent_constitucional)
+                normas_future = pool.submit(auditar, "consistencia", run_agent_consistencia)
+                pendientes = {cpe_future: ("constitucional", "dictamenData"), normas_future: ("consistencia", "consistenciaData")}
+                resultados = {}
+                activos = ["constitucional", "consistencia"]
+                for futuro in as_completed(pendientes):
+                    agente_id, campo = pendientes[futuro]
+                    try:
+                        resultados[campo] = futuro.result()["data"]
+                    except Exception as e:
+                        resultados[campo] = {"estado": "PENDIENTE_REVISION", "error": str(getattr(e, "detail", e)),
+                            "confianza": 0, "pendientes_revision": [{"motivo": str(getattr(e, "detail", e))}]}
+                    activos.remove(agente_id)
+                    progreso("AUDITORIAS_EN_PROCESO", **{campo: resultados[campo], "agentesEnProceso": activos.copy()})
+                cpe, normas = resultados["dictamenData"], resultados["consistenciaData"]
+            progreso("AUDITORIAS_REVISADAS", dictamenData=cpe, consistenciaData=normas)
+            if any(d.get("error") or d.get("estado") == "PENDIENTE_REVISION" for d in (cpe, normas)):
+                avisos.append("Hay cotejos incompletos. Se concentran como pendientes, sin considerarlos conclusiones verificadas.")
+                progreso("AUDITORIAS_CON_PENDIENTES", avisos=avisos)
+        else:
+            comision = {"comision_principal": "Atención Ciudadana", "resumen": req.texto[:2000],
+                        "camara_destino": req.camara_destino}
+            cpe, normas = {}, {}
+            progreso("CONSULTA_CLASIFICADA", comisionData=comision, selectedCategory=fase.get("categoria", "AGENTE_ATENCION_CIUDADANA"))
+        progreso("CONCENTRADOR_EN_PROCESO", pipelineStep=6, agentesEnProceso=["concentrador"])
+        resultado = run_agent_concentrador(ConcentradorRequest(sesion_id=fase["sesion_id"],
+            id_proyecto=fase["id_proyecto"], datos_constitucionales=cpe, datos_consistencia=normas,
+            datos_comision=comision, texto_proyecto=req.texto, titulo_proyecto=req.titulo, notificar=False))["data"]
+        if resultado.get("error"):
+            raise ValueError(str(resultado["error"]))
+        if str(resultado.get("expediente_consolidado", {}).get("estado", "")).startswith("ERROR"):
+            avisos.append(resultado["expediente_consolidado"].get("resumen_ejecutivo") or "El Concentrador recibió insumos incompletos")
+        if avisos:
+            resultado["evaluacion_incompleta"] = True
+            resultado["avisos"] = avisos
+        progreso("PENDIENTE_SEGUIMIENTO_LEGISLADOR_CON_OBSERVACIONES" if avisos else "PENDIENTE_SEGUIMIENTO_LEGISLADOR", concentradorData=resultado,
+            pdfResult=resultado.get("pdf"), pipelineStep=11, agentesEnProceso=[])
+    except Exception as e:
+        logger.error(f"Caso ciudadano {caso_id}: {e}")
+        progreso("REQUIERE_REVISION", agentesEnProceso=[], errorMessage=str(getattr(e, "detail", e)))
+    finally:
+        col.update_one({"_id": caso_id}, {"$set": {"processing": False}, "$inc": {"version": 1}})
+
+
+@app.post("/api/ciudadana/presentaciones", status_code=202)
+def presentar_caso_ciudadano(req: PresentacionCiudadanaRequest, tareas: BackgroundTasks, usuario=Depends(usuario_revision)):
+    from sma_unified.db.casos_compartidos import coleccion, publico
+    caso_id = str(uuid.uuid4())
+    doc = {"_id": caso_id, "version": 1, "processing": True, "estado": "RECIBIDO",
+        "autor_id": usuario["usuario_id"], "autor_nombre": usuario.get("nombre_completo"),
+        "camara_destino": req.camara_destino, "actualizado": datetime.now(timezone.utc).isoformat(),
+        "snapshot": {"id": caso_id, "title": req.titulo, "documentName": req.nombre_archivo or req.titulo,
+            "documentText": req.texto, "inputMode": "text", "pipelineStep": 1, "pipelineLog": [], "agentesEnProceso": ["distribuidor"],
+            "tipoPresentacion": req.tipo, "camaraDestino": req.camara_destino,
+            "nombreAutor": usuario.get("nombre_completo", ""), "emailAutor": usuario.get("correo_electronico", "")}}
+    coleccion().insert_one(doc)
+    tareas.add_task(_procesar_caso_ciudadano, caso_id, req, usuario)
+    return {"success": True, "data": publico(doc)}
+
+
+@app.post("/api/ciudadana/presentaciones/{caso_id}/reanudar", status_code=202)
+def reanudar_caso_ciudadano(caso_id: str, tareas: BackgroundTasks, usuario=Depends(usuario_revision)):
+    from sma_unified.db.casos_compartidos import preparar_reanudacion, publico
+    try:
+        doc = preparar_reanudacion(caso_id, usuario)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    snapshot = doc["snapshot"]
+    titulo = str(snapshot.get("title") or snapshot.get("documentName") or "Iniciativa ciudadana").strip()
+    camara = doc.get("camara_destino")
+    req = PresentacionCiudadanaRequest(titulo=titulo[:200] if len(titulo) >= 3 else "Iniciativa ciudadana",
+        texto=snapshot["documentText"], tipo="iniciativa", camara_destino=camara if camara in {"Diputados", "Senadores", "Ambas"} else "Ambas",
+        nombre_archivo=snapshot.get("documentName"))
+    tareas.add_task(_procesar_caso_ciudadano, caso_id, req, usuario, True)
+    return {"success": True, "data": publico(doc)}
 
 
 # ── Endpoints de Autenticación (Usuarios_Sistema) ─────────────────────────────
@@ -476,7 +644,7 @@ def consultar_revision_bicameral(id_proyecto: int, usuario=Depends(usuario_revis
 
 
 @app.post("/api/pipeline/decision_bicameral")
-def decidir_bicameral(req: DecisionBicameralRequest, usuario=Depends(usuario_revision)):
+def decidir_bicameral(req: DecisionBicameralRequest, usuario=Depends(legislador_revision)):
     from sma_unified.db.neon_client import get_neon_client
     if req.accion == "APROBAR" and not req.confirmacion_exigencias:
         raise HTTPException(400, "Confirmar la revisión de autenticidad, factibilidad y exigencias normativas aplicables")
@@ -1520,7 +1688,7 @@ async def run_agent_concentrador_endpoint(payload: Dict[str, Any]):
 
 
 @app.post("/api/pipeline/agent_secretario")
-async def run_agent_secretario_endpoint(payload: Dict[str, Any]):
+async def run_agent_secretario_endpoint(payload: Dict[str, Any], usuario=Depends(legislador_revision)):
     """
     Etapa 5: Agente Secretario de Cámara
     Registro de actas de debate parlamentario y votaciones.
@@ -1559,7 +1727,7 @@ async def run_agent_secretario_endpoint(payload: Dict[str, Any]):
 
 
 @app.post("/api/pipeline/agent_bicameral")
-async def run_agent_bicameral_endpoint(payload: Dict[str, Any]):
+async def run_agent_bicameral_endpoint(payload: Dict[str, Any], usuario=Depends(legislador_revision)):
     """
     Etapa 6: Agente Comunicación Bicameral
     Coordinación y reconciliación entre Cámara de Origen y Revisora.
@@ -1632,7 +1800,7 @@ def confirmar_aprobacion_bicameral_endpoint(req: ConfirmarAprobacionBicameralReq
 
 @app.post("/api/pipeline/agent_veto_promulgacion")
 async def run_agent_veto_promulgacion_endpoint(
-    payload: Dict[str, Any], authorization: Optional[str] = Header(default=None)
+    payload: Dict[str, Any], authorization: Optional[str] = Header(default=None), usuario=Depends(legislador_revision)
 ):
     """
     Etapa 7: Agente Veto y Promulgación
@@ -1678,7 +1846,7 @@ async def run_agent_veto_promulgacion_endpoint(
 
 
 @app.post("/api/pipeline/agent_publicacion")
-async def run_agent_publicacion_endpoint(payload: Dict[str, Any]):
+async def run_agent_publicacion_endpoint(payload: Dict[str, Any], usuario=Depends(legislador_revision)):
     """
     Etapa 8: Agente Publicación Oficial
     Asignación de número de ley y registro en Boletín Oficial.
@@ -1717,7 +1885,7 @@ async def run_agent_publicacion_endpoint(payload: Dict[str, Any]):
 
 
 @app.post("/api/pipeline/pipeline_completo")
-async def run_pipeline_completo_endpoint(payload: Dict[str, Any]):
+async def run_pipeline_completo_endpoint(payload: Dict[str, Any], usuario=Depends(legislador_revision)):
     """
     Ejecución del pipeline completo CrewAI de extremo a extremo (Etapas 3 a 8).
     """
@@ -3310,6 +3478,6 @@ def api_drive_subir_ley(id_proyecto: int):
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 8085))
     print(f"🚀 Iniciando Servidor FastAPI SMA Congreso en http://localhost:{port}")
     uvicorn.run("server:app", host="0.0.0.0", port=port, reload=True)

@@ -41,7 +41,11 @@ import {
   Copy,
   Info,
 } from 'lucide-react';
-import { api } from '../services/api';
+import { api as apiClient, BACKEND_BASE_URL } from '../services/api';
+import { apiSoloLectura } from '../services/apiSoloLectura';
+import AuditResultsNav from '../components/AuditResultsNav';
+import CaseProcessingStatus from '../components/CaseProcessingStatus';
+import { useCasosCompartidos } from '../hooks/useCasosCompartidos';
 import { RevisionBicameralPanel, DecisionEjecutivaPanel } from '../components/RevisionLegislativa';
 import HorizontalAgentFlow, { AGENTS_DEFINITION } from '../components/HorizontalAgentFlow';
 import LateralAgentHero from '../components/LateralAgentHero';
@@ -304,15 +308,20 @@ function CardArticuloAFavor({ art, idx }) {
   );
 }
 
-export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
+export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnly = false, initialCaseId = null }) {
+  const api = readOnly ? apiSoloLectura(apiClient) : apiClient;
+  const resultsRef = useRef(null);
+  const [reanudandoCaso, setReanudandoCaso] = useState(false);
+  const [errorReanudacion, setErrorReanudacion] = useState('');
   // ── Multi-Session State Initialization ──
   const [sessions, setSessions] = useState(() => {
+    if (readOnly) return [];
     try {
       const saved = localStorage.getItem(STORAGE_SESSIONS_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map(s => ({ ...s, isProcessing: false }));
         }
       }
     } catch (err) {
@@ -322,6 +331,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   });
 
   const [activeSessionId, setActiveSessionId] = useState(() => {
+    if (readOnly) return initialCaseId || "";
     try {
       const savedId = localStorage.getItem(STORAGE_ACTIVE_KEY);
       if (savedId) return savedId;
@@ -368,6 +378,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   }, []);
 
   const handleSubirNormativa = async (e) => {
+    if (readOnly) return;
     e.preventDefault();
     if (!normativaNombre.trim()) {
       alert('Por favor ingrese el nombre oficial de la normativa');
@@ -419,9 +430,25 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // Active Session helper
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0] || createDefaultSession(1);
+  const shared = useCasosCompartidos(sessions, setSessions, s => ({ ...createDefaultSession(), ...s, createdAt: s.createdAt || s.updatedAt }), readOnly);
+  const reanudarAuditorias = async () => {
+    if (reanudandoCaso) return;
+    setReanudandoCaso(true); setErrorReanudacion('');
+    try {
+      // Acción explícita del autor; el servidor comprueba propiedad, rol y versión.
+      await apiClient.reanudarCasoCiudadano(activeSession.id);
+      await shared.refresh();
+    } catch (err) { setErrorReanudacion(err.message); }
+    finally { setReanudandoCaso(false); }
+  };
+
+  useEffect(() => {
+    if (readOnly && initialCaseId) setActiveSessionId(initialCaseId);
+  }, [readOnly, initialCaseId]);
 
   // Save to localStorage on change
   useEffect(() => {
+    if (readOnly) return;
     try {
       // Don't store large files in localStorage; just metadata and text
       localStorage.setItem(STORAGE_SESSIONS_KEY, JSON.stringify(sessions));
@@ -429,10 +456,14 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     } catch (err) {
       console.warn('Error saving sessions to localStorage:', err);
     }
-  }, [sessions, activeSessionId]);
+  }, [sessions, activeSessionId, readOnly]);
 
   // Update current session helper
   const updateActiveSession = (patch) => {
+    if (readOnly) {
+      const vistas = new Set(['inspectedAgentId', 'showEmailPreview', 'showTextoConsolidadoModal', 'textoConsolidadoInfo']);
+      patch = Object.fromEntries(Object.entries(patch).filter(([key]) => vistas.has(key)));
+    }
     setSessions(prev => prev.map(s => {
       if (s.id === activeSession.id) {
         return { ...s, ...patch };
@@ -443,6 +474,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // Add new session tab
   const handleAddSession = () => {
+    if (readOnly) return;
     const newSession = createDefaultSession(sessions.length + 1);
     setSessions(prev => [...prev, newSession]);
     setActiveSessionId(newSession.id);
@@ -450,6 +482,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // Remove session tab
   const handleRemoveSession = (e, sessionId) => {
+    if (readOnly) return;
     e.stopPropagation();
     if (sessions.length <= 1) {
       // Reset the only remaining session instead of deleting
@@ -511,6 +544,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // Manejar Carga de Archivo
   const handleFileUpload = async (e) => {
+    if (readOnly) return;
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
@@ -551,6 +585,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // Iniciar Fase 1: Agente Distribuidor
   const handleIniciarFase1 = async () => {
+    if (readOnly) return;
     if (!documentText.trim()) {
       updateActiveSession({ errorMessage: 'Por favor ingrese texto o suba un archivo.' });
       return;
@@ -614,6 +649,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   });
 
   const handleEjecutarComision = async () => {
+    if (readOnly) return;
     if (!fase1Data) return;
     updateActiveSession({
       isProcessing: true,
@@ -643,6 +679,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleEjecutarConstitucional = async () => {
+    if (readOnly) return;
     updateActiveSession({
       isProcessing: true,
       errorMessage: '',
@@ -668,6 +705,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleEjecutarConsistencia = async () => {
+    if (readOnly) return;
     updateActiveSession({
       isProcessing: true,
       errorMessage: '',
@@ -693,6 +731,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleEmitPDF = async () => {
+    if (readOnly) return;
     updateActiveSession({
       isProcessing: true,
       errorMessage: '',
@@ -718,6 +757,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleNotificar = async () => {
+    if (readOnly) return;
     updateActiveSession({
       isProcessing: true,
       errorMessage: '',
@@ -780,6 +820,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleConstitucionFondo = async () => {
+    if (readOnly) return;
     if (!fase1Data) return;
     updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 9, inspectedAgentId: null });
     appendLog('Constitucion_Fondo', 'EN_PROCESO', 'Iniciando analisis hermeneutico constitucional de fondo...');
@@ -799,6 +840,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleConcentrador = async () => {
+    if (readOnly) return;
     if (isProcessing || !(dictamenData && consistenciaData && !dictamenData.error && !consistenciaData.error && dictamenData.estado !== 'PENDIENTE_REVISION' && consistenciaData.estado !== 'PENDIENTE_REVISION')) {
       updateActiveSession({ errorMessage: 'Completa las auditorias constitucional y normativa antes de consolidar.' });
       return;
@@ -843,6 +885,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleSecretario = async () => {
+    if (readOnly) return;
     if (isProcessing || !(concentradorData)) {
       updateActiveSession({ errorMessage: 'Completa el concentrador antes de ejecutar al secretario.' });
       return;
@@ -866,6 +909,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleBicameral = async () => {
+    if (readOnly) return;
     if (isProcessing || !(secretarioData)) {
       updateActiveSession({ errorMessage: 'Completa el acta del secretario antes del tramite bicameral.' });
       return;
@@ -901,6 +945,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
    * y consistencia adjuntos) a todos los usuarios de la cámara opuesta.
    */
   const handleConfirmarAprobacionBicameral = async () => {
+    if (readOnly) return;
     if (!fase1Data) return;
     const rol = currentUser?.rol;
     if (rol !== 'Senador' && rol !== 'Diputado') return;
@@ -952,6 +997,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleResolverBicameral = async (accion, motivo, confirmado) => {
+    if (readOnly) return;
     if (isProcessing) return;
     updateActiveSession({ isProcessing: true, errorMessage: '' });
     try {
@@ -979,6 +1025,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleRegistrarDecisionEjecutiva = async (accion, referencia) => {
+    if (readOnly) return;
     if (isProcessing) return;
     updateActiveSession({ isProcessing: true, errorMessage: '' });
     try {
@@ -999,6 +1046,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleVetoPromulgacion = async () => {
+    if (readOnly) return;
     if (isProcessing || bicameralData?.ciclo_bicameral?.aprobacion_humana?.accion !== 'APROBAR') {
       updateActiveSession({ errorMessage: 'Registra la aprobacion de la revision bicameral antes de continuar.' });
       return;
@@ -1022,6 +1070,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handlePublicacion = async () => {
+    if (readOnly) return;
     if (isProcessing || vetoPromulgacionData?.evaluacion_veto?.decision !== 'PROMULGAR' || pipelineStep < 14) {
       updateActiveSession({ errorMessage: 'Completa Veto y Promulgacion antes de publicar.' });
       return;
@@ -1046,6 +1095,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
   };
 
   const handleReset = () => {
+    if (readOnly) return;
     updateActiveSession({
       documentText: '',
       documentName: '',
@@ -1100,6 +1150,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // Dictado por voz: añade el texto dictado al campo del documento (Distribuidor)
   const handleDictadoVoz = (textoDict) => {
+    if (readOnly) return;
     if (!textoDict) return;
     updateActiveSession({
       documentText: (documentText ? documentText + ' ' : '') + textoDict,
@@ -1134,6 +1185,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // Callback del AgentChatPanel: ejecuta el paso del pipeline decidido por el orquestador
   const handleChatAccion = (accion, agenteDestino) => {
+    if (readOnly) return;
     const handler = CHAT_ACTION_HANDLERS[accion];
     const origen = inspectedAgentId || 'orquestador';
     if (handler) {
@@ -1166,13 +1218,12 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // Agent Selection — abre el panel lateral Y también actualiza inspección
   const handleSelectAgent = (agent) => {
-    setDetailPanelAgent(agent);
-    if (!getAgentResultData(agent.id)) return;
-    if (inspectedAgentId === agent.id) {
-      updateActiveSession({ inspectedAgentId: null });
-    } else {
-      updateActiveSession({ inspectedAgentId: agent.id });
+    if (!readOnly && !getAgentResultData(agent.id)) {
+      setDetailPanelAgent(agent);
+      return;
     }
+    setDetailPanelAgent(null);
+    updateActiveSession({ inspectedAgentId: agent.id });
   };
 
   const handleCloseDetailPanel = () => {
@@ -1181,6 +1232,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // ── EJECUCIÓN PARALELA: Constitucional + Consistencia simultáneamente ──
   const handleEjecutarAuditoriaParalela = async () => {
+    if (readOnly) return;
     if (!fase1Data) return;
     updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 4, inspectedAgentId: null });
     appendLog('Auditoria_Paralela', 'EN_PROCESO', 'Iniciando Verificador Constitucional y Consistencia Normativa en paralelo...');
@@ -1228,6 +1280,9 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // Active agent object determination (preciso para los 9 agentes del pipeline)
   const getActiveAgentDef = () => {
+    if (readOnly && !inspectedAgentId && activeSession.agentesEnProceso?.length) {
+      return AGENTS_DEFINITION.find(a => a.id === activeSession.agentesEnProceso[0]) || AGENTS_DEFINITION[0];
+    }
     if (inspectedAgentId) return AGENTS_DEFINITION.find(a => a.id === inspectedAgentId) || AGENTS_DEFINITION[0];
     if (isProcessing && pipelineStep >= 11 && pipelineStep <= 14) {
       const id = { 11: 'secretario', 12: 'bicameral', 13: 'veto_promulgacion', 14: 'publicacion' }[pipelineStep];
@@ -1252,7 +1307,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
   // ── Renderiza el contenedor superior dedicado (RECUADRO ROJO): Logo más grande (104px) + Nombre del agente destacado ──
   const renderAgentHeaderContainer = () => {
-    const isAgentDone = pipelineStep >= (activeAgentDef?.doneAtStep || 99);
+    const isAgentDone = !!getAgentResultData(activeAgentDef?.id);
 
     return (
       <div style={{
@@ -1423,9 +1478,30 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
     constitucion_fondo: 5, secretario: 12, bicameral: 13, veto_promulgacion: 14, publicacion: 15
   };
   const effectiveViewStep = inspectedAgentId ? (inspectStepMap[inspectedAgentId] || pipelineStep) : pipelineStep;
+  useEffect(() => {
+    if (!inspectedAgentId) return;
+    const frame = requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    return () => cancelAnimationFrame(frame);
+  }, [inspectedAgentId, activeSession.id]);
 
   return (
     <div style={{ maxWidth: '1720px', width: '96%', margin: '0 auto', padding: 'clamp(12px, 2vw, 24px) clamp(12px, 2vw, 24px) 80px' }}>
+      <section className="revision-panel" aria-live="polite">
+        <strong>{readOnly ? 'Seguimiento ciudadano: agentes y observaciones' : 'Casos compartidos'}</strong>
+        <CaseProcessingStatus caso={activeSession} onReanudar={reanudarAuditorias} reanudando={reanudandoCaso} />
+        {errorReanudacion && <p role="alert">{errorReanudacion}</p>}
+        {readOnly && <p>Puede inspeccionar los agentes y sus resultados. El seguimiento se actualiza automáticamente; la continuación corresponde al diputado o senador.</p>}
+        {readOnly && activeSession.agentesEnProceso?.length > 0 && <p role="status">En acción: {activeSession.agentesEnProceso.map(id => AGENTS_DEFINITION.find(a => a.id === id)?.name || id).join(' y ')}</p>}
+        {readOnly && activeSession.errorMessage && <p role="alert">{activeSession.errorMessage}</p>}
+        {readOnly && activeSession.avisos?.map((aviso, i) => <p role="status" key={i}>{aviso}</p>)}
+        {readOnly && inspectedAgentId && !getAgentResultData(inspectedAgentId) && <p role="status">Este agente todavía no tiene un resultado disponible. Su pantalla se actualizará cuando termine.</p>}
+        <p>{shared.error || (shared.saving ? 'Guardando en el servidor…' : shared.ready ? 'Casos sincronizados. El seguimiento está disponible desde otros equipos.' : 'Conectando al servidor de casos…')}</p>
+        <button type="button" className="btn-secondary" onClick={shared.refresh}>Actualizar casos</button>
+        {activeSession.camaraDestino && <p>Destino: {activeSession.camaraDestino} · {activeSession.estadoCompartido || 'En seguimiento'}</p>}
+      </section>
+      {(fase1Data || dictamenData || consistenciaData) && <AuditResultsNav
+        constitucional={dictamenData} consistencia={consistenciaData} selected={inspectedAgentId}
+        onSelect={id => handleSelectAgent(AGENTS_DEFINITION.find(agent => agent.id === id))} />}
 
       {/* ── MODAL GLOBAL DE TODOS LOS RESULTADOS DE AGENTES ── */}
       <AllAgentsResultsModal
@@ -1503,7 +1579,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
             title="Visualizar en cualquier momento los resultados de todos los agentes ejecutados"
           >
             <Eye size={15} />
-            <span>Ver Todos los Resultados ({AGENTS_DEFINITION.filter(a => pipelineStep >= a.doneAtStep).length})</span>
+            <span>Ver Todos los Resultados ({AGENTS_DEFINITION.filter(a => getAgentResultData(a.id)).length})</span>
           </button>
         </div>
         <h1 style={{
@@ -1615,6 +1691,8 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
       {/* ── TOP HORIZONTAL AGENT FLOW ── */}
       <HorizontalAgentFlow
+        activeAgentIds={activeSession._sharedProcessing ? activeSession.agentesEnProceso : undefined}
+        completedAgentIds={readOnly ? AGENTS_DEFINITION.filter(a => getAgentResultData(a.id)).map(a => a.id) : undefined}
         pipelineStep={pipelineStep}
         inspectedAgentId={inspectedAgentId}
         onSelectAgent={handleSelectAgent}
@@ -1686,6 +1764,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
         </div>
       )}
 
+      <div ref={resultsRef} style={{ scrollMarginTop: 100 }} />
       {/* ── ERROR ALERT ── */}
       {errorMessage && (
         <div className="glass-card" style={{
@@ -1707,7 +1786,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
       )}
 
       {/* ── STEP 0: DOCUMENT UPLOAD & INPUT ── */}
-      {effectiveViewStep === 0 && (
+      {effectiveViewStep === 0 && !readOnly && (
         <div className="mesa-layout-grid">
           {/* Columna Izquierda: Banner Nítido sin recuadros */}
           <div className="mesa-banner-col" style={{ position: 'sticky', top: '20px' }}>
@@ -1849,7 +1928,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
                   {/* Asistente de Voz: Dictado de Documento */}
                   <div style={{ marginBottom: '14px' }}>
-                    <AgentVoiceModule
+                    {!readOnly && (<AgentVoiceModule
                       agentId="distribuidor"
                       agentLabel="Agente Distribuidor"
                       primaryColor="#00B4D8"
@@ -1857,7 +1936,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                       speechHook={speechHook}
                       onDictadoText={handleDictadoVoz}
                       compact={true}
-                    />
+                    />)}
                   </div>
                   <textarea
                     value={documentText}
@@ -1964,7 +2043,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button
                   onClick={handleIniciarFase1}
-                  disabled={isProcessing || !documentText.trim()}
+                  disabled={readOnly || isProcessing || !documentText.trim()}
                   className="btn-primary"
                   style={{ fontSize: '1rem', padding: '14px 28px' }}
                 >
@@ -2133,14 +2212,14 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
               {/* Módulo de voz: Agente Distribuidor (Lectura y conversación) */}
               <div style={{ marginBottom: '20px' }}>
-                <AgentVoiceModule
+                {!readOnly && (<AgentVoiceModule
                   agentId="distribuidor"
                   agentLabel="Agente Distribuidor"
                   primaryColor="#00B4D8"
                   sesionId={fase1Data?.sesion_id || null}
                   resultData={fase1Data}
                   speechHook={speechHook}
-                />
+                />)}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
@@ -2151,7 +2230,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
                 <button
                   onClick={handleEjecutarComision}
-                  disabled={isProcessing}
+                  disabled={readOnly || isProcessing}
                   className="btn-primary"
                   style={{ fontSize: '1rem', padding: '14px 28px' }}
                 >
@@ -2307,14 +2386,14 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
               {/* Módulo de voz: Agente Comisión Legislativa */}
               <div style={{ marginTop: '20px', marginBottom: '20px' }}>
-                <AgentVoiceModule
+                {!readOnly && (<AgentVoiceModule
                   agentId="comision"
                   agentLabel="Agente Comisión Legislativa"
                   primaryColor="#38BDF8"
                   sesionId={fase1Data?.sesion_id || null}
                   resultData={comisionData}
                   speechHook={speechHook}
-                />
+                />)}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px', gap: '14px', alignItems: 'center' }}>
@@ -2323,7 +2402,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                 </span>
                 <button
                   onClick={handleEjecutarAuditoriaParalela}
-                  disabled={isProcessing}
+                  disabled={readOnly || isProcessing}
                   className="btn-primary"
                   style={{
                     fontSize: '1.05rem',
@@ -2404,7 +2483,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 18px', borderRadius: '10px', textAlign: 'center' }}>
                     <div style={{ fontSize: '1.6rem', fontWeight: 800, color: dictamenData.valido ? '#34d399' : '#fbbf24' }}>
-                      {dictamenData.confianza || 95}%
+                      {dictamenData.confianza ?? 0}%
                     </div>
                     <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>Confianza</div>
                   </div>
@@ -2558,7 +2637,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
                 <div style={{ marginTop: '24px', marginBottom: '16px' }}>
 
-                  <AgentVoiceModule
+                  {!readOnly && (<AgentVoiceModule
 
                     agentId="constitucional"
 
@@ -2572,14 +2651,14 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
                     speechHook={speechHook}
 
-                  />
+                  />)}
 
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '28px' }}>
                   <button
                     onClick={handleEjecutarConsistencia}
-                    disabled={isProcessing}
+                    disabled={readOnly || isProcessing}
                     className="btn-primary"
                     style={{ fontSize: '1.05rem', padding: '14px 30px' }}
                   >
@@ -3089,20 +3168,20 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '28px' }}>
                       {/* Módulo de voz: Lectura de Hallazgos Normativos */}
                       <div style={{ width: '100%' }}>
-                        <AgentVoiceModule
+                        {!readOnly && (<AgentVoiceModule
                           agentId="consistencia"
                           agentLabel="Agente de Consistencia Normativa"
                           primaryColor="#fbbf24"
                           sesionId={fase1Data?.sesion_id || null}
                           resultData={consistenciaData}
                           speechHook={speechHook}
-                        />
+                        />)}
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px', flexWrap: 'wrap' }}>
                         <button
                           onClick={handleConcentrador}
-                          disabled={isProcessing}
+                          disabled={readOnly || isProcessing}
                           className="btn-primary"
                           style={{ fontSize: '1.05rem', padding: '14px 30px' }}
                         >
@@ -3300,7 +3379,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
               <div style={{ maxWidth: '640px', margin: '0 auto 24px auto' }}>
 
 
-                <AgentVoiceModule
+                {!readOnly && (<AgentVoiceModule
 
 
                   agentId="emisor"
@@ -3339,7 +3418,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                   }}
 
 
-                />
+                />)}
 
 
               </div>
@@ -3347,7 +3426,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
               <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
                 <a
-                  href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfResult.filename}`}
+                  href={`${BACKEND_BASE_URL}/uploaded_files/informes/${pdfResult.filename}`}
                   target="_blank"
                   rel="noreferrer"
                   className="btn-secondary"
@@ -3370,7 +3449,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                 )}
                 <button
                   onClick={handleNotificar}
-                  disabled={isProcessing}
+                  disabled={readOnly || isProcessing}
                   className="btn-primary"
                   style={{ fontSize: '1rem', padding: '13px 26px' }}
                 >
@@ -3521,7 +3600,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                   {/* Botón para avanzar a la siguiente etapa legislativa: Comisión Constitución Fondo */}
                   <button
                     onClick={handleConstitucionFondo}
-                    disabled={isProcessing}
+                    disabled={readOnly || isProcessing}
                     className="btn-primary"
                     style={{
                       fontSize: '1rem',
@@ -3537,7 +3616,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
                   {pdfResult?.filename && (
                     <a
-                      href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfResult.filename}`}
+                      href={`${BACKEND_BASE_URL}/uploaded_files/informes/${pdfResult.filename}`}
                       target="_blank" rel="noreferrer"
                       className="btn-secondary"
                       style={{ fontSize: '1rem', padding: '13px 24px', textDecoration: 'none' }}
@@ -3689,7 +3768,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
                       <button
                         onClick={handleConcentrador}
-                        disabled={isProcessing}
+                        disabled={readOnly || isProcessing}
                         className="btn-primary"
                         style={{ fontSize: '1.05rem', padding: '14px 30px' }}
                       >
@@ -3797,7 +3876,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <a
-                            href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfFilename}`}
+                            href={`${BACKEND_BASE_URL}/uploaded_files/informes/${pdfFilename}`}
                             target="_blank"
                             rel="noreferrer"
                             className="btn-secondary"
@@ -3933,7 +4012,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px' }}>
                       <button
                         onClick={handleSecretario}
-                        disabled={isProcessing}
+                        disabled={readOnly || isProcessing}
                         className="btn-primary"
                         style={{ fontSize: '1.05rem', padding: '14px 30px' }}
                       >
@@ -4049,7 +4128,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
                       <div style={{ marginBottom: '24px', width: '100%' }}>
 
-                        <AgentVoiceModule
+                        {!readOnly && (<AgentVoiceModule
 
                           agentId="secretario"
 
@@ -4069,13 +4148,13 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
                           }}
 
-                        />
+                        />)}
 
                       </div>
 
                       <button
                         onClick={handleBicameral}
-                        disabled={isProcessing}
+                        disabled={readOnly || isProcessing}
                         className="btn-primary"
                         style={{ fontSize: '1.05rem', padding: '14px 30px' }}
                       >
@@ -4121,7 +4200,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                 key={bicameralData.ciclo_bicameral?.version_revision}
                 ciclo={bicameralData.ciclo_bicameral || {}}
                 usuario={currentUser}
-                procesando={isProcessing}
+                procesando={readOnly || isProcessing}
                 onDecision={handleResolverBicameral}
                 onActualizar={handleActualizarBicameral}
                 onContinuar={handleVetoPromulgacion}
@@ -4135,7 +4214,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                   ) : (
                     <>
                       <p>{confirmacionBicameralData?.mensaje || 'La aprobación está registrada. El envío de correo está pendiente.'}</p>
-                      <button type="button" className="btn-secondary" disabled={isProcessing}
+                      <button type="button" className="btn-secondary" disabled={readOnly || isProcessing}
                         onClick={handleConfirmarAprobacionBicameral}>
                         {isProcessing ? 'Enviando...' : 'Enviar correo a la otra cámara'}
                       </button>
@@ -4173,7 +4252,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
             >
               {vetoPromulgacionData?.evaluacion_veto && (
                 <DecisionEjecutivaPanel evaluacion={vetoPromulgacionData.evaluacion_veto}
-                  usuario={currentUser} procesando={isProcessing}
+                  usuario={currentUser} procesando={readOnly || isProcessing}
                   onRegistrar={handleRegistrarDecisionEjecutiva} onPublicar={handlePublicacion} />
               )}
               {(() => {
@@ -4225,7 +4304,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                       <button
                         type="button"
                         onClick={handleVetoPromulgacion}
-                        disabled={isProcessing}
+                        disabled={readOnly || isProcessing}
                         className="btn-primary"
                         style={{ fontSize: '1rem', padding: '12px 28px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                       >
@@ -4252,6 +4331,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                 };
 
                 const handleCopyJson = () => {
+    if (readOnly) return;
                   try {
                     navigator.clipboard.writeText(JSON.stringify(vetoPromulgacionData, null, 2));
                     setCopiedVetoJson(true);
@@ -4602,7 +4682,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
 
                         {/* Módulo de voz */}
                         <div style={{ marginBottom: '24px', width: '100%' }}>
-                          <AgentVoiceModule
+                          {!readOnly && (<AgentVoiceModule
                             agentId="veto_promulgacion"
                             agentLabel="Agente Veto y Promulgación"
                             primaryColor="#1E3A8A"
@@ -4621,7 +4701,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                               });
                               appendLog('veto_promulgacion', 'MODIFICACION_VOZ', `Decisión modificada por voz a: ${nuevaDec}`);
                             }}
-                          />
+                          />)}
                         </div>
 
                         {/* Botones de Navegación de Pie */}
@@ -4648,7 +4728,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                           <button
                             type="button"
                             onClick={handlePublicacion}
-                            disabled={isProcessing}
+                            disabled={readOnly || isProcessing}
                             className="btn-gaceta-oficial"
                             style={{
                               background: 'linear-gradient(135deg, #0284C7 0%, #00C2CB 100%)',
@@ -5040,7 +5120,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                             onClick={async () => {
                               await handlePublicacion();
                             }}
-                            disabled={isProcessing}
+                            disabled={readOnly || isProcessing}
                             className="btn-gaceta-oficial"
                             style={{
                               background: 'linear-gradient(135deg, #0284C7 0%, #00C2CB 100%)',
@@ -5149,7 +5229,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                       <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#00C2CB', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Newspaper size={13} /> Asistente de Voz — Gaceta Oficial
                       </div>
-                      <AgentVoiceModule
+                      {!readOnly && (<AgentVoiceModule
                         agentId="publicacion"
                         agentLabel="Publicación Oficial — Gaceta"
                         primaryColor="#00C2CB"
@@ -5157,11 +5237,11 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                         resultData={publicacionData}
                         speechHook={speechHook}
                         compact={false}
-                      />
+                      />)}
                     </div>
 
                     {/* ── MÓDULO INTERACTIVO CON AGENTE CREWAI: MENSAJE AL PRESIDENTE DEL SENADO ── */}
-                    <MensajeSenadoCrewPanel
+                    {!readOnly && (<MensajeSenadoCrewPanel
                       idProyecto={fase1Data?.id_proyecto || 104}
                       sesionId={fase1Data?.sesion_id}
                       numeroLey={pub.numero_ley || 'Ley Sancionada y Promulgada'}
@@ -5169,28 +5249,28 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                       boletinOficial={pub.boletin_oficial || 'GAC-2026-BOL'}
                       defaultEmail={activeSession?.emailAutor || 'rebalicbecky2@gmail.com'}
                       onSent={() => appendLog('Mensaje_Senado_Crew', 'COMPLETADO', 'Oficio remitido al Presidente del Senado con Token de Google')}
-                    />
+                    />)}
 
                     {/* ── CORRECCIONES FINALES DE LA GACETA (Secretario / Usuario) ── */}
-                    <GacetaCorreccionesSection
+                    {!readOnly && (<GacetaCorreccionesSection
                       idProyecto={fase1Data?.id_proyecto}
                       sesionId={activeSession?.id}
                       onCorreccionActualizada={() => appendLog('Gaceta_Correcciones', 'ACTUALIZADO', 'Corrección registrada en Gaceta')}
-                    />
+                    />)}
 
                     {/* ── ENVÍO DE CORREOS VALIDADO — PUBLICACIÓN EN GACETA ── */}
-                    <GacetaNotificacionEmailSection
+                    {!readOnly && (<GacetaNotificacionEmailSection
                       fase1Data={fase1Data}
                       pub={pub}
                       defaultEmail={activeSession?.emailAutor || 'rebalicbecky2@gmail.com'}
                       onSent={(dest) => appendLog('Publicacion_Correo', 'COMPLETADO', `Correos de Gaceta enviados a: ${dest.join(', ')}`)}
-                    />
+                    />)}
 
                     {/* Acciones Finales */}
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
                       {pdfResult?.filename && (
                         <a
-                          href={`http://127.0.0.1:8085/uploaded_files/informes/${pdfResult.filename}`}
+                          href={`${BACKEND_BASE_URL}/uploaded_files/informes/${pdfResult.filename}`}
                           target="_blank" rel="noreferrer"
                           className="btn-secondary"
                           style={{ fontSize: '1rem', padding: '13px 24px', textDecoration: 'none' }}
@@ -5329,7 +5409,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           fontSize: '0.74rem',
           fontWeight: 900
         }}>
-          {AGENTS_DEFINITION.filter(a => pipelineStep >= a.doneAtStep).length}
+          {AGENTS_DEFINITION.filter(a => getAgentResultData(a.id)).length}
         </span>
       </button>
 
@@ -5470,7 +5550,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
           )}
 
           {(!inspectedAgentId || chatTab === 'sistema') ? (
-            <AgentChatPanel
+            !readOnly && (<AgentChatPanel
               agentId="orquestador"
               agentLabel="Chat del Sistema — Mesa de Partes"
               sesionId={fase1Data?.sesion_id || null}
@@ -5479,10 +5559,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
               compact={false}
               onAccion={handleChatAccion}
               onClose={() => setShowChat(false)}
-            />
+            />)
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <AgentChatPanel
+              {!readOnly && (<AgentChatPanel
                 key={inspectedAgentId}
                 agentId={inspectedAgentId}
                 agentLabel={activeAgentDef?.name}
@@ -5494,7 +5574,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                 emailDestino={activeSession?.emailAutor || null}
                 onAccion={handleChatAccion}
                 onClose={() => setShowChat(false)}
-              />
+              />)}
               {/* Control de voz contextual del agente (antes barra inline superior) */}
               <div style={{
                 background: 'rgba(15,23,42,0.9)',
@@ -5518,7 +5598,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                 </div>
                 {showVozEnChat && (
                   <div style={{ padding: '0 10px 10px' }}>
-                    <AgentVoiceModule
+                    {!readOnly && (<AgentVoiceModule
                       agentId={inspectedAgentId}
                       agentLabel={activeAgentDef?.name}
                       primaryColor={AGENT_ACCENT_MAP[inspectedAgentId] || '#00B4D8'}
@@ -5533,7 +5613,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
                           appendLog(inspectedAgentId, 'VOZ', `Notificación enviada: "${(action.texto || '').substring(0, 60)}"`);
                         }
                       }}
-                    />
+                    />)}
                   </div>
                 )}
               </div>
@@ -5603,7 +5683,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
       </button>
 
       {/* ── EMAIL DESPACHO DRAWER ── */}
-      <EmailDespachoDrawer
+      {!readOnly && (<EmailDespachoDrawer
         isOpen={showEmailDrawer}
         onClose={() => setShowEmailDrawer(false)}
         defaultEmail={customEmail || activeSession?.emailAutor || ''}
@@ -5619,7 +5699,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
         onSent={(info) => {
           appendLog('Despacho_Correo', 'COMPLETADO', `Correo enviado a: ${info.email}`);
         }}
-      />
+      />)}
 
       {showCorreccionesDrawer && fase1Data?.id_proyecto && (
         <div style={{
@@ -5654,10 +5734,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser }) {
             </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
-            <CorrecionesPanel
+            {!readOnly && (<CorrecionesPanel
               idProyecto={fase1Data.id_proyecto}
               sesionId={activeSession?.id}
-            />
+            />)}
           </div>
         </div>
       )}

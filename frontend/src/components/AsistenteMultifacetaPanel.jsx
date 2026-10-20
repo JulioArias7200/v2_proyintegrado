@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, Send, Bot, User, Zap, Paperclip, FlaskConical, FileText, X } from 'lucide-react';
 import { api } from '../services/api';
+import PresentacionCiudadana from './PresentacionCiudadana';
 
 /**
  * Asistente Ciudadano Multi-Faceta
@@ -141,6 +142,11 @@ export default function AsistenteMultifacetaPanel({ sesionId = null }) {
         Escribe tu consulta en lenguaje natural. El sistema elige solo la especialidad
         que corresponde — no necesitas seleccionar nada.
       </p>
+      <details style={{ marginBottom: 16 }}>
+        <summary>Presentar mi consulta o iniciativa a Diputados o Senadores</summary>
+        <PresentacionCiudadana textoInicial={caso?.texto || mensajes.filter(m => m.rol === 'ciudadano').at(-1)?.texto || texto}
+          archivoInicial={caso?.nombre || ''} mostrarCasos={false} />
+      </details>
 
       {facetas.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>

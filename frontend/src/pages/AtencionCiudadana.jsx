@@ -16,13 +16,14 @@ import {
   FileText
 } from 'lucide-react';
 import { api } from '../services/api';
+import PresentacionCiudadana from '../components/PresentacionCiudadana';
 
 import CssRobotAvatar from '../components/CssRobotAvatar';
 import AsistenteMultifacetaPanel from '../components/AsistenteMultifacetaPanel';
 import GestionFacetasPanel from '../components/GestionFacetasPanel';
 import { esRolInterno } from '../context/AuthContext';
 
-export default function AtencionCiudadana({ isAuthenticated = false, currentUser = null, onNavigateLogin }) {
+export default function AtencionCiudadana({ isAuthenticated = false, currentUser = null, onNavigateLogin, onVerCaso }) {
   const [solicitudes, setSolicitudes] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -84,25 +85,13 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
         partesTexto.push(`\n--- Documento adjunto: ${adjunto.nombre} ---\n${adjunto.texto}`);
       }
       const texto = partesTexto.join('\n');
-      const resFase1 = await api.runPhase1({
-        texto: texto,
-        nombre_archivo: adjunto?.nombre || `atencion_${nombre.toLowerCase().replace(/\s+/g, '_')}.txt`,
-        tipo_entrada: `Atención Ciudadana (${medio})`,
+      const presentacion = await api.presentarCasoCiudadano({
+        titulo: motivo.trim().slice(0, 180), texto,
+        tipo: 'consulta', camara_destino: 'Ambas', nombre_archivo: adjunto?.nombre || null,
       });
-
-      if (resFase1.success) {
-        await api.runPhase2({
-          sesion_id: resFase1.data.sesion_id,
-          task_id_inicial: resFase1.data.task_id_inicial,
-          task_id_distribuidor: resFase1.data.task_id_distribuidor,
-          categoria: 'AGENTE_ATENCION_CIUDADANA',
-          agente_destino_nombre: 'Agente_Atencion_Ciudadana',
-          texto_documento: texto,
-          nombre_archivo: resFase1.data.nombre_archivo,
-          tipo_entrada: resFase1.data.tipo_entrada,
-          solicitud_id: resFase1.data.solicitud_id,
-        });
-
+      if (presentacion.success) {
+        onVerCaso?.(presentacion.data.id);
+        window.dispatchEvent(new CustomEvent('caso-ciudadano-presentado', { detail: { casoId: presentacion.data.id } }));
         setSubmitSuccess(true);
         setNombre(currentUser?.nombre_completo || '');
         setMotivo('');
@@ -179,6 +168,7 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
 
       {/* Asistente ciudadano multi-faceta: el mensaje se enruta solo al prompt correcto */}
       <AsistenteMultifacetaPanel />
+      {isAuthenticated && <PresentacionCiudadana onVerCaso={onVerCaso} />}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '24px' }}>
         {/* Formulario de Registro Rápido (solo autenticado) / Panel informativo (público) */}

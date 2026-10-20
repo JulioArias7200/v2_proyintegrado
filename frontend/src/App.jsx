@@ -44,6 +44,18 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('mesa');
   const [healthStatus, setHealthStatus] = useState(null);
   const [mostrarLogin, setMostrarLogin] = useState(false);
+  const [casoCiudadano, setCasoCiudadano] = useState(null);
+  const [verSeguimiento, setVerSeguimiento] = useState(false);
+
+  useEffect(() => {
+    const seguir = event => {
+      if (user?.rol !== 'Ciudadano' || !event.detail?.casoId) return;
+      setCasoCiudadano(event.detail.casoId);
+      setVerSeguimiento(true);
+    };
+    window.addEventListener('caso-ciudadano-presentado', seguir);
+    return () => window.removeEventListener('caso-ciudadano-presentado', seguir);
+  }, [user?.rol]);
 
   useEffect(() => {
     // Comprobar salud del backend periódicamente
@@ -111,7 +123,14 @@ export default function App() {
           simplified={true}
         />
         <main style={{ flex: 1 }}>
-          <AtencionCiudadana isAuthenticated={true} currentUser={user} />
+          <nav aria-label="Participación y seguimiento" style={{ display: 'flex', gap: 12, padding: 16 }}>
+            <button className="btn-secondary" onClick={() => setVerSeguimiento(false)}>Presentar consulta o iniciativa</button>
+            <button className="btn-secondary" onClick={() => setVerSeguimiento(true)}>Ver agentes, flujo y observaciones</button>
+          </nav>
+          {verSeguimiento ? <MesaPartes key={user.usuario_id} currentUser={user} readOnly initialCaseId={casoCiudadano} /> :
+            <AtencionCiudadana isAuthenticated currentUser={user} onVerCaso={id => {
+              setCasoCiudadano(id); setVerSeguimiento(true);
+            }} />}
         </main>
         <FloatingCitizenAssistant />
         {FOOTER}

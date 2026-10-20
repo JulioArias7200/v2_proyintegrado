@@ -187,10 +187,10 @@ export const AGENTS_DEFINITION = [
 ];
 
 // ── Nodo circular individual ──
-function CircularAgentNode({ agent, pipelineStep, isInspected, onSelect, compact = false }) {
+function CircularAgentNode({ agent, pipelineStep, isInspected, onSelect, compact = false, activeAgentIds, completedAgentIds }) {
   const [hovered, setHovered] = useState(false);
-  const isActive = (pipelineStep >= agent.activeStep && pipelineStep < agent.doneAtStep);
-  const isDone   = pipelineStep >= agent.doneAtStep;
+  const isActive = activeAgentIds ? activeAgentIds.includes(agent.id) : (pipelineStep >= agent.activeStep && pipelineStep < agent.doneAtStep);
+  const isDone   = completedAgentIds ? completedAgentIds.includes(agent.id) : pipelineStep >= agent.doneAtStep;
   const tc = INST_COLORS[agent.id] || INST_COLORS.distribuidor;
   const logoUrl = AGENT_LOGOS[agent.id];
   const size = compact ? 52 : 70;
@@ -701,7 +701,7 @@ function MergeFlowConnector({ isDone, isActive, compact = false }) {
 }
 
 // Bloque paralelo (constitucional + consistencia)
-function ParallelBlock({ agents, pipelineStep, inspectedAgentId, onSelectAgent, compact }) {
+function ParallelBlock({ agents, pipelineStep, inspectedAgentId, onSelectAgent, compact, activeAgentIds, completedAgentIds }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
       gap: '6px', flexShrink: 0 }}>
@@ -721,6 +721,8 @@ function ParallelBlock({ agents, pipelineStep, inspectedAgentId, onSelectAgent, 
             <CircularAgentNode
               agent={agent}
               pipelineStep={pipelineStep}
+              activeAgentIds={activeAgentIds}
+              completedAgentIds={completedAgentIds}
               isInspected={inspectedAgentId === agent.id}
               onSelect={onSelectAgent}
               compact={compact}
@@ -740,6 +742,8 @@ function ParallelBlock({ agents, pipelineStep, inspectedAgentId, onSelectAgent, 
 
 export default function HorizontalAgentFlow({
   pipelineStep = 0,
+  activeAgentIds,
+  completedAgentIds,
   inspectedAgentId = null,
   onSelectAgent = () => {},
   onOpenAllResults = null
@@ -755,7 +759,7 @@ export default function HorizontalAgentFlow({
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [pipelineStep]);
 
-  const completedCount = AGENTS_DEFINITION.filter(a => pipelineStep >= a.doneAtStep).length;
+  const completedCount = completedAgentIds ? completedAgentIds.length : AGENTS_DEFINITION.filter(a => pipelineStep >= a.doneAtStep).length;
   const progressPercent = Math.round((completedCount / AGENTS_DEFINITION.length) * 100);
 
   // Filtros de fase
@@ -945,6 +949,8 @@ export default function HorizontalAgentFlow({
                     <CircularAgentNode
                       agent={group.agent}
                       pipelineStep={pipelineStep}
+              activeAgentIds={activeAgentIds}
+                    completedAgentIds={completedAgentIds}
                       isInspected={inspectedAgentId === group.agent.id}
                       onSelect={onSelectAgent}
                       compact={compact}
@@ -954,6 +960,8 @@ export default function HorizontalAgentFlow({
                   <ParallelBlock
                     agents={group.agents}
                     pipelineStep={pipelineStep}
+              activeAgentIds={activeAgentIds}
+                    completedAgentIds={completedAgentIds}
                     inspectedAgentId={inspectedAgentId}
                     onSelectAgent={onSelectAgent}
                     compact={compact}

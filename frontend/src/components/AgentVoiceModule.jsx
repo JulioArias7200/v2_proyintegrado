@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../services/api';
 /**
  * AgentVoiceModule.jsx - Módulo de Voz Contextual por Agente
  * ============================================================
@@ -302,7 +303,7 @@ export default function AgentVoiceModule({
     setIsSendingNotif(true);
     setNotifResult(null);
     try {
-      const res = await fetch("http://127.0.0.1:8085/api/voz/notificacion-voz", {
+      const res = await fetch(`${API_BASE_URL}/voz/notificacion-voz`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -360,7 +361,7 @@ export default function AgentVoiceModule({
     if (!texto || !texto.trim()) return;
 
     try {
-      const res = await fetch("http://127.0.0.1:8085/api/voz/correccion-secretario", {
+      const res = await fetch(`${API_BASE_URL}/voz/correccion-secretario`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

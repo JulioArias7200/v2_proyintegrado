@@ -404,7 +404,7 @@ class ApiRevisionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Cargar solamente las rutas reales de revisión evita el DDL y proveedores del arranque global.
-        nombres = {"crear_sesion_revision", "usuario_revision", "proyecto_revision", "DecisionBicameralRequest",
+        nombres = {"crear_sesion_revision", "usuario_revision", "legislador_revision", "proyecto_revision", "DecisionBicameralRequest",
                    "consultar_sesion_revision", "cerrar_sesion_revision", "consultar_revision_bicameral", "decidir_bicameral"}
         arbol = ast.parse(Path("server.py").read_text(encoding="utf-8"))
         seleccion = ast.Module(body=[n for n in arbol.body if isinstance(n, (ast.FunctionDef, ast.ClassDef)) and n.name in nombres], type_ignores=[])

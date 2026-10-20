@@ -94,7 +94,7 @@ export default function AllAgentsResultsModal({
     );
   });
 
-  const completedTotal = AGENTS_DEFINITION.filter(a => pipelineStep >= a.doneAtStep).length;
+  const completedTotal = AGENTS_DEFINITION.filter(a => getAgentResultData(a.id)).length;
 
   return (
     <div style={{
@@ -273,9 +273,9 @@ export default function AllAgentsResultsModal({
           gap: '12px'
         }}>
           {filteredAgents.map((agent) => {
-            const isDone = pipelineStep >= agent.doneAtStep;
-            const isActive = pipelineStep >= agent.activeStep && pipelineStep < agent.doneAtStep;
             const resultData = getAgentResultData(agent.id);
+            const isDone = !!resultData;
+            const isActive = !isDone && pipelineStep >= agent.activeStep && pipelineStep < agent.doneAtStep;
             const isExpanded = expandedAgentId === agent.id;
             const Icon = AGENT_ICONS[agent.id] || Shield;
 

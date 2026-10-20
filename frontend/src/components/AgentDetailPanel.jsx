@@ -145,7 +145,7 @@ export default function AgentDetailPanel({
   const bannerUrl = AGENT_BANNER_MAP[agent.id];
 
   const isActive = pipelineStep === agent.activeStep;
-  const isDone = pipelineStep >= agent.doneAtStep;
+  const isDone = !!resultData;
   const agentLogs = pipelineLog.filter(l =>
     l.etapa?.toLowerCase().includes(agent.id?.toLowerCase().replace('_', '')) ||
     l.etapa?.toLowerCase().includes(agent.shortName?.toLowerCase())
