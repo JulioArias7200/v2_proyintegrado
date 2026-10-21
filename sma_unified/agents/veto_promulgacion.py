@@ -92,6 +92,12 @@ class AgenteVetoPromulgacion:
         pct_origen = circuito.get("camara_origen", {}).get("porcentaje_aprobacion", 72.5)
         pct_revisora = circuito.get("camara_revisora", {}).get("porcentaje_aprobacion", 68.0)
 
+        # El expediente compartido puede aportar dictámenes que todavía no estén
+        # materializados en la fila bicameral de Neon. La asesoría presidencial
+        # recibe ambos orígenes para conservar el contexto de los agentes previos.
+        antecedentes_agentes = expediente.get("antecedentes_agentes") or {}
+        expediente_consolidado = ciclo.get("expediente_consolidado") or expediente.get("expediente_consolidado") or {}
+
         # 3. Asesor Inteligente para el Presidente (Informe Ejecutivo Detallado)
         informe_asesor = {
             "dictamen_sugerido": "RECOMIENDA_PROMULGAR",
@@ -124,7 +130,8 @@ class AgenteVetoPromulgacion:
             - ID: {proyecto_id}
             - Respaldo en Cámara de Diputados: {pct_origen}% de votos a favor
             - Respaldo en Cámara de Senadores: {pct_revisora}% de votos a favor
-            - Expediente: {json.dumps(ciclo.get('expediente_consolidado', {}), ensure_ascii=False)[:1200]}
+            - Expediente consolidado: {json.dumps(expediente_consolidado, ensure_ascii=False)[:5000]}
+            - Dictámenes y antecedentes de agentes anteriores: {json.dumps(antecedentes_agentes, ensure_ascii=False)[:9000]}
 
             Genera el Informe Ejecutivo Asesor Presidencial con la siguiente estructura JSON exacta:
             {{

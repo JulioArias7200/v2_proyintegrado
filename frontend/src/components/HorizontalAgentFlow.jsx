@@ -156,23 +156,9 @@ export const AGENTS_DEFINITION = [
     db: ['Neon PostgreSQL', 'MongoDB'],
     workflowIcon: GitBranch, iconLabel: 'Bicameral', isParallel: false
   },
-  // ── ETAPA 7: VETO Y PROMULGACIÓN ──
+  // ── ETAPA 7: PUBLICACIÓN OFICIAL (GACETA), tras la decisión del Despacho Ejecutivo ──
   {
-    id: 'veto_promulgacion', key: 'veto_promulgacion', stepNumber: '08',
-    name: 'Veto y Promulgación', shortName: 'Veto/Promulg.',
-    role: 'Decisión Ejecutiva Final',
-    phaseKey: 'fase5', phaseName: 'Fase 5: Veto y Promulgación',
-    theme: 'rose', activeStep: 13, doneAtStep: 14,
-    desc: 'Evalúa criterios constitucionales del Ejecutivo y emite la resolución de Promulgación o Veto.',
-    justificacion: 'Art. 163-167 CPE: potestad promulgatoria y veto presidencial del proyecto.',
-    garantiaEtica: 'Motivación jurídica transparente y razonabilidad ejecutiva',
-    model: 'Nemotron-3 Super 120B',
-    db: ['Neon PostgreSQL', 'MongoDB'],
-    workflowIcon: Gavel, iconLabel: 'Promulgar', isParallel: false
-  },
-  // ── ETAPA 8: PUBLICACIÓN OFICIAL (GACETA) ──
-  {
-    id: 'publicacion', key: 'publicacion', stepNumber: '09',
+    id: 'publicacion', key: 'publicacion', stepNumber: '08',
     name: 'Publicación Oficial', shortName: 'Gaceta Oficial',
     role: 'Boletín & Gaceta Oficial',
     phaseKey: 'fase5', phaseName: 'Fase 5: Gaceta Oficial',
@@ -333,7 +319,7 @@ function CircularAgentNode({ agent, pipelineStep, isInspected, onSelect, compact
             ? '#8AC926'
             : isActive
             ? tc.primary
-            : '#E2E8F0',
+            : '#244863',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'normal',
@@ -370,8 +356,8 @@ function CircularAgentNode({ agent, pipelineStep, isInspected, onSelect, compact
               ? 'rgba(138,201,38,0.18)'
               : isActive
               ? 'rgba(0,180,216,0.18)'
-              : 'rgba(255,255,255,0.06)',
-            border: `1px solid ${isDone ? 'rgba(138,201,38,0.45)' : isActive ? 'rgba(0,180,216,0.45)' : 'rgba(255,255,255,0.12)'}`
+            : 'rgba(36,90,132,0.07)',
+            border: `1px solid ${isDone ? 'rgba(138,201,38,0.45)' : isActive ? 'rgba(0,180,216,0.45)' : 'rgba(36,90,132,0.16)'}`
           }}>
             {isDone && <span>✓</span>}
             <span>P{agent.stepNumber}</span>
@@ -750,7 +736,7 @@ export default function HorizontalAgentFlow({
 }) {
   const scrollContainerRef = useRef(null);
   const [activeFilter, setActiveFilter] = useState('all');
-  const [compact, setCompact] = useState(false);
+  const [compact, setCompact] = useState(true);
 
   // Auto-scroll al agente activo
   useEffect(() => {
@@ -796,12 +782,12 @@ export default function HorizontalAgentFlow({
   const handleScrollRight = () => scrollContainerRef.current?.scrollBy({ left: 250, behavior: 'smooth' });
 
   return (
-    <div style={{ width: '100%', marginBottom: '26px' }}>
+    <div className="mesa-horizontal-flow" style={{ width: '100%', marginBottom: '26px' }}>
 
       {/* ── BARRA DE CONTROLES ── */}
       <div style={{
-        background: 'rgba(15,23,42,0.85)',
-        border: '1px solid rgba(0,180,216,0.2)',
+        background: '#ffffff',
+        border: '1px solid #d5e3ed',
         borderRadius: '14px',
         padding: '10px 16px',
         marginBottom: '14px',
@@ -811,7 +797,7 @@ export default function HorizontalAgentFlow({
         flexWrap: 'wrap',
         gap: '10px',
         backdropFilter: 'blur(12px)',
-        boxShadow: '0 4px 18px rgba(0,0,0,0.4)'
+        boxShadow: '0 4px 18px rgba(26,68,99,0.08)'
       }}>
         {/* Izquierda: título + filtros */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -824,22 +810,11 @@ export default function HorizontalAgentFlow({
           </div>
 
           {/* Filtros de fase */}
-          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-            {allPhaseFilters.map(f => (
-              <button key={f.key} onClick={() => setActiveFilter(f.key)}
-                style={{ border: 'none',
-                  background: activeFilter === f.key ? 'rgba(0,180,216,0.2)' : 'rgba(255,255,255,0.05)',
-                  color: activeFilter === f.key ? '#00B4D8' : '#64748B',
-                  padding: '4px 10px', borderRadius: '7px',
-                  fontSize: '0.7rem', fontWeight: activeFilter === f.key ? 700 : 500,
-                  cursor: 'pointer', transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap',
-                  borderBottom: activeFilter === f.key ? '2px solid #00B4D8' : '2px solid transparent'
-                }}>
-                {f.label}
-              </button>
-            ))}
-          </div>
+          <label className="flow-phase-filter">Fase
+            <select aria-label="Filtrar flujo por fase" value={activeFilter} onChange={e => setActiveFilter(e.target.value)}>
+              {allPhaseFilters.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+          </label>
         </div>
 
         {/* Derecha: botón todos los resultados + toggle + progreso + scroll */}
@@ -881,7 +856,7 @@ export default function HorizontalAgentFlow({
           {/* Toggle tamaño */}
           <button onClick={() => setCompact(c => !c)}
             style={{ border: '1px solid rgba(0,180,216,0.25)',
-              background: 'rgba(30,41,59,0.7)', color: '#CBD5E1',
+              background: '#f2f7fb', color: '#35566e',
               padding: '4px 10px', borderRadius: '8px',
               fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '5px',
               cursor: 'pointer' }}>
@@ -897,7 +872,7 @@ export default function HorizontalAgentFlow({
                 background: 'linear-gradient(90deg, #0284C7, #00B4D8, #8AC926)',
                 transition: 'width 0.4s ease', borderRadius: '3px' }} />
             </div>
-            <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 700 }}>
+            <span style={{ fontSize: '0.72rem', color: '#637e92', fontWeight: 700 }}>
               {completedCount}/{AGENTS_DEFINITION.length} ({progressPercent}%)
             </span>
           </div>
@@ -906,14 +881,14 @@ export default function HorizontalAgentFlow({
           <div style={{ display: 'flex', gap: '3px' }}>
             <button onClick={handleScrollLeft} title="Anterior"
               style={{ border: '1px solid rgba(100,116,139,0.3)',
-                background: 'rgba(30,41,59,0.8)', color: '#E2E8F0',
+                background: '#f2f7fb', color: '#31536b',
                 borderRadius: '6px', width: '26px', height: '26px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
               <ChevronLeft size={13} />
             </button>
             <button onClick={handleScrollRight} title="Siguiente"
               style={{ border: '1px solid rgba(100,116,139,0.3)',
-                background: 'rgba(30,41,59,0.8)', color: '#E2E8F0',
+                background: '#f2f7fb', color: '#31536b',
                 borderRadius: '6px', width: '26px', height: '26px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
               <ChevronRight size={13} />
@@ -924,8 +899,8 @@ export default function HorizontalAgentFlow({
 
       {/* ── TRACK DEL FLUJO HORIZONTAL ── */}
       <div style={{
-        background: 'rgba(11,37,69,0.5)',
-        border: '1px solid rgba(0,180,216,0.15)',
+        background: '#f5f9fc',
+        border: '1px solid #dce8f0',
         borderRadius: '16px',
         padding: compact ? '14px 16px' : '18px 16px',
         backdropFilter: 'blur(8px)'

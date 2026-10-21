@@ -228,6 +228,8 @@ def upload_pdf_to_drive(
     categoria: str = "reportes",   # "reportes" | "leyes_editadas" | "proyectos_iniciales"
     subcarpeta: Optional[str] = None,
     make_public: bool = True,
+    description: Optional[str] = None,
+    app_properties: Optional[Dict[str, str]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Sube un documento oficial (Proyecto Inicial, Reporte/Dictamen o Ley Editada) a Google Drive.
@@ -262,8 +264,10 @@ def upload_pdf_to_drive(
 
         file_metadata: Dict[str, Any] = {
             "name": filename,
-            "description": f"Documento oficial del Sistema Multi-Agente ALP — Categoría: {categoria}"
+            "description": description or f"Documento oficial del Sistema Multi-Agente ALP — Categoría: {categoria}"
         }
+        if app_properties:
+            file_metadata["appProperties"] = {str(k): str(v) for k, v in app_properties.items()}
         if target_folder_id:
             file_metadata["parents"] = [target_folder_id]
 

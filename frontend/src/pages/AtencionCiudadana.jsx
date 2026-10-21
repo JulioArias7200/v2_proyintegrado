@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Lock,
   LogIn,
+  Download,
   UploadCloud,
   Paperclip,
   FileText
@@ -37,6 +38,8 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
   // Adjunto opcional (solo disponible logeado)
   const [adjunto, setAdjunto] = useState(null); // { nombre, texto, paginas, palabras }
   const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [downloadingAttachment, setDownloadingAttachment] = useState(false);
 
   useEffect(() => {
     cargarSolicitudes();
@@ -58,6 +61,7 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
     setIsUploadingFile(true);
+    setUploadError('');
     try {
       const res = await api.uploadDocument(selectedFile);
       setAdjunto({
@@ -65,9 +69,16 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
         texto: res.texto_completo,
         paginas: res.paginas,
         palabras: res.palabras,
+        saved_as: res.saved_as,
+        upload_id: res.upload_id,
+        drive_link: res.drive_link,
+        drive_file_id: res.drive_file_id,
+        drive_status: res.drive_status,
+        tipo: selectedFile.type || '',
       });
     } catch (err) {
       console.error('Error subiendo adjunto ciudadano:', err);
+      setUploadError(err.message || 'No se pudo registrar el archivo en Google Drive. Vuelva a intentarlo.');
     } finally {
       setIsUploadingFile(false);
     }
@@ -88,6 +99,10 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
       const presentacion = await api.presentarCasoCiudadano({
         titulo: motivo.trim().slice(0, 180), texto,
         tipo: 'consulta', camara_destino: 'Ambas', nombre_archivo: adjunto?.nombre || null,
+        documento_original: adjunto?.saved_as
+          ? { saved_as: adjunto.saved_as, nombre: adjunto.nombre, tipo: adjunto.tipo,
+            upload_id: adjunto.upload_id, drive_link: adjunto.drive_link,
+            drive_file_id: adjunto.drive_file_id, drive_status: adjunto.drive_status } : null,
       });
       if (presentacion.success) {
         onVerCaso?.(presentacion.data.id);
@@ -101,15 +116,31 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
       }
     } catch (err) {
       console.error('Error registrando atención ciudadana:', err);
+      setUploadError(err.message || 'No se pudo registrar la solicitud. Revise los datos e inténtelo de nuevo.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const descargarAdjunto = async () => {
+    if (!adjunto?.upload_id) return;
+    setDownloadingAttachment(true);
+    setUploadError('');
+    try {
+      const blob = await api.getDocumentoIngresado(adjunto.upload_id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url; anchor.download = adjunto.nombre || 'documento-original';
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) { setUploadError(err.message); }
+    finally { setDownloadingAttachment(false); }
+  };
+
   return (
-    <div style={{ maxWidth: '1720px', width: '96%', margin: '0 auto', padding: '32px 24px' }}>
+    <div className="atencion-ciudadana-page" style={{ maxWidth: '1720px', width: '96%', margin: '0 auto', padding: '32px 24px' }}>
       {/* Header with CSS Robot Avatar Banner */}
-      <div style={{
+      <div className="citizen-home-hero" style={{
         marginBottom: '32px',
         display: 'flex',
         alignItems: 'center',
@@ -135,42 +166,16 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
           </p>
         </div>
 
-        {/* Dynamic Bot Avatar with Official Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(2, 26, 25, 0.6)', padding: '14px 22px', borderRadius: '20px', border: '1px solid rgba(20, 184, 166, 0.3)' }}>
-          <div style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '50%',
-            border: '2.5px solid #2dd4bf',
-            boxShadow: '0 0 18px rgba(45, 212, 191, 0.35)',
-            overflow: 'hidden',
-            background: '#042f2e',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0
-          }}>
-            <img
-              src="/robots/logos/agente_ciudadania.jpeg"
-              alt="Agente Atención Ciudadana"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '1.05rem' }}>Agente Atención Ciudadana</div>
-            <div style={{ fontSize: '0.78rem', color: '#2dd4bf', fontWeight: 600 }}>NVIDIA Nemotron 30B • SMA AI</div>
-          </div>
-        </div>
       </div>
 
       {/* Administración de facetas: visible solo para roles internos (Secretaría, Comisión, etc.) */}
       {esRolInterno(currentUser?.rol) && <GestionFacetasPanel />}
 
-      {/* Asistente ciudadano multi-faceta: el mensaje se enruta solo al prompt correcto */}
-      <AsistenteMultifacetaPanel />
       {isAuthenticated && <PresentacionCiudadana onVerCaso={onVerCaso} />}
+      {/* Asistente ciudadano multi-faceta: el mensaje se enruta solo al prompt correcto */}
+      <AsistenteMultifacetaPanel onNavigateLogin={onNavigateLogin} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '24px' }}>
+      {isAuthenticated && <div className="citizen-legacy-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '24px' }}>
         {/* Formulario de Registro Rápido (solo autenticado) / Panel informativo (público) */}
         <div className="glass-card" style={{ padding: '28px' }}>
           {!isAuthenticated ? (
@@ -302,6 +307,7 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
                   <label style={{ display: 'block', fontSize: '0.85rem', color: '#a7f3d0', marginBottom: '6px', fontWeight: 600 }}>
                     Adjuntar Documento (opcional):
                   </label>
+                  {uploadError && <div role="alert" style={{ marginBottom: 10, padding: '9px 11px', borderRadius: 8, color: '#fecaca', background: 'rgba(127,29,29,.3)', border: '1px solid rgba(248,113,113,.3)', fontSize: 12 }}>{uploadError}</div>}
                   {!adjunto ? (
                     <label style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
@@ -324,11 +330,17 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Paperclip size={14} /> {adjunto.nombre} ({adjunto.palabras} palabras)
                       </span>
-                      <button type="button" onClick={() => setAdjunto(null)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.78rem' }}>
-                        Quitar
-                      </button>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button type="button" onClick={descargarAdjunto} disabled={downloadingAttachment} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'transparent', border: 'none', color: '#7dd3fc', cursor: 'pointer', fontSize: '0.78rem' }}>
+                          <Download size={13}/>{downloadingAttachment ? 'Descargando…' : 'Descargar'}
+                        </button>
+                        <button type="button" onClick={() => setAdjunto(null)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.78rem' }}>
+                          Quitar
+                        </button>
+                      </div>
                     </div>
                   )}
+                  {adjunto?.drive_status === 'GUARDADO' && <div style={{ marginTop: 6, color: '#86efac', fontSize: 11 }}>Copia confirmada en Google Drive · registro {adjunto.upload_id}</div>}
                 </div>
 
                 <button
@@ -399,7 +411,7 @@ export default function AtencionCiudadana({ isAuthenticated = false, currentUser
             </div>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

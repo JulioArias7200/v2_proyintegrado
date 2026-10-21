@@ -13,6 +13,8 @@ import time
 import shutil
 import secrets
 import threading
+import mimetypes
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Literal
 from datetime import datetime, timezone
@@ -31,7 +33,7 @@ from fastapi import (
     BackgroundTasks,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import uvicorn
@@ -115,6 +117,60 @@ app.mount(
 )
 
 
+def _registrar_documento_drive(upload_id: str, nombre_original: str, nombre_guardado: str,
+                               drive_res: Dict[str, Any], origen: str, contenido: bytes, usuario: Optional[Dict[str, Any]] = None):
+    """Registra la copia de Drive y su huella en Mongo antes de aceptar la carga."""
+    try:
+        get_db()["documentos_ingresados"].insert_one({
+            "_id": upload_id,
+            "nombre_original": nombre_original,
+            "nombre_guardado": nombre_guardado,
+            "mime_type": mimetypes.guess_type(nombre_original)[0] or "application/octet-stream",
+            "tamano_bytes": len(contenido),
+            "sha256": hashlib.sha256(contenido).hexdigest(),
+            "drive_file_id": drive_res.get("file_id"),
+            "drive_link": drive_res.get("web_view_link", ""),
+            "drive_folder_id": drive_res.get("folder_id"),
+            "drive_status": "GUARDADO",
+            "origen": origen,
+            "autor_id": (usuario or {}).get("usuario_id"),
+            "autor_nombre": (usuario or {}).get("nombre_completo"),
+            "caso_id": None,
+            "fecha_ingreso": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.error(f"No se pudo registrar en Mongo la carga {upload_id} guardada en Drive: {e}")
+        raise HTTPException(status_code=503, detail="El documento llegó a Google Drive, pero no se pudo registrar en el expediente. La carga no se confirmó; inténtelo de nuevo o solicite revisión a Mesa de Partes.")
+
+
+def _vincular_documento_drive(upload_id: Optional[str], caso_id: str):
+    if not upload_id:
+        return
+    try:
+        get_db()["documentos_ingresados"].update_one(
+            {"_id": upload_id}, {"$set": {"caso_id": caso_id, "estado": "VINCULADO_A_EXPEDIENTE",
+                                           "fecha_vinculacion": datetime.now(timezone.utc).isoformat()}}
+        )
+    except Exception as e:
+        logger.error(f"No se pudo vincular la carga {upload_id} al expediente {caso_id}: {e}")
+
+
+def _respuesta_documento_drive(drive_file_id: Optional[str], nombre: str, mime_type: str):
+    if not drive_file_id:
+        raise HTTPException(status_code=404, detail="El archivo original no está disponible")
+    try:
+        from sma_unified.utils.drive_uploader import _get_drive_service
+        service = _get_drive_service()
+        if not service:
+            raise RuntimeError("Google Drive no está conectado")
+        contenido = service.files().get_media(fileId=drive_file_id, supportsAllDrives=True).execute()
+        return Response(content=contenido, media_type=mime_type,
+                        headers={"Content-Disposition": 'attachment; filename="documento-original"'})
+    except Exception as e:
+        logger.error(f"No se pudo recuperar {drive_file_id} desde Google Drive: {e}")
+        raise HTTPException(status_code=503, detail="La copia local no está disponible y no se pudo recuperar el original desde Google Drive")
+
+
 # ── Schemas Pydantic ──────────────────────────────────────────────────────────
 
 
@@ -139,6 +195,7 @@ class Phase2Request(BaseModel):
     solicitud_id: Optional[int] = None
     t_inicio_fase1: Optional[float] = None
     local_filepath: Optional[str] = None
+    presupuesto_segundos: int = Field(default=240, ge=1, le=240)
 
 
 class SearchNormativaRequest(BaseModel):
@@ -508,22 +565,107 @@ class PresentacionCiudadanaRequest(BaseModel):
     tipo: Literal["consulta", "iniciativa"]
     camara_destino: Literal["Diputados", "Senadores", "Ambas"]
     nombre_archivo: Optional[str] = None
+    documento_original: Optional[Dict[str, Any]] = None
 
 
 @app.get("/api/casos")
 def listar_casos_compartidos(offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
                             usuario=Depends(usuario_revision)):
     from sma_unified.db.casos_compartidos import coleccion, publico
-    docs = list(coleccion().find({}).sort("actualizado", -1).skip(offset).limit(limit + 1))
+    filtro = {"autor_id": usuario["usuario_id"]} if usuario.get("rol") == "Ciudadano" else {}
+    docs = list(coleccion().find(filtro).sort("actualizado", -1).skip(offset).limit(limit + 1))
     return {"success": True, "data": [publico(d) for d in docs[:limit]],
             "next_offset": offset + limit if len(docs) > limit else None}
+
+
+@app.get("/api/casos/{caso_id}/documento")
+def descargar_documento_caso(caso_id: str, authorization: Optional[str] = Header(default=None)):
+    """Entrega el documento original solo a su autor o a personal legislativo autorizado."""
+    from sma_unified.db.casos_compartidos import coleccion
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Inicie sesión para abrir el documento")
+    token = authorization[7:].strip()
+    with _SESIONES_LOCK:
+        sesion = _SESIONES.get(token)
+        if not sesion or sesion.get("vence", 0) <= time.time():
+            raise HTTPException(status_code=401, detail="La sesión expiró; vuelva a iniciar sesión")
+        usuario_id = sesion.get("usuario_id")
+    try:
+        from sma_unified.db.neon_client import get_neon_client
+        usuarios = get_neon_client().ejecutar_query(
+            'SELECT usuario_id, rol FROM sistema."Usuarios_Sistema" WHERE usuario_id = %s AND activo = TRUE',
+            (usuario_id,),
+        )
+    except Exception as e:
+        logger.error(f"No se pudo verificar acceso al documento del caso {caso_id}: {e}")
+        raise HTTPException(status_code=503, detail="No se pudo verificar el permiso para este documento")
+    if not usuarios:
+        raise HTTPException(status_code=401, detail="La cuenta no está habilitada")
+    usuario = usuarios[0]
+    doc = coleccion().find_one({"_id": caso_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="El expediente no existe")
+    if usuario.get("rol") == "Ciudadano" and str(doc.get("autor_id")) != str(usuario.get("usuario_id")):
+        raise HTTPException(status_code=403, detail="No tiene permiso para abrir este documento")
+    snapshot = doc.get("snapshot") or {}
+    metadata = snapshot.get("documentPdf") or {}
+    nombre = metadata.get("saved_as") or (snapshot.get("uploadStats") or {}).get("saved_as")
+    if not nombre or Path(nombre).name != nombre or Path(nombre).suffix.lower() not in {".pdf", ".doc", ".docx", ".txt"}:
+        raise HTTPException(status_code=404, detail="El expediente no tiene un archivo original descargable registrado")
+    ruta = (UPLOAD_DIR / nombre).resolve()
+    media_type = mimetypes.guess_type(nombre)[0] or "application/octet-stream"
+    if ruta.parent != UPLOAD_DIR.resolve():
+        raise HTTPException(status_code=404, detail="El archivo no tiene una ruta válida")
+    if not ruta.is_file():
+        drive_id = metadata.get("drive_file_id") or (snapshot.get("uploadStats") or {}).get("drive_file_id")
+        return _respuesta_documento_drive(drive_id, nombre, media_type)
+    return FileResponse(ruta, media_type=media_type, filename=metadata.get("nombre") or snapshot.get("documentName") or nombre)
+
+
+@app.get("/api/documentos/ingresados/{upload_id}/descargar")
+def descargar_documento_ingresado(upload_id: str, authorization: Optional[str] = Header(default=None)):
+    """Descarga una carga registrada en Mongo, verificando la sesión y el autor ciudadano."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Inicie sesión para descargar el documento")
+    with _SESIONES_LOCK:
+        session = _SESIONES.get(authorization[7:].strip())
+        if not session or session.get("vence", 0) <= time.time():
+            raise HTTPException(status_code=401, detail="La sesión expiró; vuelva a iniciar sesión")
+        user_id = session.get("usuario_id")
+    try:
+        from sma_unified.db.neon_client import get_neon_client
+        users = get_neon_client().ejecutar_query(
+            'SELECT usuario_id, rol FROM sistema."Usuarios_Sistema" WHERE usuario_id = %s AND activo = TRUE', (user_id,))
+    except Exception as e:
+        logger.error(f"No se pudo verificar acceso a la carga {upload_id}: {e}")
+        raise HTTPException(status_code=503, detail="No se pudo verificar el permiso del documento")
+    if not users:
+        raise HTTPException(status_code=401, detail="La cuenta no está habilitada")
+    doc = get_db()["documentos_ingresados"].find_one({"_id": upload_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="No se encontró el registro del archivo")
+    if users[0].get("rol") == "Ciudadano" and str(doc.get("autor_id")) != str(user_id):
+        raise HTTPException(status_code=403, detail="No tiene permiso para descargar este documento")
+    nombre = doc.get("nombre_guardado")
+    if not nombre or Path(nombre).name != nombre:
+        raise HTTPException(status_code=404, detail="El archivo no tiene una ruta válida")
+    ruta = (UPLOAD_DIR / nombre).resolve()
+    if ruta.parent != UPLOAD_DIR.resolve():
+        raise HTTPException(status_code=404, detail="El archivo no tiene una ruta válida")
+    mime_type = doc.get("mime_type") or "application/octet-stream"
+    if not ruta.is_file():
+        return _respuesta_documento_drive(doc.get("drive_file_id"), doc.get("nombre_original") or nombre, mime_type)
+    return FileResponse(ruta, media_type=mime_type, filename=doc.get("nombre_original") or nombre)
 
 
 @app.put("/api/casos/{caso_id}")
 def guardar_caso_compartido(caso_id: str, req: CasoCompartidoRequest, usuario=Depends(usuario_revision)):
     from sma_unified.db.casos_compartidos import guardar
     try:
-        return {"success": True, "data": guardar(caso_id, req.snapshot, req.version, usuario)}
+        data = guardar(caso_id, req.snapshot, req.version, usuario)
+        upload_id = (req.snapshot.get("uploadStats") or {}).get("upload_id") or (req.snapshot.get("documentPdf") or {}).get("upload_id")
+        _vincular_documento_drive(upload_id, caso_id)
+        return {"success": True, "data": data}
     except PermissionError as e:
         raise HTTPException(403, str(e))
     except ValueError as e:
@@ -532,7 +674,6 @@ def guardar_caso_compartido(caso_id: str, req: CasoCompartidoRequest, usuario=De
 
 def _procesar_caso_ciudadano(caso_id, req, usuario, reanudar=False):
     from sma_unified.db.casos_compartidos import coleccion
-    from concurrent.futures import ThreadPoolExecutor, as_completed
     col = coleccion()
     snapshot = col.find_one({"_id": caso_id})["snapshot"]
     avisos = []
@@ -567,7 +708,7 @@ def _procesar_caso_ciudadano(caso_id, req, usuario, reanudar=False):
                 nombre_archivo=req.nombre_archivo or req.titulo, id_proyecto=fase["id_proyecto"])
             progreso("COMISION_EN_PROCESO", pipelineStep=3, agentesEnProceso=["comision"])
             comision = run_agent_comision(payload)["data"]
-            progreso("AUDITORIAS_EN_PROCESO", comisionData=comision, selectedCategory=categoria, pipelineStep=4, agentesEnProceso=["constitucional", "consistencia"])
+            progreso("AUDITORIAS_EN_PROCESO", comisionData=comision, selectedCategory=categoria, pipelineStep=5, agentesEnProceso=["constitucional"])
 
             def auditar(agente_id, ejecutar):
                 logger.info(f"[Caso {caso_id}] INICIO agente={agente_id} proyecto={fase['id_proyecto']}")
@@ -583,22 +724,32 @@ def _procesar_caso_ciudadano(caso_id, req, usuario, reanudar=False):
                     logger.error(f"[Caso {caso_id}] ERROR agente={agente_id}: {getattr(e, 'detail', e)}")
                     raise
 
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                cpe_future = pool.submit(auditar, "constitucional", run_agent_constitucional)
-                normas_future = pool.submit(auditar, "consistencia", run_agent_consistencia)
-                pendientes = {cpe_future: ("constitucional", "dictamenData"), normas_future: ("consistencia", "consistenciaData")}
-                resultados = {}
-                activos = ["constitucional", "consistencia"]
-                for futuro in as_completed(pendientes):
-                    agente_id, campo = pendientes[futuro]
-                    try:
-                        resultados[campo] = futuro.result()["data"]
-                    except Exception as e:
-                        resultados[campo] = {"estado": "PENDIENTE_REVISION", "error": str(getattr(e, "detail", e)),
-                            "confianza": 0, "pendientes_revision": [{"motivo": str(getattr(e, "detail", e))}]}
-                    activos.remove(agente_id)
-                    progreso("AUDITORIAS_EN_PROCESO", **{campo: resultados[campo], "agentesEnProceso": activos.copy()})
-                cpe, normas = resultados["dictamenData"], resultados["consistenciaData"]
+            limite_auditoria = time.monotonic() + 240
+            try:
+                cpe = auditar("constitucional", lambda p: run_agent_constitucional(
+                    p.copy(update={"presupuesto_segundos": 240})
+                ))["data"]
+            except Exception as e:
+                detalle = str(getattr(e, "detail", e))
+                cpe = {"estado": "PENDIENTE_REVISION", "error": detalle, "confianza": 0,
+                       "pendientes_revision": [{"motivo": detalle}]}
+            progreso("AUDITORIAS_EN_PROCESO", dictamenData=cpe, pipelineStep=6,
+                     agentesEnProceso=["consistencia"])
+            restante = max(0, int(limite_auditoria - time.monotonic()))
+            if restante > 0:
+                try:
+                    normas = auditar("consistencia", lambda p: run_agent_consistencia(
+                        p.copy(update={"presupuesto_segundos": restante})
+                    ))["data"]
+                except Exception as e:
+                    detalle = str(getattr(e, "detail", e))
+                    normas = {"estado": "PENDIENTE_REVISION", "error": detalle, "confianza": 0,
+                              "pendientes_revision": [{"motivo": detalle}]}
+            else:
+                detalle = "Se agotó el presupuesto máximo de 4 minutos; Consistencia queda pendiente de revisión."
+                normas = {"estado": "PENDIENTE_REVISION", "error": detalle, "confianza": 0,
+                          "pendientes_revision": [{"motivo": detalle}]}
+            progreso("AUDITORIAS_EN_PROCESO", consistenciaData=normas, pipelineStep=6, agentesEnProceso=[])
             progreso("AUDITORIAS_REVISADAS", dictamenData=cpe, consistenciaData=normas)
             if any(d.get("error") or d.get("estado") == "PENDIENTE_REVISION" for d in (cpe, normas)):
                 avisos.append("Hay cotejos incompletos. Se concentran como pendientes, sin considerarlos conclusiones verificadas.")
@@ -608,7 +759,7 @@ def _procesar_caso_ciudadano(caso_id, req, usuario, reanudar=False):
                         "camara_destino": req.camara_destino}
             cpe, normas = {}, {}
             progreso("CONSULTA_CLASIFICADA", comisionData=comision, selectedCategory=fase.get("categoria", "AGENTE_ATENCION_CIUDADANA"))
-        progreso("CONCENTRADOR_EN_PROCESO", pipelineStep=6, agentesEnProceso=["concentrador"])
+        progreso("CONCENTRADOR_EN_PROCESO", pipelineStep=7, agentesEnProceso=["concentrador"])
         resultado = run_agent_concentrador(ConcentradorRequest(sesion_id=fase["sesion_id"],
             id_proyecto=fase["id_proyecto"], datos_constitucionales=cpe, datos_consistencia=normas,
             datos_comision=comision, texto_proyecto=req.texto, titulo_proyecto=req.titulo, notificar=False))["data"]
@@ -638,8 +789,12 @@ def presentar_caso_ciudadano(req: PresentacionCiudadanaRequest, tareas: Backgrou
         "snapshot": {"id": caso_id, "title": req.titulo, "documentName": req.nombre_archivo or req.titulo,
             "documentText": req.texto, "inputMode": "text", "pipelineStep": 1, "pipelineLog": [], "agentesEnProceso": ["distribuidor"],
             "tipoPresentacion": req.tipo, "camaraDestino": req.camara_destino,
+            "documentPdf": ({**req.documento_original, "version": 1, "version_id": str(uuid.uuid4()),
+                             "registrado": datetime.now(timezone.utc).isoformat()} if req.documento_original else None),
             "nombreAutor": usuario.get("nombre_completo", ""), "emailAutor": usuario.get("correo_electronico", "")}}
     coleccion().insert_one(doc)
+    if req.documento_original:
+        _vincular_documento_drive(req.documento_original.get("upload_id"), caso_id)
     tareas.add_task(_procesar_caso_ciudadano, caso_id, req, usuario)
     return {"success": True, "data": publico(doc)}
 
@@ -851,57 +1006,60 @@ def get_dashboard_stats():
 
 
 @app.post("/api/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(file: UploadFile = File(...), usuario=Depends(usuario_revision)):
     """
     Carga un archivo (PDF, DOCX, TXT), extrae su texto limpio
     y devuelve la información estructurada.
     """
     try:
-        filename = file.filename or f"doc_{uuid.uuid4().hex[:8]}.txt"
+        original_name = Path((file.filename or f"documento_{uuid.uuid4().hex[:8]}.txt").replace("\\", "/")).name
+        upload_id = str(uuid.uuid4())
         file_bytes = await file.read()
 
         if len(file_bytes) == 0:
             raise HTTPException(status_code=400, detail="El archivo está vacío.")
 
-        # Guardar copia local en uploaded_files
-        unique_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}"
-        dest_path = UPLOAD_DIR / unique_name
-        with open(dest_path, "wb") as f:
-            f.write(file_bytes)
+        unique_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{upload_id[:8]}_{original_name}"
+
+        # El archivo se registra primero en Drive. Si Drive no confirma la copia,
+        # no se confirma la carga al flujo ni se crea una referencia local huérfana.
+        try:
+            from sma_unified.utils.drive_uploader import upload_pdf_to_drive
+            drive_res = upload_pdf_to_drive(
+                file_bytes=file_bytes,
+                filename=unique_name,
+                categoria="proyectos_iniciales",
+                subcarpeta=f"INGRESOS-{datetime.now().strftime('%Y-%m')}",
+                make_public=False,
+                description=f"Documento de ingreso SMA Congreso. Registro de carga: {upload_id}. Nombre original: {original_name}",
+                app_properties={"sma_upload_id": upload_id, "sma_source_name": original_name[:100]},
+            )
+        except Exception as _e_drive:
+            logger.error(f"No se pudo respaldar {upload_id} en Google Drive: {_e_drive}")
+            raise HTTPException(status_code=503, detail="No se pudo guardar el documento en Google Drive. La carga no se registró; verifique la conexión y vuelva a intentarlo.")
+        if not drive_res or not drive_res.get("file_id"):
+            raise HTTPException(status_code=503, detail="Google Drive no confirmó el registro del documento. La carga no se registró; vuelva a intentarlo.")
 
         # Extraer texto
         texto_extraido, metadata_extraccion = extraer_texto_archivo(
-            filename, file_bytes
+            original_name, file_bytes
         )
 
         if not texto_extraido.strip():
             texto_extraido = "[No se pudo extraer texto legible del documento o el archivo contiene solo imágenes]"
 
-        # Subir a Google Drive (Categoría: Proyectos de Ley de Entrada - Mesa de Partes)
-        drive_link = ""
-        drive_file_id = ""
-        try:
-            from sma_unified.utils.drive_uploader import upload_pdf_to_drive
-
-            drive_res = upload_pdf_to_drive(
-                file_bytes=file_bytes,
-                filename=unique_name,
-                categoria="proyectos_iniciales",
-            )
-            if drive_res:
-                drive_link = drive_res.get("web_view_link", "")
-                drive_file_id = drive_res.get("file_id", "")
-                logger.info(
-                    f"✅ [Mesa de Partes] Proyecto inicial respaldado en Google Drive: {drive_link}"
-                )
-        except Exception as _e_drive:
-            logger.warning(
-                f"No se pudo respaldar proyecto inicial en Drive: {_e_drive}"
-            )
+        dest_path = UPLOAD_DIR / unique_name
+        with open(dest_path, "wb") as f:
+            f.write(file_bytes)
+        drive_link = drive_res.get("web_view_link", "")
+        drive_file_id = drive_res["file_id"]
+        _registrar_documento_drive(upload_id, original_name, unique_name, drive_res, "MESA_DE_PARTES", file_bytes, usuario)
+        logger.info(f"✅ [Mesa de Partes] Carga {upload_id} registrada en Drive: {drive_link or drive_file_id}")
 
         return {
             "success": True,
-            "filename": filename,
+            "filename": original_name,
+            "upload_id": upload_id,
             "saved_as": unique_name,
             "local_path": str(dest_path),
             "size_bytes": len(file_bytes),
@@ -913,7 +1071,10 @@ async def upload_document(file: UploadFile = File(...)):
             "texto_completo": texto_extraido,
             "drive_link": drive_link,
             "drive_file_id": drive_file_id,
+            "drive_status": "GUARDADO",
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error procesando archivo subido: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1480,6 +1641,7 @@ def run_agent_constitucional(req: Phase2Request):
         registrar_bitacora,
     )
     from sma_unified.db.mongo_atlas import guardar_reporte_constitucionalidad_mongo
+    from sma_unified.agents.llm_client import limite_tiempo_auditoria
 
     try:
         t_inicio = time.time()
@@ -1487,13 +1649,14 @@ def run_agent_constitucional(req: Phase2Request):
             req.sesion_id, req.id_proyecto, req.texto_documento, req.nombre_archivo
         )
 
-        resultado = verificar_constitucionalidad(
-            texto_documento=req.texto_documento,
-            sesion_id=req.sesion_id,
-            id_proyecto=id_proyecto,
-            task_id_distribuidor=f"task_{req.sesion_id}",
-            persistir=True,
-        )
+        with limite_tiempo_auditoria(req.presupuesto_segundos):
+            resultado = verificar_constitucionalidad(
+                texto_documento=req.texto_documento,
+                sesion_id=req.sesion_id,
+                id_proyecto=id_proyecto,
+                task_id_distribuidor=f"task_{req.sesion_id}",
+                persistir=True,
+            )
 
         resultado["id_proyecto"] = id_proyecto
 
@@ -1544,6 +1707,7 @@ def run_agent_consistencia(req: Phase2Request):
         verificar_consistencia_normativa,
     )
     from sma_unified.db.neon_postgres import registrar_bitacora
+    from sma_unified.agents.llm_client import limite_tiempo_auditoria
 
     try:
         t_inicio = time.time()
@@ -1551,14 +1715,15 @@ def run_agent_consistencia(req: Phase2Request):
             req.sesion_id, req.id_proyecto, req.texto_documento, req.nombre_archivo
         )
 
-        resultado = verificar_consistencia_normativa(
-            texto_documento=req.texto_documento,
-            sesion_id=req.sesion_id,
-            task_id_distribuidor=f"task_{req.sesion_id}",
-            metadata_extra={"nombre_archivo": req.nombre_archivo},
-            id_proyecto=id_proyecto,
-            nombre_archivo=req.nombre_archivo,
-        )
+        with limite_tiempo_auditoria(req.presupuesto_segundos):
+            resultado = verificar_consistencia_normativa(
+                texto_documento=req.texto_documento,
+                sesion_id=req.sesion_id,
+                task_id_distribuidor=f"task_{req.sesion_id}",
+                metadata_extra={"nombre_archivo": req.nombre_archivo},
+                id_proyecto=id_proyecto,
+                nombre_archivo=req.nombre_archivo,
+            )
 
         resultado["id_proyecto"] = id_proyecto
 
@@ -2750,6 +2915,7 @@ async def subir_normativa_vigente(
     nombre: str = Form(...),
     tipo: str = Form("ley"),
     numero_norma: Optional[str] = Form(None),
+    usuario=Depends(usuario_revision),
 ):
     """
     Sube y procesa una nueva normativa boliviana:
@@ -2763,10 +2929,32 @@ async def subir_normativa_vigente(
 
     try:
         texto = ""
+        archivo_drive = None
         if file and file.filename:
             file_bytes = await file.read()
             if len(file_bytes) > 0:
-                texto, _ = extraer_texto_archivo(file.filename, file_bytes)
+                nombre_original = Path(file.filename.replace("\\", "/")).name
+                upload_id = str(uuid.uuid4())
+                nombre_drive = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{upload_id[:8]}_{nombre_original}"
+                try:
+                    from sma_unified.utils.drive_uploader import upload_pdf_to_drive
+                    resultado_drive = upload_pdf_to_drive(
+                        file_bytes=file_bytes, filename=nombre_drive, categoria="reportes",
+                        subcarpeta="NORMATIVA_VIGENTE", make_public=False,
+                        description=f"Normativa registrada: {nombre}. Carga {upload_id}.",
+                        app_properties={"sma_upload_id": upload_id, "sma_documento": nombre[:100]},
+                    )
+                except Exception as e_drive:
+                    logger.error(f"Error guardando normativa {upload_id} en Drive: {e_drive}")
+                    raise HTTPException(status_code=503, detail="No se pudo guardar el archivo normativo en Google Drive; no se indexó. Vuelva a intentarlo.")
+                if not resultado_drive or not resultado_drive.get("file_id"):
+                    raise HTTPException(status_code=503, detail="Google Drive no confirmó el archivo normativo; no se indexó. Vuelva a intentarlo.")
+                archivo_drive = {"upload_id": upload_id, "drive_file_id": resultado_drive["file_id"],
+                                 "drive_link": resultado_drive.get("web_view_link", ""),
+                                 "nombre_drive": nombre_drive, "nombre_original": nombre_original}
+                (UPLOAD_DIR / nombre_drive).write_bytes(file_bytes)
+                _registrar_documento_drive(upload_id, nombre_original, nombre_drive, resultado_drive, "NORMATIVA", file_bytes, usuario)
+                texto, _ = extraer_texto_archivo(nombre_original, file_bytes)
 
         if not texto.strip() and texto_directo:
             texto = texto_directo.strip()
@@ -2867,6 +3055,9 @@ Responde ÚNICAMENTE con el objeto JSON."""
             resumen=resumen_ia,
             materia=materia_ia,
             num_articulos=total_insertados,
+            drive_file_id=(archivo_drive or {}).get("drive_file_id"),
+            drive_link=(archivo_drive or {}).get("drive_link"),
+            drive_upload_id=(archivo_drive or {}).get("upload_id"),
         )
 
         return {
@@ -2877,6 +3068,7 @@ Responde ÚNICAMENTE con el objeto JSON."""
             "resumen": resumen_ia,
             "materia": materia_ia,
             "articulos_indexados": total_insertados,
+            "drive": ({**archivo_drive, "estado": "GUARDADO"} if archivo_drive else None),
             "mensaje": f"Normativa '{nombre}' procesada exitosamente con LLM e indexada en la base de datos.",
             "normativas": obtener_normativas_catalogadas_completas(),
         }

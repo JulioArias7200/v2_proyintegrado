@@ -52,6 +52,21 @@ async function request(endpoint, options = {}) {
   }
 }
 
+async function requestBlob(endpoint) {
+  let token;
+  try {
+    const user = JSON.parse(localStorage.getItem('sma_congreso_usuario') || 'null');
+    token = user?.token || user?.session_token;
+  } catch { /* sesión local dañada */ }
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!response.ok) {
+    let message = `No se pudo abrir el documento (${response.status})`;
+    try { message = (await response.json()).detail || message; } catch { /* respuesta no JSON */ }
+    throw new Error(message);
+  }
+  return response.blob();
+}
+
 // CHAT CONVERSACIONAL POR AGENTE — retornan { success: false, error } en vez de lanzar
 export async function sendChatMessage({ sesionId = null, agente, mensaje, datosContexto = null, confirmar = false }) {
   try {
@@ -105,6 +120,8 @@ export async function confirmarChatAccion(sesionId) {
 }
 
 export const api = {
+  getCasoDocumento: (id) => requestBlob(`/casos/${encodeURIComponent(id)}/documento`),
+  getDocumentoIngresado: (id) => requestBlob(`/documentos/ingresados/${encodeURIComponent(id)}/descargar`),
   reanudarCasoCiudadano: (id) => request(`/ciudadana/presentaciones/${encodeURIComponent(id)}/reanudar`, { method: 'POST' }),
   getCasosCompartidos: async () => {
     const data = [];

@@ -19,6 +19,7 @@ Gestiona todas las operaciones con la BD PostgreSQL en Neon:
 """
 
 import os
+from threading import Lock
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -36,6 +37,9 @@ except ImportError:
 # ── Lazy singleton de conexión ────────────────────────────────────────────────
 _conn = None
 _tables_ensured = False
+# Compartido por los análisis de Constitucionalidad y Consistencia que corren
+# en paralelo y consultan la conexión singleton psycopg2.
+ANALISIS_NEON_LOCK = Lock()
 
 
 def get_conn():
@@ -1693,6 +1697,9 @@ def _ensure_normativas_catalogadas_table(conn) -> None:
         resumen TEXT,
         materia TEXT,
         num_articulos INT DEFAULT 0,
+        drive_file_id TEXT,
+        drive_link TEXT,
+        drive_upload_id TEXT,
         creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
@@ -1700,6 +1707,7 @@ def _ensure_normativas_catalogadas_table(conn) -> None:
     try:
         cur = conn.cursor()
         cur.execute(ddl)
+        cur.execute("ALTER TABLE sistema.normativas_catalogadas ADD COLUMN IF NOT EXISTS drive_file_id TEXT, ADD COLUMN IF NOT EXISTS drive_link TEXT, ADD COLUMN IF NOT EXISTS drive_upload_id TEXT")
         cur.execute("""
             INSERT INTO sistema.normativas_catalogadas (documento, tipo_documento, resumen, materia)
             VALUES 
@@ -1731,10 +1739,11 @@ def obtener_normativas_catalogadas_completas() -> List[Dict[str, Any]]:
                 COUNT(a.id) AS num_articulos,
                 COALESCE(c.resumen, 'Cuerpo normativo del ordenamiento jurídico del Estado Plurinacional de Bolivia, indexado para control de antinomias.') AS resumen,
                 COALESCE(c.materia, 'Legislación Nacional') AS materia,
-                MAX(a.actualizado_en) AS ultima_actualizacion
+                MAX(a.actualizado_en) AS ultima_actualizacion,
+                c.drive_file_id, c.drive_link, c.drive_upload_id
             FROM sistema.articulos_normativos a
             LEFT JOIN sistema.normativas_catalogadas c ON LOWER(a.documento) = LOWER(c.documento)
-            GROUP BY a.documento, c.tipo_documento, c.numero_norma, c.resumen, c.materia
+            GROUP BY a.documento, c.tipo_documento, c.numero_norma, c.resumen, c.materia, c.drive_file_id, c.drive_link, c.drive_upload_id
             ORDER BY MAX(a.actualizado_en) DESC NULLS LAST, a.documento ASC
         """)
         filas = cur.fetchall()
@@ -1748,6 +1757,7 @@ def obtener_normativas_catalogadas_completas() -> List[Dict[str, Any]]:
                 "resumen": f[4],
                 "materia": f[5],
                 "ultima_actualizacion": str(f[6]) if f[6] else "",
+                "drive_file_id": f[7], "drive_link": f[8], "drive_upload_id": f[9],
             }
             for f in filas
         ]
@@ -1767,22 +1777,28 @@ def guardar_o_actualizar_normativa_catalogada(
     resumen: Optional[str] = None,
     materia: Optional[str] = None,
     num_articulos: int = 0,
+    drive_file_id: Optional[str] = None,
+    drive_link: Optional[str] = None,
+    drive_upload_id: Optional[str] = None,
 ) -> bool:
     try:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO sistema.normativas_catalogadas 
-                (documento, tipo_documento, numero_norma, resumen, materia, num_articulos, actualizado_en)
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                (documento, tipo_documento, numero_norma, resumen, materia, num_articulos, drive_file_id, drive_link, drive_upload_id, actualizado_en)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT (documento) DO UPDATE SET
                 tipo_documento = EXCLUDED.tipo_documento,
                 numero_norma = COALESCE(EXCLUDED.numero_norma, sistema.normativas_catalogadas.numero_norma),
                 resumen = COALESCE(EXCLUDED.resumen, sistema.normativas_catalogadas.resumen),
                 materia = COALESCE(EXCLUDED.materia, sistema.normativas_catalogadas.materia),
                 num_articulos = EXCLUDED.num_articulos,
+                drive_file_id = COALESCE(EXCLUDED.drive_file_id, sistema.normativas_catalogadas.drive_file_id),
+                drive_link = COALESCE(EXCLUDED.drive_link, sistema.normativas_catalogadas.drive_link),
+                drive_upload_id = COALESCE(EXCLUDED.drive_upload_id, sistema.normativas_catalogadas.drive_upload_id),
                 actualizado_en = NOW()
-        """, (documento, tipo_documento, numero_norma, resumen, materia, num_articulos))
+        """, (documento, tipo_documento, numero_norma, resumen, materia, num_articulos, drive_file_id, drive_link, drive_upload_id))
         conn.commit()
         cur.close()
         return True

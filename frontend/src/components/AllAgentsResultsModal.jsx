@@ -101,8 +101,8 @@ export default function AllAgentsResultsModal({
       position: 'fixed',
       inset: 0,
       zIndex: 9999,
-      background: 'rgba(7, 16, 33, 0.85)',
-      backdropFilter: 'blur(10px)',
+      background: 'rgba(19, 46, 69, 0.52)',
+      backdropFilter: 'blur(8px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -112,19 +112,19 @@ export default function AllAgentsResultsModal({
         width: '100%',
         maxWidth: '1080px',
         maxHeight: '90vh',
-        background: 'linear-gradient(145deg, #0B2545 0%, #0F172A 100%)',
-        border: '1.5px solid rgba(0, 180, 216, 0.4)',
+        background: '#F2F7FB',
+        border: '1.5px solid #B8D3E3',
         borderRadius: '20px',
         display: 'flex',
         flexDirection: 'column',
-        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(0, 180, 216, 0.25)',
+        boxShadow: '0 24px 60px rgba(20, 55, 82, 0.28), 0 0 24px rgba(0, 132, 190, 0.12)',
         overflow: 'hidden'
       }}>
         {/* ── HEADER MODAL ── */}
         <div style={{
           padding: '20px 24px',
-          background: 'rgba(15, 23, 42, 0.8)',
-          borderBottom: '1px solid rgba(0, 180, 216, 0.25)',
+          background: '#FFFFFF',
+          borderBottom: '1px solid #D8E5EE',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -150,7 +150,7 @@ export default function AllAgentsResultsModal({
                   margin: 0,
                   fontSize: '1.25rem',
                   fontWeight: 900,
-                  color: '#FFFFFF',
+                  color: '#123B60',
                   fontFamily: 'Outfit, sans-serif',
                   letterSpacing: '-0.01em'
                 }}>
@@ -161,14 +161,14 @@ export default function AllAgentsResultsModal({
                   borderRadius: '12px',
                   fontSize: '0.72rem',
                   fontWeight: 800,
-                  background: 'rgba(138, 201, 38, 0.2)',
-                  border: '1px solid rgba(138, 201, 38, 0.5)',
-                  color: '#8AC926'
+                  background: '#EFF7E9',
+                  border: '1px solid #C9DFAE',
+                  color: '#4B7C18'
                 }}>
                   {completedTotal} de {AGENTS_DEFINITION.length} completados
                 </span>
               </div>
-              <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', color: '#94A3B8' }}>
+              <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', color: '#526E84' }}>
                 Revise y compare los dictámenes de todos los agentes ejecutados, incluso mientras otro agente corre en segundo plano.
               </p>
             </div>
@@ -177,11 +177,11 @@ export default function AllAgentsResultsModal({
           <button
             onClick={onClose}
             style={{
-              background: 'rgba(255, 255, 255, 0.06)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
+              background: '#F3F8FB',
+              border: '1px solid #D1E0E9',
               borderRadius: '10px',
               padding: '8px',
-              color: '#CBD5E1',
+              color: '#45657D',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -189,7 +189,7 @@ export default function AllAgentsResultsModal({
               transition: 'all 0.2s'
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = '#CBD5E1'; e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#45657D'; e.currentTarget.style.background = '#F3F8FB'; }}
           >
             <X size={18} />
           </button>
@@ -198,8 +198,8 @@ export default function AllAgentsResultsModal({
         {/* ── ALERTA DE EJECUCIÓN EN VIVO ── */}
         {isProcessing && (
           <div style={{
-            background: 'linear-gradient(90deg, rgba(2, 132, 199, 0.25) 0%, rgba(0, 180, 216, 0.18) 100%)',
-            borderBottom: '1px solid rgba(0, 180, 216, 0.35)',
+            background: 'linear-gradient(90deg, #E8F4FA 0%, #F3FAFD 100%)',
+            borderBottom: '1px solid #C5DFEC',
             padding: '10px 24px',
             display: 'flex',
             alignItems: 'center',
@@ -208,17 +208,17 @@ export default function AllAgentsResultsModal({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Zap size={16} color="#00B4D8" className="animate-pulse" />
-              <span style={{ fontSize: '0.82rem', color: '#E2E8F0', fontWeight: 600 }}>
+              <span style={{ fontSize: '0.82rem', color: '#244863', fontWeight: 600 }}>
                 Ejecución activa en curso: <strong style={{ color: '#00B4D8' }}>{activeAgentDef?.name || 'Agente'}</strong>
               </span>
             </div>
             <span style={{
               fontSize: '0.72rem',
-              color: '#38BDF8',
-              background: 'rgba(0, 180, 216, 0.15)',
+              color: '#126596',
+              background: '#E5F3FA',
               padding: '2px 8px',
               borderRadius: '6px',
-              border: '1px solid rgba(0, 180, 216, 0.3)'
+              border: '1px solid #B7D8E9'
             }}>
               Paso {pipelineStep} en progreso
             </span>
@@ -226,13 +226,13 @@ export default function AllAgentsResultsModal({
         )}
 
         {/* ── BARRA DE BÚSQUEDA ── */}
-        <div style={{ padding: '14px 24px', borderBottom: '1px solid rgba(0, 180, 216, 0.15)' }}>
+        <div style={{ padding: '14px 24px', borderBottom: '1px solid #D8E5EE', background: '#F2F7FB' }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            background: 'rgba(15, 23, 42, 0.6)',
-            border: '1px solid rgba(0, 180, 216, 0.3)',
+            background: '#FFFFFF',
+            border: '1px solid #BFD8E7',
             borderRadius: '10px',
             padding: '8px 14px'
           }}>
@@ -246,7 +246,7 @@ export default function AllAgentsResultsModal({
                 background: 'transparent',
                 border: 'none',
                 outline: 'none',
-                color: '#FFFFFF',
+                color: '#183650',
                 fontSize: '0.84rem',
                 width: '100%',
                 fontFamily: 'Outfit, sans-serif'
@@ -266,6 +266,7 @@ export default function AllAgentsResultsModal({
         {/* ── LISTADO SCROLLABLE DE AGENTES ── */}
         <div style={{
           padding: '16px 24px',
+          background: '#F1F6FA',
           overflowY: 'auto',
           flex: 1,
           display: 'flex',
@@ -284,22 +285,22 @@ export default function AllAgentsResultsModal({
                 key={agent.id}
                 style={{
                   background: isExpanded
-                    ? 'rgba(19, 64, 116, 0.45)'
+                    ? '#EAF5FB'
                     : isDone
-                      ? 'rgba(11, 37, 69, 0.55)'
-                      : 'rgba(15, 23, 42, 0.4)',
+                      ? '#FFFFFF'
+                      : '#F8FBFD',
                   border: `1.5px solid ${isExpanded
-                      ? '#00B4D8'
+                      ? '#68B9DB'
                       : isDone
-                        ? 'rgba(138, 201, 38, 0.4)'
+                        ? '#C5DDB4'
                         : isActive
-                          ? '#00B4D8'
-                          : 'rgba(100, 116, 139, 0.2)'
+                          ? '#8BCDE5'
+                          : '#DCE6ED'
                     }`,
                   borderRadius: '14px',
                   padding: '14px 18px',
                   transition: 'all 0.25s ease',
-                  boxShadow: isDone ? '0 4px 16px rgba(0, 0, 0, 0.25)' : 'none'
+                  boxShadow: isDone ? '0 4px 14px rgba(24, 58, 86, 0.07)' : 'none'
                 }}
               >
                 {/* Cabecera del Agente */}
@@ -315,7 +316,7 @@ export default function AllAgentsResultsModal({
                       width: '42px',
                       height: '42px',
                       borderRadius: '50%',
-                      background: '#0F172A',
+                      background: '#EAF2F7',
                       border: `2px solid ${isDone ? '#8AC926' : isActive ? '#00B4D8' : 'rgba(100, 116, 139, 0.4)'}`,
                       display: 'flex',
                       alignItems: 'center',
@@ -340,7 +341,7 @@ export default function AllAgentsResultsModal({
                         <span style={{
                           fontSize: '0.92rem',
                           fontWeight: 800,
-                          color: '#FFFFFF',
+                          color: '#183F5D',
                           fontFamily: 'Outfit, sans-serif'
                         }}>
                           {agent.name}
@@ -357,11 +358,11 @@ export default function AllAgentsResultsModal({
                         }}>
                           P{agent.stepNumber}
                         </span>
-                        <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#5B7489' }}>
                           • {agent.phaseName}
                         </span>
                       </div>
-                      <div style={{ fontSize: '0.76rem', color: '#94A3B8', marginTop: '2px' }}>
+                      <div style={{ fontSize: '0.76rem', color: '#536F85', marginTop: '2px' }}>
                         {agent.role}
                       </div>
                     </div>
@@ -376,9 +377,9 @@ export default function AllAgentsResultsModal({
                         gap: '5px',
                         padding: '4px 10px',
                         borderRadius: '20px',
-                        background: 'rgba(138, 201, 38, 0.15)',
-                        color: '#8AC926',
-                        border: '1px solid rgba(138, 201, 38, 0.4)',
+                        background: '#EFF7E9',
+                        color: '#4B7C18',
+                        border: '1px solid #C9DFAE',
                         fontSize: '0.74rem',
                         fontWeight: 800
                       }}>
@@ -391,9 +392,9 @@ export default function AllAgentsResultsModal({
                         gap: '5px',
                         padding: '4px 10px',
                         borderRadius: '20px',
-                        background: 'rgba(0, 180, 216, 0.15)',
-                        color: '#00B4D8',
-                        border: '1px solid rgba(0, 180, 216, 0.4)',
+                        background: '#E6F5FA',
+                        color: '#087C9D',
+                        border: '1px solid #AEDBEA',
                         fontSize: '0.74rem',
                         fontWeight: 800
                       }}>
@@ -407,8 +408,8 @@ export default function AllAgentsResultsModal({
                         padding: '4px 10px',
                         borderRadius: '20px',
                         background: 'rgba(100, 116, 139, 0.15)',
-                        color: '#64748B',
-                        border: '1px solid rgba(100, 116, 139, 0.25)',
+                        color: '#536F85',
+                        border: '1px solid #D3DFE7',
                         fontSize: '0.74rem',
                         fontWeight: 700
                       }}>
@@ -425,9 +426,9 @@ export default function AllAgentsResultsModal({
                           fontSize: '0.74rem',
                           fontWeight: 700,
                           borderRadius: '8px',
-                          background: isExpanded ? 'rgba(0, 180, 216, 0.25)' : 'rgba(0, 180, 216, 0.12)',
-                          border: '1px solid rgba(0, 180, 216, 0.4)',
-                          color: '#38BDF8',
+                          background: isExpanded ? '#D9EEF8' : '#EAF6FB',
+                          border: '1px solid #9BCDE2',
+                          color: '#126596',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -452,9 +453,9 @@ export default function AllAgentsResultsModal({
                         fontSize: '0.74rem',
                         fontWeight: 700,
                         borderRadius: '8px',
-                        background: 'rgba(255, 255, 255, 0.06)',
-                        border: '1px solid rgba(255, 255, 255, 0.18)',
-                        color: '#E2E8F0',
+                        background: '#F2F7FA',
+                        border: '1px solid #D2E0E9',
+                        color: '#35566E',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
@@ -472,23 +473,23 @@ export default function AllAgentsResultsModal({
                   <div style={{
                     marginTop: '14px',
                     paddingTop: '14px',
-                    borderTop: '1px solid rgba(0, 180, 216, 0.2)'
+                    borderTop: '1px solid #D1E3ED'
                   }}>
                     <div style={{
-                      background: 'rgba(10, 17, 30, 0.85)',
+                      background: '#FFFFFF',
                       borderRadius: '10px',
                       padding: '12px 16px',
-                      border: '1px solid rgba(0, 180, 216, 0.25)',
+                      border: '1px solid #D7E5ED',
                       fontSize: '0.78rem',
                       lineHeight: 1.55,
-                      color: '#CBD5E1'
+                      color: '#35566E'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <span style={{ fontWeight: 800, color: '#38BDF8' }}>
+                        <span style={{ fontWeight: 800, color: '#126596' }}>
                           Salida Estructurada — {agent.name}
                         </span>
                         {agent.model && (
-                          <span style={{ fontSize: '0.7rem', color: '#64748B', fontFamily: 'monospace' }}>
+                          <span style={{ fontSize: '0.7rem', color: '#6A8295', fontFamily: 'monospace' }}>
                             Modelo: {agent.model}
                           </span>
                         )}
@@ -569,17 +570,18 @@ export default function AllAgentsResultsModal({
 
                       {/* Vista previa JSON detallada */}
                       <details style={{ marginTop: '8px', cursor: 'pointer' }}>
-                        <summary style={{ color: '#64748B', fontSize: '0.72rem' }}>Ver JSON Completo</summary>
+                        <summary style={{ color: '#42647D', fontSize: '0.72rem' }}>Ver JSON Completo</summary>
                         <pre style={{
                           margin: '6px 0 0 0',
                           padding: '8px',
-                          background: '#070D18',
+                          background: '#F1F6F9',
                           borderRadius: '6px',
                           fontFamily: 'monospace',
                           fontSize: '0.68rem',
                           maxHeight: '160px',
                           overflowY: 'auto',
-                          color: '#94A3B8'
+                          color: '#35566E',
+                          border: '1px solid #D7E2E9'
                         }}>
                           {typeof resultData === 'object' ? JSON.stringify(resultData, null, 2) : String(resultData)}
                         </pre>
@@ -595,14 +597,14 @@ export default function AllAgentsResultsModal({
         {/* ── FOOTER MODAL ── */}
         <div style={{
           padding: '14px 24px',
-          background: 'rgba(15, 23, 42, 0.95)',
-          borderTop: '1px solid rgba(0, 180, 216, 0.25)',
+          background: '#FFFFFF',
+          borderTop: '1px solid #D8E5EE',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between'
         }}>
-          <span style={{ fontSize: '0.76rem', color: '#64748B' }}>
-            Base de Datos: <strong style={{ color: '#94A3B8' }}>Neon PostgreSQL + pgvector + MongoDB Atlas</strong>
+          <span style={{ fontSize: '0.76rem', color: '#536F85' }}>
+            Base de Datos: <strong style={{ color: '#35566E' }}>Neon PostgreSQL + pgvector + MongoDB Atlas</strong>
           </span>
           <button
             onClick={onClose}

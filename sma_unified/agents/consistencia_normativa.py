@@ -43,7 +43,7 @@ from sma_unified.config import (
     AGENTE_CONSISTENCIA,
     TIPOS_RELACION_CONSISTENCIA,
 )
-from sma_unified.agents.llm_client import chat_completion_auditoria
+from sma_unified.agents.llm_client import chat_completion_auditoria, map_con_contexto_auditoria
 from sma_unified.agents.embeddings_nvidia import embeber_pregunta
 from sma_unified.utils.parser_normativa import parsear_articulos
 from sma_unified.db.mongo_atlas import (
@@ -58,10 +58,11 @@ from sma_unified.db.neon_postgres import (
     guardar_analisis_consistencia,
     guardar_correccion_proyecto,
     obtener_email_autor_proyecto,
+    ANALISIS_NEON_LOCK,
 )
 
 # ── Constantes de profundidad ────────────────────────────────────────────────
-TOP_K_NORMAS = 15           # Artículos vigentes a recuperar por bloque
+TOP_K_NORMAS = 6            # Alineado con el límite efectivo de cotejos por bloque
 UMBRAL_SIMILITUD = 0.42     # Similitud mínima coseno (más bajo = más cobertura)
 LONGITUD_MIN_BLOQUE = 30    # Mínimo de caracteres para considerar un bloque analizable
 MAX_CHARS_EMBEDDING = 1500  # Máximo de caracteres enviados al modelo de embedding
@@ -200,13 +201,16 @@ class AgenteConsistenciaNormativa:
         filtrando y deduplicando los candidatos más relevantes.
         """
         embedding = self._embed(texto_nuevo)
-        candidatos = buscar_articulos_normativos_semantico(
-            embedding, documento=None, top_k=self.top_k, umbral=self.umbral
-        )
-        if not candidatos:
+        # neon_postgres usa una conexión psycopg2 singleton; serializar su uso
+        # entre las unidades paralelas evita compartir cursores entre hilos.
+        with ANALISIS_NEON_LOCK:
             candidatos = buscar_articulos_normativos_semantico(
-                embedding, documento=None, top_k=self.top_k, umbral=0.35
+                embedding, documento=None, top_k=self.top_k, umbral=self.umbral
             )
+            if not candidatos:
+                candidatos = buscar_articulos_normativos_semantico(
+                    embedding, documento=None, top_k=self.top_k, umbral=0.35
+                )
 
         # Deduplicación de candidatos por (documento, numero) y límite a top 6
         vistos_cand = set()
@@ -228,7 +232,9 @@ class AgenteConsistenciaNormativa:
             return cand, clasificacion
 
         with ThreadPoolExecutor(max_workers=2) as executor:
-            evaluaciones_paralelas = list(executor.map(_evaluar_candidato_normativo, candidatos_unicos))
+            evaluaciones_paralelas = map_con_contexto_auditoria(
+                executor, _evaluar_candidato_normativo, candidatos_unicos
+            )
 
         resultados: List[Dict[str, Any]] = []
         for candidato, clasificacion in evaluaciones_paralelas:
@@ -255,22 +261,23 @@ class AgenteConsistenciaNormativa:
             resultados.append(resultado)
 
             if persistir and resultado["verificado"]:
-                guardar_analisis_consistencia(
-                    articulo_nuevo_texto=texto_nuevo,
-                    articulo_candidato_id=None,
-                    similitud=resultado["similitud"],
-                    tipo_relacion=tipo_relacion,
-                    justificacion=resultado["justificacion"],
-                    sugerencia=resultado["sugerencia"],
-                    sesion_id=sesion_id,
-                    task_id_mongo=task_id_mongo,
-                    id_proyecto=id_proyecto,
-                    modelo_llm=self.llm_model,
-                    nombre_archivo=nombre_archivo,
-                    articulo_proyecto_numero=articulo_proyecto_numero,
-                    articulo_candidato_documento=candidato["documento"],
-                    articulo_candidato_numero=candidato["numero"],
-                )
+                with ANALISIS_NEON_LOCK:
+                    guardar_analisis_consistencia(
+                        articulo_nuevo_texto=texto_nuevo,
+                        articulo_candidato_id=None,
+                        similitud=resultado["similitud"],
+                        tipo_relacion=tipo_relacion,
+                        justificacion=resultado["justificacion"],
+                        sugerencia=resultado["sugerencia"],
+                        sesion_id=sesion_id,
+                        task_id_mongo=task_id_mongo,
+                        id_proyecto=id_proyecto,
+                        modelo_llm=self.llm_model,
+                        nombre_archivo=nombre_archivo,
+                        articulo_proyecto_numero=articulo_proyecto_numero,
+                        articulo_candidato_documento=candidato["documento"],
+                        articulo_candidato_numero=candidato["numero"],
+                    )
 
         return resultados
 
@@ -296,7 +303,8 @@ class AgenteConsistenciaNormativa:
         resultados: List[Dict[str, Any]] = []
         vistos_hallazgos = set()
 
-        for indice, unidad in enumerate(unidades, start=1):
+        def _analizar_unidad(indice_unidad):
+            indice, unidad = indice_unidad
             logger.info(
                 f"[Consistencia] Artículo {unidad['numero']} ({indice}/{len(unidades)}): iniciando cotejo"
             )
@@ -313,6 +321,17 @@ class AgenteConsistenciaNormativa:
                 f"[Consistencia] Artículo {unidad['numero']} ({indice}/{len(unidades)}): "
                 f"{len(hallazgos)} hallazgos"
             )
+            return hallazgos
+
+        # Las unidades son independientes. Mantener un límite pequeño acelera
+        # proyectos extensos sin saturar el proveedor LLM ni la base vectorial.
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            hallazgos_por_unidad = map_con_contexto_auditoria(
+                executor, _analizar_unidad, enumerate(unidades, start=1)
+            )
+
+        for hallazgos in hallazgos_por_unidad:
             for h in hallazgos:
                 clave = (h.get("articulo_proyecto"), h.get("norma"), h.get("numero_articulo"), h.get("tipo_relacion"))
                 if clave not in vistos_hallazgos:

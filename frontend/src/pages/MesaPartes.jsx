@@ -308,11 +308,15 @@ function CardArticuloAFavor({ art, idx }) {
   );
 }
 
-export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnly = false, initialCaseId = null }) {
+export default function MesaPartes({ onNavigateExpedientes, onNavigateEjecutivo, currentUser, readOnly = false, initialCaseId = null, onActiveCaseChange }) {
   const api = readOnly ? apiSoloLectura(apiClient) : apiClient;
   const resultsRef = useRef(null);
   const [reanudandoCaso, setReanudandoCaso] = useState(false);
   const [errorReanudacion, setErrorReanudacion] = useState('');
+  const [inboxSearch, setInboxSearch] = useState('');
+  const [inboxDestination, setInboxDestination] = useState('Todas');
+  const [downloadingOriginal, setDownloadingOriginal] = useState(false);
+  const [originalDownloadError, setOriginalDownloadError] = useState('');
   // ── Multi-Session State Initialization ──
   const [sessions, setSessions] = useState(() => {
     if (readOnly) return [];
@@ -354,6 +358,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
   const [normativaNumero, setNormativaNumero] = useState('');
   const [isUploadingNormativa, setIsUploadingNormativa] = useState(false);
   const [normativaUploadStatus, setNormativaUploadStatus] = useState(null);
+  const [driveDownloadError, setDriveDownloadError] = useState('');
 
   // ── Pestañas técnicas para el Agente de Veto y Promulgación ──
   const [vetoActiveTab, setVetoActiveTab] = useState('dictamen');
@@ -429,9 +434,45 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
     }
   };
 
+  const descargarRegistroNormativo = async (norma) => {
+    setDriveDownloadError('');
+    try {
+      const blob = await apiClient.getDocumentoIngresado(norma.drive_upload_id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = norma.drive_filename || norma.documento || 'normativa-original';
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) { setDriveDownloadError(err.message); }
+  };
+
   // Active Session helper
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0] || createDefaultSession(1);
   const shared = useCasosCompartidos(sessions, setSessions, s => ({ ...createDefaultSession(), ...s, createdAt: s.createdAt || s.updatedAt }), readOnly);
+  const descargarDocumentoOriginal = async () => {
+    setDownloadingOriginal(true);
+    setOriginalDownloadError('');
+    try {
+      const blob = await apiClient.getCasoDocumento(activeSession.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = activeSession.documentPdf?.nombre || activeSession.uploadStats?.filename || activeSession.documentName || 'documento-original';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) { setOriginalDownloadError(err.message); }
+    finally { setDownloadingOriginal(false); }
+  };
+  useEffect(() => {
+    if (activeSession?.id && (activeSession._sharedVersion || activeSession.documentText || activeSession.fase1Data || activeSession.uploadStats?.saved_as)) {
+      onActiveCaseChange?.(activeSession);
+    }
+  }, [activeSession?.id, activeSession?._sharedVersion, activeSession?.updatedAt, activeSession?.pipelineStep,
+    activeSession?.estadoCompartido, activeSession?.isProcessing, activeSession?.title, activeSession?.documentName,
+    activeSession?.documentText, activeSession?.uploadStats?.saved_as, onActiveCaseChange]);
   const reanudarAuditorias = async () => {
     if (reanudandoCaso) return;
     setReanudandoCaso(true); setErrorReanudacion('');
@@ -570,9 +611,12 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
           caracteres: res.caracteres,
           motor: res.motor,
           saved_as: res.saved_as,
+          filename: res.filename,
+          upload_id: res.upload_id,
           local_path: res.local_path,
           drive_link: res.drive_link,
           drive_file_id: res.drive_file_id,
+          drive_status: res.drive_status,
         },
         driveLinkInicial: res.drive_link,
         isProcessing: false
@@ -708,6 +752,10 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
 
   const handleEjecutarConsistencia = async () => {
     if (readOnly) return;
+    if (!dictamenData) {
+      updateActiveSession({ errorMessage: 'Ejecuta primero la Verificación Constitucional artículo por artículo.' });
+      return;
+    }
     updateActiveSession({
       isProcessing: true,
       errorMessage: '',
@@ -1051,76 +1099,6 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
     }
   };
 
-  const handleRegistrarDecisionEjecutiva = async (accion, referencia, motivoVeto = '', numeroLeyManual = '') => {
-    if (readOnly) return;
-    if (isProcessing) return;
-    updateActiveSession({ isProcessing: true, errorMessage: '' });
-    try {
-      let numPersonalizado = numeroLeyManual?.trim() || '';
-      if (!numPersonalizado && referencia) {
-        const digits = referencia.replace(/\D/g, '');
-        if (digits.length >= 1 && digits.length <= 6) {
-          numPersonalizado = digits;
-        }
-      }
-      const res = await api.runAgentVetoPromulgacion({
-        proyecto_info: buildProyectoInfo(),
-        id_proyecto: fase1Data?.id_proyecto,
-        expediente: {
-          ...concentradorData?.expediente_consolidado,
-          decision_operador: accion,
-          referencia_decision: referencia,
-          numero_ley_personalizado: numPersonalizado,
-          pliego_objeciones: motivoVeto ? [{ motivo_objecion: motivoVeto }] : []
-        },
-      });
-      if (!res.success || (res.data?.evaluacion_veto?.decision !== accion && !res.data?.evaluacion_veto?.decision?.includes(accion))) {
-        throw new Error('No se pudo registrar la decisión ejecutiva');
-      }
-      const dataConLey = {
-        ...res.data,
-        numero_ley_personalizado: numPersonalizado,
-        evaluacion_veto: {
-          ...res.data?.evaluacion_veto,
-          decision: accion,
-          referencia_decision: referencia,
-          numero_ley_personalizado: numPersonalizado
-        }
-      };
-      updateActiveSession({ vetoPromulgacionData: dataConLey, pipelineStep: 14 });
-      appendLog('Veto_Promulgacion', 'DECISION_REGISTRADA', `${accion}: ${referencia}${numPersonalizado ? ` | Ley: ${numPersonalizado}` : ''}`);
-    } catch (err) {
-      updateActiveSession({ errorMessage: err.message });
-    } finally {
-      updateActiveSession({ isProcessing: false });
-    }
-  };
-
-
-  const handleVetoPromulgacion = async () => {
-    if (readOnly) return;
-    if (isProcessing || bicameralData?.ciclo_bicameral?.aprobacion_humana?.accion !== 'APROBAR') {
-      updateActiveSession({ errorMessage: 'Registra la aprobacion de la revision bicameral antes de continuar.' });
-      return;
-    }
-    if (!fase1Data) return;
-    updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 13, inspectedAgentId: null });
-    appendLog('Veto_Promulgacion', 'EN_PROCESO', 'Evaluacion estrategica multicriterio en curso...');
-    try {
-      const res = await api.runAgentVetoPromulgacion({
-        proyecto_info: buildProyectoInfo(),
-        expediente: concentradorData?.expediente_consolidado || {},
-        id_proyecto: fase1Data?.id_proyecto
-      });
-      updateActiveSession({ vetoPromulgacionData: res.data, pipelineStep: 14, isProcessing: false });
-      const ev = res.data?.evaluacion_veto || {};
-      appendLog('Veto_Promulgacion', 'COMPLETADO', `Decision: ${ev.decision || 'N/A'} | Score: ${ev.score_final || 'N/A'}`);
-    } catch (err) {
-      updateActiveSession({ errorMessage: err.message || 'Error en Veto/Promulgacion', pipelineStep: 13, isProcessing: false });
-      appendLog('Veto_Promulgacion', 'ERROR', err.message);
-    }
-  };
-
   const handlePublicacion = async () => {
     if (readOnly) return;
     if (isProcessing || vetoPromulgacionData?.evaluacion_veto?.decision !== 'PROMULGAR' || pipelineStep < 14) {
@@ -1235,9 +1213,9 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
     registrar_aprobacion_detalle: handleSecretario,
     iniciar_ciclo_bicameral: handleBicameral,
     confirmar_aprobacion_bicameral: handleConfirmarAprobacionBicameral,
-    evaluar_veto_promulgacion: handleVetoPromulgacion,
-    autorizar_promulgacion: handleVetoPromulgacion,
-    registrar_veto: handleVetoPromulgacion,
+    evaluar_veto_promulgacion: () => onNavigateEjecutivo?.(),
+    autorizar_promulgacion: () => onNavigateEjecutivo?.(),
+    registrar_veto: () => onNavigateEjecutivo?.(),
     publicar_gaceta_oficial: handlePublicacion,
     asignar_numero_ley: handlePublicacion,
   };
@@ -1289,36 +1267,38 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
     setDetailPanelAgent(null);
   };
 
-  // ── EJECUCIÓN PARALELA: Constitucional + Consistencia simultáneamente ──
+  // ── EJECUCIÓN SECUENCIAL: Constitucionalidad primero, después Consistencia ──
   const handleEjecutarAuditoriaParalela = async () => {
     if (readOnly) return;
     if (!fase1Data) return;
     updateActiveSession({ isProcessing: true, errorMessage: '', pipelineStep: 4, inspectedAgentId: null });
-    appendLog('Auditoria_Paralela', 'EN_PROCESO', 'Iniciando Verificador Constitucional y Consistencia Normativa en paralelo...');
+    appendLog('Auditoria_Secuencial', 'EN_PROCESO', 'Constitucionalidad por artículo primero; Consistencia Normativa después (máximo 4 minutos).');
+    let auditoriaActual = 'Constitucional';
     try {
       const payload = buildPayload();
       const ejecutar = async (nombre, campo, llamada) => {
-        const res = await llamada(payload);
+        const presupuesto = Math.max(1, Math.min(240, Math.ceil((limite - Date.now()) / 1000)));
+        if (Date.now() >= limite) {
+          const detalle = 'Se agotó el límite de 4 minutos; el agente queda pendiente de revisión.';
+          updateActiveSession({ [campo]: { estado: 'PENDIENTE_REVISION', error: detalle, confianza: 0 } });
+          throw new Error(detalle);
+        }
+        const res = await llamada({ ...payload, presupuesto_segundos: presupuesto });
         if (!res.success || !res.data || res.data.error) {
           throw new Error(`${nombre}: ${res.data?.error || res.error || 'Respuesta incompleta'}`);
         }
         updateActiveSession({ [campo]: res.data });
         if (res.data.estado === 'PENDIENTE_REVISION') {
           appendLog(nombre, 'PENDIENTE_REVISION', `${res.data.total_pendientes} cotejos sin completar`);
-          throw new Error(`${nombre}: ${res.data.total_pendientes} cotejos pendientes de revisión. Reintenta la auditoría.`);
+          return res;
         }
         appendLog(nombre, 'COMPLETADO', 'Análisis terminado. Resultado disponible.');
         return res;
       };
-      const resultados = await Promise.allSettled([
-        ejecutar('Constitucional', 'dictamenData', api.runAgentConstitucional),
-        ejecutar('Consistencia', 'consistenciaData', api.runAgentConsistencia)
-      ]);
-      const errores = resultados.filter(r => r.status === 'rejected');
-      if (errores.length) {
-        throw new Error(errores.map(r => r.reason.message).join('; '));
-      }
-      const [resConstitucional, resConsistencia] = resultados.map(r => r.value);
+      const limite = Date.now() + 240_000;
+      const resConstitucional = await ejecutar('Constitucional', 'dictamenData', api.runAgentConstitucional);
+      auditoriaActual = 'Consistencia';
+      const resConsistencia = await ejecutar('Consistencia', 'consistenciaData', api.runAgentConsistencia);
       updateActiveSession({
         dictamenData: resConstitucional.data,
         consistenciaData: resConsistencia.data,
@@ -1328,12 +1308,17 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
       appendLog('Constitucional', 'COMPLETADO', `Resultado constitucional: ${resConstitucional.data?.valido ? 'VÁLIDO' : 'CON OBSERVACIONES'}`);
       appendLog('Consistencia', 'COMPLETADO', `Hallazgos: ${(resConsistencia.data?.hallazgos || []).length} detectados`);
     } catch (err) {
+      const campoPendiente = auditoriaActual === 'Constitucional' ? 'dictamenData' : 'consistenciaData';
       updateActiveSession({
-        errorMessage: err.message || 'Error en auditoría paralela',
+        [campoPendiente]: activeSession[campoPendiente] || {
+          estado: 'PENDIENTE_REVISION', error: err.message, confianza: 0,
+          pendientes_revision: [{ motivo: err.message || 'Tiempo máximo de auditoría agotado' }]
+        },
+        errorMessage: err.message || 'Error en auditoría secuencial',
         pipelineStep: 4,
         isProcessing: false
       });
-      appendLog('Auditoria_Paralela', 'ERROR', err.message);
+      appendLog('Auditoria_Secuencial', 'ERROR', err.message);
     }
   };
 
@@ -1344,7 +1329,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
     }
     if (inspectedAgentId) return AGENTS_DEFINITION.find(a => a.id === inspectedAgentId) || AGENTS_DEFINITION[0];
     if (isProcessing && pipelineStep >= 11 && pipelineStep <= 14) {
-      const id = { 11: 'secretario', 12: 'bicameral', 13: 'veto_promulgacion', 14: 'publicacion' }[pipelineStep];
+      const id = { 11: 'secretario', 12: 'bicameral', 13: 'bicameral', 14: 'publicacion' }[pipelineStep];
       return AGENTS_DEFINITION.find(a => a.id === id);
     }
     if (pipelineStep <= 2) return AGENTS_DEFINITION.find(a => a.id === 'distribuidor') || AGENTS_DEFINITION[0];
@@ -1357,8 +1342,8 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
     if (pipelineStep <= 10) return AGENTS_DEFINITION.find(a => a.id === 'constitucional') || AGENTS_DEFINITION[2];
     if (pipelineStep === 12) return AGENTS_DEFINITION.find(a => a.id === 'secretario') || AGENTS_DEFINITION[5];
     if (pipelineStep === 13) return AGENTS_DEFINITION.find(a => a.id === 'bicameral') || AGENTS_DEFINITION[6];
-    if (pipelineStep === 14) return AGENTS_DEFINITION.find(a => a.id === 'veto_promulgacion') || AGENTS_DEFINITION[7];
-    return AGENTS_DEFINITION.find(a => a.id === 'publicacion') || AGENTS_DEFINITION[8];
+    if (pipelineStep === 14) return AGENTS_DEFINITION.find(a => a.id === 'publicacion') || AGENTS_DEFINITION[7];
+    return AGENTS_DEFINITION.find(a => a.id === 'publicacion') || AGENTS_DEFINITION[7];
   };
   const activeAgentDef = getActiveAgentDef();
   const activeLogoUrl = AGENT_LOGO_MAP[activeAgentDef?.id] || '/robots/logos/agente_distribuidor.jpeg';
@@ -1370,13 +1355,13 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
 
     return (
       <div style={{
-        background: 'linear-gradient(135deg, rgba(11, 37, 69, 0.94) 0%, rgba(19, 64, 116, 0.75) 50%, rgba(15, 23, 42, 0.94) 100%)',
+        background: 'linear-gradient(135deg, #ffffff 0%, #f2f8fc 58%, #eaf4fa 100%)',
         border: `1.5px solid ${isAgentDone ? '#8AC92688' : `${activeAccent}66`}`,
         borderRadius: '20px',
         padding: '20px 28px',
         boxShadow: isAgentDone
-          ? `0 10px 32px rgba(0,0,0,0.45), 0 0 28px rgba(138,201,38,0.3)`
-          : `0 10px 32px rgba(0,0,0,0.45), 0 0 28px ${activeAccent}33`,
+          ? `0 8px 24px rgba(24,58,86,0.08), 0 0 20px rgba(138,201,38,0.16)`
+          : `0 8px 24px rgba(24,58,86,0.08), 0 0 20px ${activeAccent}22`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -1405,13 +1390,13 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              background: `${activeAccent}22`,
-              border: `1px solid ${activeAccent}66`,
+              background: 'rgba(14,116,176,.08)',
+              border: '1px solid #b7d5e5',
               borderRadius: '6px',
               padding: '4px 12px',
               fontSize: '0.72rem',
               fontWeight: 800,
-              color: activeAccent,
+              color: '#176b9b',
               letterSpacing: '0.09em',
               textTransform: 'uppercase'
             }}>
@@ -1443,25 +1428,25 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
           <h2 style={{
             fontSize: '2.1rem',
             fontWeight: 900,
-            color: '#FFFFFF',
+            color: '#123B60',
             fontFamily: 'Outfit, sans-serif',
             lineHeight: 1.15,
             margin: '0 0 6px 0',
             letterSpacing: '0.01em',
-            textShadow: `0 2px 18px ${activeAccent}55`
+            textShadow: 'none'
           }}>
             {activeAgentDef?.name}
           </h2>
 
           <div style={{
             fontSize: '0.9rem',
-            color: '#CBD5E1',
+            color: '#4B6B84',
             fontWeight: 500,
             display: 'flex',
             alignItems: 'center',
             gap: '8px'
           }}>
-            <span style={{ color: activeAccent, fontWeight: 800 }}>•</span>
+            <span style={{ color: '#1592ca', fontWeight: 800 }}>•</span>
             <span>{activeAgentDef?.role}</span>
           </div>
         </div>
@@ -1544,24 +1529,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
   }, [inspectedAgentId, activeSession.id]);
 
   return (
-    <div style={{ maxWidth: '1720px', width: '96%', margin: '0 auto', padding: 'clamp(12px, 2vw, 24px) clamp(12px, 2vw, 24px) 80px' }}>
-      <section className="revision-panel" aria-live="polite">
-        <strong>{readOnly ? 'Seguimiento ciudadano: agentes y observaciones' : 'Casos compartidos'}</strong>
-        <CaseProcessingStatus caso={activeSession} onReanudar={reanudarAuditorias} reanudando={reanudandoCaso} />
-        {errorReanudacion && <p role="alert">{errorReanudacion}</p>}
-        {readOnly && <p>Puede inspeccionar los agentes y sus resultados. El seguimiento se actualiza automáticamente; la continuación corresponde al diputado o senador.</p>}
-        {readOnly && activeSession.agentesEnProceso?.length > 0 && <p role="status">En acción: {activeSession.agentesEnProceso.map(id => AGENTS_DEFINITION.find(a => a.id === id)?.name || id).join(' y ')}</p>}
-        {readOnly && activeSession.errorMessage && <p role="alert">{activeSession.errorMessage}</p>}
-        {readOnly && activeSession.avisos?.map((aviso, i) => <p role="status" key={i}>{aviso}</p>)}
-        {readOnly && inspectedAgentId && !getAgentResultData(inspectedAgentId) && <p role="status">Este agente todavía no tiene un resultado disponible. Su pantalla se actualizará cuando termine.</p>}
-        <p>{shared.error || (shared.saving ? 'Guardando en el servidor…' : shared.ready ? 'Casos sincronizados. El seguimiento está disponible desde otros equipos.' : 'Conectando al servidor de casos…')}</p>
-        <button type="button" className="btn-secondary" onClick={shared.refresh}>Actualizar casos</button>
-        {activeSession.camaraDestino && <p>Destino: {activeSession.camaraDestino} · {activeSession.estadoCompartido || 'En seguimiento'}</p>}
-      </section>
-      {(fase1Data || dictamenData || consistenciaData) && <AuditResultsNav
-        constitucional={dictamenData} consistencia={consistenciaData} selected={inspectedAgentId}
-        onSelect={id => handleSelectAgent(AGENTS_DEFINITION.find(agent => agent.id === id))} />}
-
+    <div className="mesa-page" style={{ maxWidth: '1720px', width: '96%', margin: '0 auto', padding: 'clamp(12px, 2vw, 24px) clamp(12px, 2vw, 24px) 80px' }}>
       {/* ── MODAL GLOBAL DE TODOS LOS RESULTADOS DE AGENTES ── */}
       <AllAgentsResultsModal
         isOpen={showAllResultsModal}
@@ -1588,7 +1556,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
       )}
 
       {/* ── HEADER INSTITUCIONAL ── */}
-      <div style={{
+      <div className="mesa-institutional-header" style={{
         marginBottom: '20px',
         background: 'rgba(11,37,69,0.7)',
         border: '1px solid rgba(0,180,216,0.2)',
@@ -1653,111 +1621,68 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
         </p>
       </div>
 
-      {/* ── MULTI-QUERY SESSIONS TABS ── */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        marginBottom: '20px',
-        overflowX: 'auto',
-        paddingBottom: '4px',
-        borderBottom: '1px solid rgba(0,180,216,0.2)'
-      }}>
-        {sessions.map((ses, idx) => {
-          const isCurrent = ses.id === activeSession.id;
-          const isDone = ses.pipelineStep >= 15;
-          const isWorking = ses.pipelineStep > 0 && ses.pipelineStep < 15;
-
-          return (
-            <div
-              key={ses.id}
-              onClick={() => setActiveSessionId(ses.id)}
-              className={`session-tab ${isCurrent ? 'active' : 'inactive'}`}
-            >
-              {/* Status indicator dot */}
-              <span style={{
-                width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
-                background: isDone ? '#8AC926' : isWorking ? '#F4A261' : 'rgba(100,116,139,0.5)',
-                boxShadow: isWorking ? '0 0 6px #F4A261' : isDone ? '0 0 6px #8AC926' : 'none'
-              }} />
-
-              <span style={{ fontSize: '0.84rem', whiteSpace: 'nowrap' }}>
-                {ses.title || `Consulta #${idx + 1}`}
-              </span>
-
-              {/* Step indicator pill */}
-              <span style={{
-                fontSize: '0.66rem',
-                padding: '2px 6px',
-                borderRadius: '5px',
-                background: isCurrent ? 'rgba(0,180,216,0.15)' : 'rgba(100,116,139,0.1)',
-                color: isCurrent ? '#00B4D8' : '#64748B',
-                fontWeight: 700
-              }}>
-                {ses.pipelineStep === 0 ? 'Inicio' : `Paso ${ses.pipelineStep}`}
-              </span>
-
-              {/* Close tab button */}
-              <button
-                onClick={(e) => handleRemoveSession(e, ses.id)}
-                title="Cerrar esta consulta"
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  padding: '2px',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  color: '#94a3b8',
-                  transition: 'color 0.2s'
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; }}
-              >
-                <X size={14} />
-              </button>
-            </div>
-          );
-        })}
-
-        {/* Add New Session Button */}
-        <button
-          onClick={handleAddSession}
-          className="btn-secondary"
-          style={{
-            padding: '6px 14px',
-            fontSize: '0.82rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            borderRadius: '10px',
-            height: '34px',
-            whiteSpace: 'nowrap',
-            background: 'rgba(19, 64, 116, 0.4)',
-            border: '1px dashed rgba(0, 180, 216, 0.6)',
-            color: '#00B4D8',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0, 180, 216, 0.15)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(19, 64, 116, 0.4)'; }}
-        >
-          <Plus size={15} />
-          <span>Nueva Consulta</span>
-        </button>
-      </div>
-
-      {/* ── TOP HORIZONTAL AGENT FLOW ── */}
-      <HorizontalAgentFlow
-        activeAgentIds={activeSession._sharedProcessing ? activeSession.agentesEnProceso : undefined}
-        completedAgentIds={readOnly ? AGENTS_DEFINITION.filter(a => getAgentResultData(a.id)).map(a => a.id) : undefined}
-        pipelineStep={pipelineStep}
-        inspectedAgentId={inspectedAgentId}
-        onSelectAgent={handleSelectAgent}
-        onOpenAllResults={() => setShowAllResultsModal(true)}
-      />
-
+      {/* Bandeja y comandos compactos al lado; flujo y resultados en el área central. */}
+      <div className="mesa-sidebar-workspace">
+        <aside className="mesa-process-sidebar" aria-label="Bandeja de ingreso y comandos">
+          <div className="command-panel-heading"><span>Mesa de comandos</span><span className="command-stage">Etapa {pipelineStep}</span></div>
+          <label htmlFor="active-process-select">Expediente activo</label>
+          <select id="active-process-select" value={activeSession.id} onChange={e => setActiveSessionId(e.target.value)}>
+            {sessions.map((ses, idx) => <option key={ses.id} value={ses.id}>{ses.title || ses.documentName || `Consulta #${idx + 1}`} · {ses.camaraDestino || ses.tipoIniciativa || 'Sin destino'}</option>)}
+          </select>
+          {!readOnly && <button type="button" onClick={handleAddSession} className="sidebar-new-case"><Plus size={15} />Nuevo expediente</button>}
+          {!readOnly && (() => {
+            const inbox = sessions.filter(s => s._sharedVersion && (s.documentText || s.fase1Data));
+            const filtered = inbox.filter(s => {
+              const q = inboxSearch.trim().toLocaleLowerCase();
+              const target = s.camaraDestino || s.tipoIniciativa || 'Ambas';
+              return (!q || [s.id, s.title, s.documentName, s.autorCaso, s.nombreAutor].some(v => String(v || '').toLocaleLowerCase().includes(q)))
+                && (inboxDestination === 'Todas' || target === inboxDestination || target === 'Ambas');
+            }).sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+            const isActive = s => Boolean(s.isProcessing || s._sharedProcessing);
+            const needsReview = s => Boolean(s.errorMessage || s.estadoCompartido === 'REQUIERE_REVISION');
+            return <details className="sidebar-inbox">
+              <summary>Solicitudes entrantes <span className="inbox-total">{inbox.length}</span><small>{inbox.filter(isActive).length} activas · {inbox.filter(needsReview).length} por revisar</small></summary>
+              <div className="sidebar-inbox-counts"><span>{inbox.filter(isActive).length} en ejecución</span><span>{inbox.filter(needsReview).length} por revisar</span></div>
+              <input aria-label="Buscar solicitudes entrantes" value={inboxSearch} onChange={e => setInboxSearch(e.target.value)} placeholder="Buscar expediente o solicitante" />
+              <select aria-label="Filtrar solicitudes por cámara" value={inboxDestination} onChange={e => setInboxDestination(e.target.value)}><option>Todas</option><option>Diputados</option><option>Senadores</option></select>
+              <div className="sidebar-inbox-list">
+                {filtered.slice(0, 8).map(s => <button type="button" key={s.id} className={`sidebar-inbox-item ${s.id === activeSession.id ? 'selected' : ''}`} onClick={() => setActiveSessionId(s.id)}>
+                  <strong>{s.title || s.documentName || 'Sin título'}</strong><small>{s.id} · {s.camaraDestino || s.tipoIniciativa || 'Sin destino'}</small><span>{needsReview(s) ? 'Requiere revisión' : isActive(s) ? 'En ejecución' : s.estadoCompartido || (s.fase1Data ? 'En seguimiento' : 'Recibido')}</span>
+                </button>)}
+                {!filtered.length && <p className="sidebar-inbox-empty">{shared.ready ? 'No hay solicitudes que coincidan.' : 'Cargando solicitudes registradas…'}</p>}
+                {filtered.length > 8 && <small className="sidebar-inbox-more">Mostrando 8 de {filtered.length}; busca para localizar otro expediente.</small>}
+              </div>
+              <button type="button" className="sidebar-refresh" onClick={shared.refresh}>Actualizar bandeja</button>
+              {shared.error && <p role="alert" className="sidebar-error">{shared.error}</p>}
+            </details>;
+          })()}
+          <details className="revision-panel command-status-panel sidebar-sync-panel" aria-live="polite">
+            <summary>Sincronización y estado</summary>
+            <strong>{readOnly ? 'Seguimiento ciudadano' : 'Casos compartidos'}</strong>
+            <CaseProcessingStatus caso={activeSession} onReanudar={reanudarAuditorias} reanudando={reanudandoCaso} />
+            {errorReanudacion && <p role="alert">{errorReanudacion}</p>}
+            {readOnly && <p>El seguimiento se actualiza automáticamente; la continuación corresponde al diputado o senador.</p>}
+            {readOnly && activeSession.agentesEnProceso?.length > 0 && <p role="status">En acción: {activeSession.agentesEnProceso.map(id => AGENTS_DEFINITION.find(a => a.id === id)?.name || id).join(' y ')}</p>}
+            {readOnly && activeSession.errorMessage && <p role="alert">{activeSession.errorMessage}</p>}
+            {readOnly && activeSession.avisos?.map((aviso, i) => <p role="status" key={i}>{aviso}</p>)}
+            {readOnly && inspectedAgentId && !getAgentResultData(inspectedAgentId) && <p role="status">Este agente todavía no tiene un resultado disponible.</p>}
+            <p>{shared.error || (shared.saving ? 'Guardando en el servidor…' : shared.ready ? 'Casos sincronizados en el servidor.' : 'Conectando al servidor de casos…')}</p>
+            <button type="button" className="sidebar-refresh" onClick={shared.refresh}>Actualizar casos</button>
+          </details>
+          <button type="button" className="sidebar-results-button" onClick={() => setShowAllResultsModal(true)}><Eye size={15} />Ver todos los resultados ({AGENTS_DEFINITION.filter(a => getAgentResultData(a.id)).length})</button>
+        </aside>
+        <main className="mesa-workbench-main">
+          <HorizontalAgentFlow
+            activeAgentIds={activeSession._sharedProcessing ? activeSession.agentesEnProceso : undefined}
+            completedAgentIds={readOnly ? AGENTS_DEFINITION.filter(a => getAgentResultData(a.id)).map(a => a.id) : undefined}
+            pipelineStep={pipelineStep}
+            inspectedAgentId={inspectedAgentId}
+            onSelectAgent={handleSelectAgent}
+            onOpenAllResults={() => setShowAllResultsModal(true)}
+          />
+          {(fase1Data || dictamenData || consistenciaData) && <AuditResultsNav
+            constitucional={dictamenData} consistencia={consistenciaData} selected={inspectedAgentId}
+            onSelect={id => handleSelectAgent(AGENTS_DEFINITION.find(agent => agent.id === id))} />}
       {/* ── INSPECTION BANNER ── */}
       {inspectedAgentId && (
         <div style={{
@@ -2352,8 +2277,8 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Building2 size={32} color="#60a5fa" />
-                  <h3 style={{ fontSize: '1.4rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>Comisión Parlamentaria Asignada</h3>
+                  <Building2 size={32} color="#1d4f91" />
+              <h3 style={{ fontSize: '1.4rem', color: '#123B60', fontWeight: 800, margin: 0 }}>Comisión Parlamentaria Asignada</h3>
                 </div>
                 <button className="btn-secondary" onClick={handleReset}>
                   <RotateCcw size={16} />
@@ -2362,19 +2287,19 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
               </div>
 
               <div style={{
-                background: 'rgba(29, 78, 216, 0.2)',
+                background: '#edf5ff',
                 padding: '20px',
                 borderRadius: '14px',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
+                border: '1px solid #c7dbf3',
                 marginBottom: '24px'
               }}>
-                <div style={{ fontSize: '0.9rem', color: '#bfdbfe', marginBottom: '4px' }}>Comisión Principal Recomendada:</div>
-                <div style={{ fontSize: '1.4rem', color: '#60a5fa', fontWeight: 800, marginBottom: '6px' }}>
+                <div style={{ fontSize: '0.9rem', color: '#49677f', marginBottom: '4px' }}>Comisión Principal Recomendada:</div>
+                <div style={{ fontSize: '1.4rem', color: '#1d4f91', fontWeight: 800, marginBottom: '6px' }}>
                   {comisionData.comision_principal}
                 </div>
                 {comisionData.comision_secundaria && (
-                  <div style={{ fontSize: '0.9rem', color: '#bfdbfe' }}>
-                    Comisión Secundaria: <strong style={{ color: '#ffffff' }}>{comisionData.comision_secundaria}</strong>
+                  <div style={{ fontSize: '0.9rem', color: '#49677f' }}>
+                    Comisión Secundaria: <strong style={{ color: '#183650' }}>{comisionData.comision_secundaria}</strong>
                   </div>
                 )}
                 <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
@@ -2385,29 +2310,29 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
 
               {comisionData.resumen && (
                 <div style={{
-                  background: 'rgba(3, 20, 16, 0.6)',
+                  background: '#edf8f2',
                   padding: '20px',
                   borderRadius: '14px',
-                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  border: '1px solid #c7e5d3',
                   marginBottom: '24px',
                 }}>
-                  <h4 style={{ fontSize: '1rem', color: '#34d399', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                  <h4 style={{ fontSize: '1rem', color: '#187448', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                     <BookOpen size={18} />
                     Resumen Ejecutivo del Bot
                   </h4>
-                  <p style={{ color: '#f0fdf4', fontSize: '0.92rem', lineHeight: 1.6, marginTop: '8px', marginBottom: 0 }}>{comisionData.resumen}</p>
+                  <p style={{ color: '#345b48', fontSize: '0.92rem', lineHeight: 1.6, marginTop: '8px', marginBottom: 0 }}>{comisionData.resumen}</p>
                 </div>
               )}
 
               {/* Miembros de la Comisión Asignada */}
               <div style={{
-                background: 'rgba(15, 23, 42, 0.6)',
+                background: '#f4f8fb',
                 padding: '20px',
                 borderRadius: '14px',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
+                border: '1px solid #d5e3ed',
                 marginBottom: '24px'
               }}>
-                <h4 style={{ fontSize: '1.05rem', color: '#60a5fa', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <h4 style={{ fontSize: '1.05rem', color: '#175d88', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                   <Users size={20} />
                   Miembros Parlamentarios Asignados (Destinatarios Oficiales)
                 </h4>
@@ -2415,20 +2340,20 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', marginTop: '12px' }}>
                     {comisionData.miembros.map((m, idx) => (
                       <div key={idx} style={{
-                        background: 'rgba(30, 41, 59, 0.7)',
+                        background: '#ffffff',
                         padding: '12px 16px',
                         borderRadius: '10px',
-                        border: '1px solid rgba(148, 163, 184, 0.2)'
+                        border: '1px solid #dce7ee'
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                          <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.92rem' }}>{m.nombre_completo}</span>
+                          <span style={{ color: '#183650', fontWeight: 700, fontSize: '0.92rem' }}>{m.nombre_completo}</span>
                           <span className="badge badge-gold">{m.cargo}</span>
                         </div>
-                        <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '4px' }}>
-                          Cámara: <strong style={{ color: '#cbd5e1' }}>{m.tipo_camara}</strong> {m.partido_politico ? `| ${m.partido_politico}` : ''}
+                        <div style={{ fontSize: '0.82rem', color: '#627d92', marginBottom: '4px' }}>
+                          Cámara: <strong style={{ color: '#35566e' }}>{m.tipo_camara}</strong> {m.partido_politico ? `| ${m.partido_politico}` : ''}
                         </div>
                         {m.email && (
-                          <div style={{ fontSize: '0.82rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ fontSize: '0.82rem', color: '#087db8', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <Mail size={14} />
                             <span>{m.email}</span>
                           </div>
@@ -2437,7 +2362,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                     ))}
                   </div>
                 ) : (
-                  <div style={{ fontSize: '0.88rem', color: '#94a3b8', fontStyle: 'italic', marginTop: '8px' }}>
+                  <div style={{ fontSize: '0.88rem', color: '#627d92', fontStyle: 'italic', marginTop: '8px' }}>
                     No hay parlamentarios registrados aún para esta comisión.
                   </div>
                 )}
@@ -2457,7 +2382,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px', gap: '14px', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.85rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Zap size={14} color="#00B4D8" /> Ejecución simultánea en paralelo
+                  <Zap size={14} color="#00B4D8" /> Constitucionalidad por artículo → Consistencia · máx. 4 min
                 </span>
                 <button
                   onClick={handleEjecutarAuditoriaParalela}
@@ -2477,12 +2402,12 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                   {isProcessing ? (
                     <>
                       <Cpu size={22} className="pulse-active" />
-                      <span>Ejecutando Auditoría Paralela (CPE + Leyes)...</span>
+                      <span>Verificando CPE por artículo y luego consistencia...</span>
                     </>
                   ) : (
                     <>
                       <Zap size={20} color="#8AC926" />
-                      <span>Iniciar Auditoría Paralela (CPE + Leyes)</span>
+                      <span>Iniciar auditoría secuencial (máx. 4 min)</span>
                       <ArrowRight size={18} />
                     </>
                   )}
@@ -2560,6 +2485,26 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                   </div>
                 </div>
               </div>
+
+              {dictamenData.analisis?.length > 0 && (
+                <section className="cpe-analysis-results">
+                  <header className="cpe-analysis-heading">
+                    <div><span>ANÁLISIS DETALLADO</span><h3>Cotejo párrafo por párrafo con la Constitución</h3><p>Cada bloque del proyecto se contrasta con los artículos pertinentes de la CPE 2009.</p></div>
+                    <div className="cpe-analysis-metrics"><strong>{dictamenData.total_parrafos_evaluados || 0}<small>Párrafos</small></strong><strong>{dictamenData.total_cotejos || dictamenData.analisis.length}<small>Cotejos CPE</small></strong><strong>{dictamenData.nivel_riesgo_global || dictamenData.resumen_ejecutivo?.nivel_riesgo || '—'}<small>Riesgo global</small></strong></div>
+                  </header>
+                  <div className="cpe-analysis-list">
+                    {dictamenData.analisis.map((fila, idx) => {
+                      const labels = { contradiccion: 'Contradicción', complementario: 'Compatible', requiere_analisis_de_fondo: 'Requiere análisis de fondo', sin_relacion: 'Sin colisión detectada', pendiente_revision: 'Pendiente de revisión' };
+                      return <article className={`cpe-analysis-item cpe-${fila.tipo_relacion || 'sin_relacion'}`} key={`${fila.articulo_proyecto}-${fila.parrafo_proyecto}-${fila.numero_articulo}-${idx}`}>
+                        <div className="cpe-analysis-item-heading"><div><strong>{fila.articulo_proyecto} · {fila.parrafo_proyecto}</strong><span>{fila.articulo_constitucional}{fila.similitud > 0 && ` · ${Math.round((fila.similitud <= 1 ? fila.similitud : fila.similitud / 100) * 100)}% de relevancia`}</span></div><span className="cpe-analysis-label">{labels[fila.tipo_relacion] || fila.tipo_relacion}</span></div>
+                        <div className="cpe-quote-grid"><div><small>Fragmento del proyecto</small><p>{fila.cita_proyecto || fila.texto_parrafo || 'Fragmento no disponible.'}</p></div><div><small>Artículo de la Constitución</small><p>{fila.cita_constitucional || fila.texto_constitucional_verificado || 'Texto constitucional no disponible.'}</p></div></div>
+                        <p className="cpe-analysis-justification">{fila.justificacion || 'Sin observación jurídica adicional.'}</p>
+                        {fila.sugerencia && <details><summary>Ver recomendación y fundamento</summary><p>{fila.sugerencia}</p>{fila.analisis_profundo?.redaccion_corregida && <p><strong>Redacción sugerida:</strong> {fila.analisis_profundo.redaccion_corregida}</p>}{fila.analisis_profundo?.precedentes_tcp && <p><strong>Precedente TCP:</strong> {fila.analisis_profundo.precedentes_tcp}</p>}</details>}
+                      </article>;
+                    })}
+                  </div>
+                </section>
+              )}
 
               <div>
                 {/* Severidad */}
@@ -3144,6 +3089,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                       </form>
                     )}
 
+                    {driveDownloadError && <p role="alert" style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{driveDownloadError}</p>}
                     {/* Grid de Normativas Cargadas */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
                       {normativasList.length === 0 ? (
@@ -3216,6 +3162,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                               <span>Estado: Vigente en BD</span>
                               <span>{norma.ultima_actualizacion ? new Date(norma.ultima_actualizacion).toLocaleDateString('es-BO') : 'Indexada'}</span>
                             </div>
+                            {norma.drive_upload_id && <button type="button" onClick={() => descargarRegistroNormativo(norma)} className="download-original-button"><Download size={14}/> Descargar original</button>}
                           </div>
                         ))
                       )}
@@ -4448,7 +4395,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
                 procesando={readOnly || isProcessing}
                 onDecision={handleResolverBicameral}
                 onActualizar={handleActualizarBicameral}
-                onContinuar={handleVetoPromulgacion}
+                onContinuar={() => { onActiveCaseChange?.(activeSession); onNavigateEjecutivo?.(); }}
                 onDevolverComision={handleDevolverComision}
                 onCorregir={() => updateActiveSession({ pipelineStep: 11, inspectedAgentId: null })}
               />
@@ -4473,724 +4420,15 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
         </div>
       )}
 
-      {/* ── STEP 14: RESULTADO VETO / PROMULGACIÓN (CON VISOR COMPLETO Y PESTAÑAS) ── */}
+      {/* ── ETAPA EJECUTIVA TRASLADADA A SU PESTAÑA ── */}
       {effectiveViewStep === 14 && (
-        <div className="mesa-layout-grid">
-          <div className="mesa-banner-col" style={{ position: 'sticky', top: '20px' }}>
-            <LateralAgentHero
-              agent={activeAgentDef}
-              isProcessing={isProcessing}
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {renderAgentHeaderContainer()}
-            <AgentResultCard
-              agentName="Agente Veto y Promulgación"
-              role="Evaluación Estratégica y Decisión Presidencial (Arts. 163-167 CPE)"
-              theme="blue"
-              status={vetoPromulgacionData ? "completed" : "idle"}
-              phaseLabel="Fase 5: Decisión Ejecutiva"
-              thinkingText={vetoPromulgacionData ? "Evaluación estratégica y dictamen ejecutivo emitido" : "Esperando ejecución de la evaluación de Veto/Promulgación"}
-              image="/robots/logos/agente_veto.jpeg"
-              justificacion="Art. 163-167 CPE: Control político y constitucional previo a la promulgación presidencial. Asesoría fundada sobre viabilidad política, legalidad, factibilidad y sostenibilidad."
-              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'bicameral' })}
-              prevLabel="Ver Trámite Bicameral"
-            >
-              {vetoPromulgacionData?.evaluacion_veto && (
-                <DecisionEjecutivaPanel evaluacion={vetoPromulgacionData.evaluacion_veto}
-                  usuario={currentUser} procesando={readOnly || isProcessing}
-                  onRegistrar={handleRegistrarDecisionEjecutiva} onPublicar={handlePublicacion} />
-              )}
-              {(() => {
-                if (!vetoPromulgacionData) {
-                  return (
-                    <div style={{
-                      padding: '28px 24px',
-                      background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.9) 0%, rgba(27, 42, 74, 0.75) 100%)',
-                      borderRadius: '16px',
-                      border: '1.5px dashed rgba(56, 189, 248, 0.4)',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{
-                        width: '68px',
-                        height: '68px',
-                        borderRadius: '50%',
-                        background: 'rgba(30, 58, 138, 0.5)',
-                        border: '2px solid #38bdf8',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto 16px',
-                        boxShadow: '0 0 25px rgba(56, 189, 248, 0.35)'
-                      }}>
-                        <Gavel size={34} color="#38bdf8" />
-                      </div>
-                      <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>
-                        Agente de Veto y Promulgación Presidencial
-                      </h3>
-                      <p style={{ color: '#94a3b8', fontSize: '0.88rem', maxWidth: '680px', margin: '0 auto 20px', lineHeight: 1.55 }}>
-                        Este agente evalúa de forma estratégica y multicriterio el proyecto de ley sancionado por la Asamblea Legislativa Plurinacional (Cámara de Diputados y Cámara de Senadores), verificando antecedentes constitucionales, sostenibilidad fiscal y el plazo perentorio de 10 días hábiles (Arts. 163 y 164 CPE).
-                      </p>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px', maxWidth: '720px', margin: '0 auto 24px', textAlign: 'left' }}>
-                        <div style={{ background: 'rgba(11, 37, 69, 0.55)', border: '1px solid rgba(0, 180, 216, 0.25)', borderRadius: '12px', padding: '14px' }}>
-                          <div style={{ fontSize: '0.72rem', color: '#00B4D8', fontWeight: 700, textTransform: 'uppercase' }}>Insumos Requeridos</div>
-                          <div style={{ fontSize: '0.82rem', color: '#e2e8f0', marginTop: '4px' }}>Ley sancionada en trámite bicameral, acta de escrutinio y expediente integral.</div>
-                        </div>
-                        <div style={{ background: 'rgba(11, 37, 69, 0.55)', border: '1px solid rgba(138, 201, 38, 0.25)', borderRadius: '12px', padding: '14px' }}>
-                          <div style={{ fontSize: '0.72rem', color: '#8AC926', fontWeight: 700, textTransform: 'uppercase' }}>Plazo Constitucional</div>
-                          <div style={{ fontSize: '0.82rem', color: '#e2e8f0', marginTop: '4px' }}>10 días hábiles para promulgar u objetar con observaciones fundadas.</div>
-                        </div>
-                        <div style={{ background: 'rgba(11, 37, 69, 0.55)', border: '1px solid rgba(244, 162, 97, 0.25)', borderRadius: '12px', padding: '14px' }}>
-                          <div style={{ fontSize: '0.72rem', color: '#F4A261', fontWeight: 700, textTransform: 'uppercase' }}>Decisiones Posibles</div>
-                          <div style={{ fontSize: '0.82rem', color: '#e2e8f0', marginTop: '4px' }}>Promulgación, Veto Parcial o Veto Total (Arts. 163-164 CPE).</div>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleVetoPromulgacion}
-                        disabled={readOnly || isProcessing}
-                        className="btn-primary"
-                        style={{ fontSize: '1rem', padding: '12px 28px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-                      >
-                        {isProcessing ? (
-                          <><Cpu size={18} className="pulse-active" /><span>Evaluando Veto y Promulgación...</span></>
-                        ) : (
-                          <><Gavel size={18} /><span>Iniciar Evaluación de Veto y Promulgación</span><ArrowRight size={16} /></>
-                        )}
-                      </button>
-                    </div>
-                  );
-                }
-
-                const ev = vetoPromulgacionData.evaluacion_veto || {};
-                const rec = ev.recomendacion_tecnica || {};
-                const decision = ev.decision || 'PENDIENTE_DECISION_HUMANA';
-                const esPromulgar = decision === 'PROMULGAR';
-
-                const inputPayload = {
-                  proyecto_info: buildProyectoInfo(),
-                  expediente: concentradorData?.expediente_consolidado || {},
-                  id_proyecto: fase1Data?.id_proyecto,
-                  ciclo_bicameral: bicameralData?.ciclo_bicameral || {}
-                };
-
-                const handleCopyJson = () => {
-    if (readOnly) return;
-                  try {
-                    navigator.clipboard.writeText(JSON.stringify(vetoPromulgacionData, null, 2));
-                    setCopiedVetoJson(true);
-                    setTimeout(() => setCopiedVetoJson(false), 2000);
-                  } catch (err) {
-                    console.error('Error al copiar JSON:', err);
-                  }
-                };
-
-                return (
-                  <div>
-                    {/* ── BARRA DE PESTAÑAS TÉCNICAS ── */}
-                    <div style={{
-                      display: 'flex',
-                      gap: '8px',
-                      borderBottom: '1.5px solid rgba(56, 189, 248, 0.25)',
-                      paddingBottom: '12px',
-                      marginBottom: '20px',
-                      overflowX: 'auto'
-                    }}>
-                      <button
-                        type="button"
-                        onClick={() => setVetoActiveTab('dictamen')}
-                        style={{
-                          padding: '8px 16px',
-                          borderRadius: '10px',
-                          border: vetoActiveTab === 'dictamen' ? '1.5px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
-                          background: vetoActiveTab === 'dictamen' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15,23,42,0.6)',
-                          color: vetoActiveTab === 'dictamen' ? '#ffffff' : '#94a3b8',
-                          fontWeight: vetoActiveTab === 'dictamen' ? 700 : 500,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        <FileText size={15} />
-                        <span>Dictamen y Asesoría Ejecutiva</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setVetoActiveTab('json')}
-                        style={{
-                          padding: '8px 16px',
-                          borderRadius: '10px',
-                          border: vetoActiveTab === 'json' ? '1.5px solid #00B4D8' : '1px solid rgba(255,255,255,0.1)',
-                          background: vetoActiveTab === 'json' ? 'rgba(0, 180, 216, 0.2)' : 'rgba(15,23,42,0.6)',
-                          color: vetoActiveTab === 'json' ? '#ffffff' : '#94a3b8',
-                          fontWeight: vetoActiveTab === 'json' ? 700 : 500,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        <FileJson size={15} />
-                        <span>Entradas y Salidas JSON</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setVetoActiveTab('codigo')}
-                        style={{
-                          padding: '8px 16px',
-                          borderRadius: '10px',
-                          border: vetoActiveTab === 'codigo' ? '1.5px solid #8AC926' : '1px solid rgba(255,255,255,0.1)',
-                          background: vetoActiveTab === 'codigo' ? 'rgba(138, 201, 38, 0.2)' : 'rgba(15,23,42,0.6)',
-                          color: vetoActiveTab === 'codigo' ? '#ffffff' : '#94a3b8',
-                          fontWeight: vetoActiveTab === 'codigo' ? 700 : 500,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        <Code size={15} />
-                        <span>Lógica y Código del Agente</span>
-                      </button>
-                    </div>
-
-                    {/* ══════════════════════════════════════════════════════════════ */}
-                    {/* PESTAÑA 1: DICTAMEN Y ASESORÍA EJECUTIVA                       */}
-                    {/* ══════════════════════════════════════════════════════════════ */}
-                    {vetoActiveTab === 'dictamen' && (
-                      <div>
-                        {/* Cabecera de Decisión */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                            <div style={{ background: esPromulgar ? 'rgba(138,201,38,0.2)' : 'rgba(231,111,81,0.2)', borderRadius: '50%', padding: '12px' }}>
-                              <Gavel size={32} color={esPromulgar ? '#8AC926' : '#E76F51'} />
-                            </div>
-                            <div>
-                              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                                Etapa 7 · Decisión Presidencial del Órgano Ejecutivo
-                              </div>
-                              <h3 style={{ fontSize: '1.45rem', color: '#ffffff', fontWeight: 800, margin: 0 }}>
-                                {esPromulgar ? '✅ Sanción Aprobada: Proceder a Promulgación' : `⚠️ Dictamen Ejecutivo: ${decision}`}
-                              </h3>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                            <span className="badge badge-gold" style={{ fontSize: '0.76rem' }}>
-                              ⏱️ Plazo: {ev.plazo_constitucional_dias || 10} días {ev.tipo_dias || 'hábiles'}
-                            </span>
-                            <span className={`badge ${esPromulgar ? 'badge-green' : 'badge-red'}`} style={{ fontSize: '0.76rem' }}>
-                              {decision}
-                            </span>
-                            <span className="badge badge-blue" style={{ fontSize: '0.76rem' }}>
-                              Modo: {ev.modo_control || 'HUMAN_IN_THE_LOOP'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Resumen Ejecutivo y Fundamentación */}
-                        <div style={{
-                          background: 'linear-gradient(145deg, rgba(15,23,42,0.9), rgba(30,41,59,0.85))',
-                          border: '1.5px solid rgba(56,189,248,0.3)',
-                          padding: '18px 20px',
-                          borderRadius: '14px',
-                          marginBottom: '20px'
-                        }}>
-                          <div style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>
-                            📋 Resumen Ejecutivo de la Asesoría Presidencial
-                          </div>
-                          <p style={{ color: '#f1f5f9', fontSize: '0.92rem', lineHeight: 1.6, margin: '0 0 12px 0' }}>
-                            {rec.resumen_ejecutivo || ev.justificacion || 'Evaluación jurídica y técnica favorable para la promulgación oficial del proyecto sancionado conforme a los Arts. 163 y 164 de la CPE.'}
-                          </p>
-
-                          {rec.fundamentacion && (
-                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: '0.84rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                              <strong>Fundamento:</strong> {rec.fundamentacion}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Paneles de Alertas Constitucionales y Fiscales */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '20px' }}>
-                          <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(138,201,38,0.3)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                              <ShieldCheck size={18} color="#8AC926" />
-                              <div style={{ fontSize: '0.78rem', color: '#8AC926', fontWeight: 800, textTransform: 'uppercase' }}>
-                                Alertas Constitucionales (CPE Art. 410)
-                              </div>
-                            </div>
-                            {Array.isArray(rec.alertas_constitucionales) && rec.alertas_constitucionales.length > 0 ? (
-                              <ul style={{ margin: 0, paddingLeft: '18px', color: '#f87171', fontSize: '0.8rem' }}>
-                                {rec.alertas_constitucionales.map((a, idx) => (
-                                  <li key={idx} style={{ marginBottom: '4px' }}>{String(a)}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <div style={{ fontSize: '0.82rem', color: '#a7f3d0' }}>
-                                ✓ Sin objeciones de constitucionalidad formal ni de fondo.
-                              </div>
-                            )}
-                          </div>
-
-                          <div style={{ background: 'rgba(15,23,42,0.85)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(244,162,97,0.3)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                              <Scale size={18} color="#F4A261" />
-                              <div style={{ fontSize: '0.78rem', color: '#F4A261', fontWeight: 800, textTransform: 'uppercase' }}>
-                                Alertas Fiscales (Ley 1178 SAFCO)
-                              </div>
-                            </div>
-                            {Array.isArray(rec.alertas_fiscales) && rec.alertas_fiscales.length > 0 ? (
-                              <ul style={{ margin: 0, paddingLeft: '18px', color: '#f87171', fontSize: '0.8rem' }}>
-                                {rec.alertas_fiscales.map((f, idx) => (
-                                  <li key={idx} style={{ marginBottom: '4px' }}>{String(f)}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <div style={{ fontSize: '0.82rem', color: '#a7f3d0' }}>
-                                ✓ Sostenibilidad fiscal y presupuestaria verificada contra el TGN.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Pliego de Observaciones (si aplica) */}
-                        {Array.isArray(ev.pliego_observaciones) && ev.pliego_observaciones.length > 0 && (
-                          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
-                            <div style={{ fontSize: '0.82rem', color: '#f87171', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px' }}>
-                              ⚠️ Pliego de Observaciones Presidenciales:
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              {ev.pliego_observaciones.map((obs, idx) => (
-                                <div key={idx} style={{ background: 'rgba(15,23,42,0.8)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem' }}>
-                                  <strong style={{ color: '#ffffff' }}>{obs.articulo || `Observación #${idx+1}`}:</strong> {obs.motivo || obs.motivo_objecion || JSON.stringify(obs)}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Constancia Oficial de Votación Bicameral */}
-                        <div style={{
-                          background: 'linear-gradient(145deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 42, 74, 0.90) 100%)',
-                          border: '1.5px solid rgba(56, 189, 248, 0.35)',
-                          borderRadius: '16px',
-                          padding: '20px',
-                          marginBottom: '24px',
-                          boxShadow: '0 8px 30px rgba(0,0,0,0.35)'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '16px', borderBottom: '1px solid rgba(148,163,184,0.15)', paddingBottom: '12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <Scale size={22} color="#38bdf8" />
-                              <div>
-                                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#ffffff' }}>
-                                  🗳️ Constancia Oficial de Votación Parlamentaria Bicameral
-                                </h4>
-                                <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
-                                  Cómputo formal de votos y verificación de quórum de 2/3 para ratificación o allanamiento de veto (Arts. 163-164 CPE).
-                                </p>
-                              </div>
-                            </div>
-                            <span style={{
-                              background: 'rgba(16, 185, 129, 0.2)',
-                              border: '1px solid rgba(16, 185, 129, 0.4)',
-                              color: '#34d399',
-                              padding: '4px 12px',
-                              borderRadius: '20px',
-                              fontSize: '0.75rem',
-                              fontWeight: 800,
-                              textTransform: 'uppercase'
-                            }}>
-                              ✓ Quórum 2/3 Ratificado
-                            </span>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-                            {/* Cámara de Diputados */}
-                            <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '14px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
-                                  Cámara de Diputados (130 curules)
-                                </span>
-                                <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>67% votos presentes</span>
-                              </div>
-                              <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
-                                <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#34d399' }}>{votosBicameral?.dipFavor ?? 87}</div>
-                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>A Favor</div>
-                                </div>
-                                <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f87171' }}>{votosBicameral?.dipContra ?? 35}</div>
-                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>En Contra</div>
-                                </div>
-                                <div style={{ flex: 1, background: 'rgba(148, 163, 184, 0.15)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#cbd5e1' }}>{votosBicameral?.dipAbst ?? 8}</div>
-                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>Abstención</div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Cámara de Senadores */}
-                            <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '14px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase' }}>
-                                  Cámara de Senadores (36 curules)
-                                </span>
-                                <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>69.4% votos presentes</span>
-                              </div>
-                              <div style={{ display: 'flex', gap: '8px', textAlign: 'center' }}>
-                                <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#34d399' }}>{votosBicameral?.senFavor ?? 25}</div>
-                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>A Favor</div>
-                                </div>
-                                <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f87171' }}>{votosBicameral?.senContra ?? 9}</div>
-                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>En Contra</div>
-                                </div>
-                                <div style={{ flex: 1, background: 'rgba(148, 163, 184, 0.15)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '8px', padding: '8px' }}>
-                                  <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#cbd5e1' }}>{votosBicameral?.senAbst ?? 2}</div>
-                                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', textTransform: 'uppercase' }}>Abstención</div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(148, 163, 184, 0.15)', borderRadius: '8px', padding: '10px 14px', fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                            ⚖️ <strong>Acta de Cómputo Oficial:</strong> Conforme al Art. 163 numeral 10 de la CPE, habiéndose alcanzado la mayoría de dos tercios de los miembros presentes en ambas Cámaras, la Ley queda definitivamente sancionada y habilitada para su remisión al Presidente o promulgación directa por la Presidencia de la ALP.
-                          </div>
-                        </div>
-
-                        {/* Banner de Remisión al Presidente */}
-                        <div style={{
-                          background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.35) 0%, rgba(15, 23, 42, 0.7) 100%)',
-                          border: '1.5px solid rgba(59, 130, 246, 0.4)',
-                          borderRadius: '12px',
-                          padding: '14px 18px',
-                          marginBottom: '20px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          flexWrap: 'wrap',
-                          gap: '12px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <Building2 size={24} color="#60a5fa" />
-                            <div>
-                              <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '0.92rem' }}>
-                                {remitidoPresidente ? '✓ Autógrafa Remitida al Presidente del Estado' : 'Procedimiento Constitucional de Promulgación'}
-                              </div>
-                              <div style={{ fontSize: '0.78rem', color: '#93c5fd' }}>
-                                {remitidoPresidente ? 'Despachada a Casa Grande del Pueblo para promulgación oficial dentro de los 10 días hábiles.' : 'Remitir la ley sancionada al Presidente Constitucional del Estado Plurinacional.'}
-                              </div>
-                            </div>
-                          </div>
-
-                          {!remitidoPresidente ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                updateActiveSession({ remitidoPresidente: true });
-                                appendLog('veto_promulgacion', 'PRESIDENCIA', 'Autógrafa de Ley remitida al Presidente del Estado para promulgación.');
-                              }}
-                              style={{
-                                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                                border: 'none',
-                                borderRadius: '8px',
-                                color: '#ffffff',
-                                padding: '8px 18px',
-                                fontSize: '0.82rem',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
-                              }}
-                            >
-                              <Building2 size={15} />
-                              <span>Remitir al Presidente</span>
-                            </button>
-                          ) : (
-                            <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 800 }}>
-                              ✓ Estado: En Despacho Presidencial
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Módulo de voz */}
-                        <div style={{ marginBottom: '24px', width: '100%' }}>
-                          {!readOnly && (<AgentVoiceModule
-                            agentId="veto_promulgacion"
-                            agentLabel="Agente Veto y Promulgación"
-                            primaryColor="#1E3A8A"
-                            sesionId={fase1Data?.sesion_id || null}
-                            resultData={vetoPromulgacionData}
-                            speechHook={speechHook}
-                            onModificarPromulgacion={(nuevaDec) => {
-                              updateActiveSession({
-                                vetoPromulgacionData: {
-                                  ...vetoPromulgacionData,
-                                  evaluacion_veto: {
-                                    ...vetoPromulgacionData?.evaluacion_veto,
-                                    decision: nuevaDec
-                                  }
-                                }
-                              });
-                              appendLog('veto_promulgacion', 'MODIFICACION_VOZ', `Decisión modificada por voz a: ${nuevaDec}`);
-                            }}
-                          />)}
-                        </div>
-
-                        {/* Botones de Navegación de Pie */}
-                        <div style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          flexWrap: 'wrap',
-                          gap: '16px',
-                          marginTop: '16px',
-                          paddingTop: '20px',
-                          borderTop: '1px solid rgba(0, 180, 216, 0.25)'
-                        }}>
-                          <button
-                            type="button"
-                            onClick={() => updateActiveSession({ inspectedAgentId: 'bicameral' })}
-                            className="btn-secondary"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '0.9rem' }}
-                          >
-                            <Eye size={16} />
-                            <span>Ver Evaluación Bicameral Previa</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={handlePublicacion}
-                            disabled={readOnly || isProcessing}
-                            className="btn-gaceta-oficial"
-                            style={{
-                              background: 'linear-gradient(135deg, #0284C7 0%, #00C2CB 100%)',
-                              fontSize: '1.08rem',
-                              padding: '14px 32px',
-                              fontWeight: 900,
-                              boxShadow: '0 6px 30px rgba(0, 194, 203, 0.5)',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {isProcessing ? (
-                              <>
-                                <Cpu size={20} className="pulse-active" />
-                                <span>Publicando y Asignando Ley en Gaceta...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Newspaper size={22} />
-                                <span>Ir a la Sección de Publicación de Gaceta</span>
-                                <ArrowRight size={20} />
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ══════════════════════════════════════════════════════════════ */}
-                    {/* PESTAÑA 2: ENTRADAS Y SALIDAS JSON (I/O)                       */}
-                    {/* ══════════════════════════════════════════════════════════════ */}
-                    {vetoActiveTab === 'json' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                        {/* Insumos de Entrada (Inputs) */}
-                        <div style={{
-                          background: 'rgba(15, 23, 42, 0.85)',
-                          borderRadius: '14px',
-                          border: '1.5px solid rgba(56, 189, 248, 0.3)',
-                          padding: '18px'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <FileJson size={18} color="#38bdf8" />
-                              <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>
-                                Insumos Recibidos (Input Payload):
-                              </strong>
-                            </div>
-                            <span className="badge badge-blue" style={{ fontSize: '0.7rem' }}>
-                              Entrada al Agente
-                            </span>
-                          </div>
-                          <p style={{ color: '#94a3b8', fontSize: '0.78rem', marginBottom: '10px' }}>
-                            Datos remitidos por la Cámara Revisora y el expediente consolidado previo para la toma de decisión ejecutiva.
-                          </p>
-                          <pre style={{
-                            background: '#070d18',
-                            border: '1px solid rgba(255, 255, 255, 0.08)',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            color: '#38bdf8',
-                            fontSize: '0.78rem',
-                            fontFamily: 'monospace',
-                            maxHeight: '260px',
-                            overflowY: 'auto'
-                          }}>
-                            {JSON.stringify(inputPayload, null, 2)}
-                          </pre>
-                        </div>
-
-                        {/* Salida Generada por el Agente (Output JSON) */}
-                        <div style={{
-                          background: 'rgba(15, 23, 42, 0.85)',
-                          borderRadius: '14px',
-                          border: '1.5px solid rgba(138, 201, 38, 0.35)',
-                          padding: '18px'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <FileJson size={18} color="#8AC926" />
-                              <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>
-                                Resultado Estructurado (Output Payload):
-                              </strong>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleCopyJson}
-                              style={{
-                                background: copiedVetoJson ? 'rgba(16, 185, 129, 0.25)' : 'rgba(0, 180, 216, 0.15)',
-                                border: `1px solid ${copiedVetoJson ? '#10b981' : 'rgba(0, 180, 216, 0.4)'}`,
-                                color: copiedVetoJson ? '#34d399' : '#00B4D8',
-                                padding: '5px 12px',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                              }}
-                            >
-                              {copiedVetoJson ? <Check size={14} /> : <Copy size={14} />}
-                              <span>{copiedVetoJson ? '✓ Copiado al Portapapeles' : 'Copiar JSON'}</span>
-                            </button>
-                          </div>
-                          <p style={{ color: '#94a3b8', fontSize: '0.78rem', marginBottom: '10px' }}>
-                            JSON formal devuelto por <code>AgenteVetoPromulgacion</code> registrado en PostgreSQL Neon y traza Cosmos DB.
-                          </p>
-                          <pre style={{
-                            background: '#070d18',
-                            border: '1px solid rgba(255, 255, 255, 0.08)',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            color: '#a7f3d0',
-                            fontSize: '0.78rem',
-                            fontFamily: 'monospace',
-                            maxHeight: '340px',
-                            overflowY: 'auto'
-                          }}>
-                            {JSON.stringify(vetoPromulgacionData, null, 2)}
-                          </pre>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ══════════════════════════════════════════════════════════════ */}
-                    {/* PESTAÑA 3: CÓDIGO Y LÓGICA DEL AGENTE                          */}
-                    {/* ══════════════════════════════════════════════════════════════ */}
-                    {vetoActiveTab === 'codigo' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <div style={{
-                          background: 'rgba(15, 23, 42, 0.85)',
-                          borderRadius: '14px',
-                          border: '1.5px solid rgba(138, 201, 38, 0.3)',
-                          padding: '18px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                            <Code size={18} color="#8AC926" />
-                            <strong style={{ color: '#ffffff', fontSize: '0.95rem' }}>
-                              Especificación del Módulo en Python (CrewAI / Determinista)
-                            </strong>
-                          </div>
-                          <p style={{ color: '#94a3b8', fontSize: '0.82rem', marginBottom: '14px', lineHeight: 1.5 }}>
-                            El agente implementa el control gubernamental previo a la promulgación. Utiliza un prompt jurídico especializado con temperatura baja (0.1) para evitar alucinaciones, exigiendo estricto apego a las constancias recibidas sin inventar respaldo fiscal ni fechas.
-                          </p>
-
-                          <div style={{
-                            background: '#070d18',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: '8px',
-                            padding: '14px',
-                            fontFamily: 'monospace',
-                            fontSize: '0.78rem',
-                            color: '#e2e8f0',
-                            maxHeight: '380px',
-                            overflowY: 'auto',
-                            lineHeight: 1.45
-                          }}>
-                            <span style={{ color: '#64748b' }}># sma_unified/agents/veto_promulgacion.py</span><br />
-                            <span style={{ color: '#f43f5e' }}>class</span> <span style={{ color: '#38bdf8' }}>AgenteVetoPromulgacion</span>:<br />
-                            &nbsp;&nbsp;<span style={{ color: '#f43f5e' }}>def</span> <span style={{ color: '#38bdf8' }}>ejecutar</span>(self, expediente: Dict, proyecto_info: Dict, usuario_registrador=None):<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#64748b' }}># 1. Recuperar ciclo y aprobación bicameral desde Neon PostgreSQL</span><br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;ciclo = self.neon.obtener_aprobacion_bicameral(int(proyecto_id))<br /><br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#64748b' }}># 2. Análisis con LLM Resiliente de Arts. 163 y 164 CPE</span><br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;raw, _ = chat_completion_resiliente(messages=[<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#123;<span style={{ color: '#10b981' }}>"role"</span>: <span style={{ color: '#10b981' }}>"system"</span>, <span style={{ color: '#10b981' }}>"content"</span>: <span style={{ color: '#cbd5e1' }}>"Asesor jurídico boliviano. CPE arts. 163 y 164..."</span>&#125;,<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#123;<span style={{ color: '#10b981' }}>"role"</span>: <span style={{ color: '#10b981' }}>"user"</span>, <span style={{ color: '#10b981' }}>"content"</span>: json.dumps(ciclo)&#125;<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;], temperature=0.1, max_tokens=2500)<br /><br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#64748b' }}># 3. Estructuración con Human-in-the-Loop y plazos perentorios</span><br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;evaluacion = &#123;<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#10b981' }}>"modo_control"</span>: <span style={{ color: '#10b981' }}>"HUMAN_IN_THE_LOOP"</span>,<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#10b981' }}>"decision"</span>: decision or <span style={{ color: '#10b981' }}>"PENDIENTE_DECISION_HUMANA"</span>,<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#10b981' }}>"plazo_constitucional_dias"</span>: 10,<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#10b981' }}>"tipo_dias"</span>: <span style={{ color: '#10b981' }}>"HABILES"</span>,<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#10b981' }}>"ruta_siguiente"</span>: <span style={{ color: '#10b981' }}>"PUBLICACION_GACETA"</span> if decision == <span style={{ color: '#10b981' }}>"PROMULGAR"</span> else ...<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;&#125;<br /><br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#64748b' }}># 4. Persistencia en Neon y Traza en Cosmos DB</span><br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;self.neon.guardar_evaluacion_ejecutiva(...)<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;registrar_traza_legislativa(...)<br />
-                            &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#f43f5e' }}>return</span> &#123;<span style={{ color: '#10b981' }}>"evaluacion_veto"</span>: evaluacion&#125;
-                          </div>
-                        </div>
-
-                        {/* Marco Normativo Constitucional */}
-                        <div style={{
-                          background: 'rgba(15, 23, 42, 0.85)',
-                          borderRadius: '14px',
-                          border: '1.5px solid rgba(56, 189, 248, 0.3)',
-                          padding: '18px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                            <BookOpen size={18} color="#38bdf8" />
-                            <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>
-                              Marco Constitucional Aplicable (CPE 2009)
-                            </strong>
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px', marginTop: '10px' }}>
-                            <div style={{ background: 'rgba(11, 37, 69, 0.5)', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', color: '#cbd5e1' }}>
-                              <strong style={{ color: '#38bdf8' }}>Art. 163 numeral 10:</strong> La ley sancionada por la ALP será remitida al Órgano Ejecutivo para su promulgación como ley del Estado.
-                            </div>
-                            <div style={{ background: 'rgba(11, 37, 69, 0.5)', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', color: '#cbd5e1' }}>
-                              <strong style={{ color: '#38bdf8' }}>Art. 163 numeral 11:</strong> El Presidente del Estado tiene 10 días hábiles desde su recepción para promulgarla o devolverla con observaciones fundadas.
-                            </div>
-                            <div style={{ background: 'rgba(11, 37, 69, 0.5)', padding: '12px', borderRadius: '8px', fontSize: '0.8rem', color: '#cbd5e1' }}>
-                              <strong style={{ color: '#38bdf8' }}>Art. 164 numeral I:</strong> La ley será de cumplimiento obligatorio desde el día de su publicación en la Gaceta Oficial del Estado Plurinacional.
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </AgentResultCard>
-          </div>
-        </div>
+        <section className="executive-move-card">
+            <span className="executive-kicker">ETAPA POST BICAMERAL</span>
+            <h2>Despacho Ejecutivo</h2>
+            <p>La evaluación de veto y promulgación, el informe del Asistente de Presidencia y la decisión humana se gestionan en su espacio propio. El expediente y los dictámenes anteriores se conservan.</p>
+            <button type="button" className="btn-primary" onClick={() => onNavigateEjecutivo?.()}>Abrir Despacho Ejecutivo <ArrowRight size={17}/></button>
+        </section>
       )}
-
       {/* ── STEP 15: RESULTADO PUBLICACIÓN OFICIAL (FIN DEL PIPELINE) ── */}
       {effectiveViewStep === 15 && (
         <div className="mesa-layout-grid">
@@ -5212,7 +4450,7 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
               thinkingText="Ley formalmente promulgada y registrada en el Boletín Oficial"
               image="/robots/logos/agente_publicacion.jpeg"
               justificacion="Art. 164 CPE: Las leyes serán de cumplimiento obligatorio desde el día de su publicación en la Gaceta Oficial del Estado Plurinacional."
-              onViewPrev={() => updateActiveSession({ inspectedAgentId: 'veto_promulgacion' })}
+              onViewPrev={() => onNavigateEjecutivo?.()}
               prevLabel="Ver Evaluación de Veto/Promulgación"
             >
               {(() => {
@@ -6133,6 +5371,23 @@ export default function MesaPartes({ onNavigateExpedientes, currentUser, readOnl
           </div>
         </div>
       )}
+        </main>
+        <aside className="mesa-case-sidebar" aria-label="Resumen del expediente seleccionado">
+          <section className="mesa-project-summary">
+            <div className="command-panel-heading"><span>Expediente seleccionado</span><span className="command-stage">{activeSession.estadoCompartido || (activeSession._sharedProcessing ? 'En ejecución' : `Etapa ${pipelineStep}`)}</span></div>
+            {activeSession.documentText || fase1Data || comisionData ? <>
+              <h2>{fase1Data?.titulo_proyecto || fase1Data?.titulo || activeSession.documentName || activeSession.title || 'Expediente seleccionado'}</h2>
+              <div className="summary-label">{fase1Data?.resumen_ejecutivo || concentradorData?.expediente_consolidado?.resumen_ejecutivo ? 'Resumen ejecutivo' : 'Vista previa del documento'}</div>
+              <p>{fase1Data?.resumen_ejecutivo || concentradorData?.expediente_consolidado?.resumen_ejecutivo || comisionData?.resumen || activeSession.documentText?.slice(0, 360) || 'El resumen estará disponible cuando el expediente tenga contenido.'}</p>
+              <dl><div><dt>Destino</dt><dd>{activeSession.camaraDestino || fase1Data?.camara_destino || activeSession.tipoIniciativa || 'Pendiente de asignación'}</dd></div><div><dt>Estado</dt><dd>{activeSession.estadoCompartido || (activeSession._sharedProcessing ? 'En ejecución' : pipelineStep ? 'En seguimiento' : 'Recibido')}</dd></div><div><dt>Documento</dt><dd>{activeSession.uploadStats?.drive_status === 'GUARDADO' || activeSession.documentPdf?.drive_file_id ? 'Registrado en Google Drive' : activeSession.documentText ? 'Texto registrado' : 'Pendiente'}</dd></div></dl>
+              {activeSession.uploadStats?.drive_link && <a href={activeSession.uploadStats.drive_link} target="_blank" rel="noreferrer" className="drive-record-link">Ver documento registrado en Drive <ExternalLink size={14}/></a>}
+              {(activeSession.uploadStats?.saved_as || activeSession.documentPdf?.saved_as) && <button type="button" onClick={descargarDocumentoOriginal} disabled={downloadingOriginal} className="download-original-button"><Download size={14}/>{downloadingOriginal ? 'Preparando descarga…' : 'Descargar original'}</button>}
+              {originalDownloadError && <p role="alert" className="original-download-error">{originalDownloadError}</p>}
+            </> : <div className="empty-project-summary"><FileText size={22}/><p>Selecciona un expediente con documento registrado para ver aquí su nombre, resumen y estado.</p></div>}
+            {(activeSession.uploadStats?.drive_file_id || activeSession.documentPdf?.drive_file_id) && <div className="drive-confirmation"><CheckCircle2 size={14}/> Copia confirmada en Google Drive</div>}
+          </section>
+        </aside>
+      </div>
     </div>
   ); 0
 }

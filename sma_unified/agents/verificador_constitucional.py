@@ -43,6 +43,7 @@ Mejoras v3 respecto a v2:
   - Cada contradicción y RAF se enriquece con análisis_profundo completo.
 """
 import time
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -52,7 +53,7 @@ except ImportError:
     logger = logging.getLogger("verificador_constitucional")
 
 from sma_unified.config import settings
-from sma_unified.agents.llm_client import chat_completion_auditoria, extraer_json_de_llm
+from sma_unified.agents.llm_client import chat_completion_auditoria, extraer_json_de_llm, map_con_contexto_auditoria
 from sma_unified.agents.embeddings_nvidia import embeber_pregunta
 from sma_unified.db.mongo_atlas import publicar_mensaje, marcar_en_proceso, marcar_completado, marcar_error
 from sma_unified.db.neon_postgres import (
@@ -60,10 +61,11 @@ from sma_unified.db.neon_postgres import (
     guardar_observacion_constitucional,
     guardar_correccion_proyecto,
     obtener_email_autor_proyecto,
+    ANALISIS_NEON_LOCK,
 )
 
 # ── Constantes ────────────────────────────────────────────────────────────────
-TOP_K_CPE             = 18    # Artículos CPE a recuperar (ampliado a 18 para mayor cobertura)
+TOP_K_CPE             = 6     # Artículos CPE relevantes por párrafo del proyecto
 UMBRAL_CPE            = 0.40  # Similitud mínima (más permisivo → mayor cobertura)
 MAX_CHARS_BLOQUE      = 2500  # Chars máximos para embedding
 MAX_TOKENS_CRIBA      = 800   # Fase A: cribado rápido (JSON compacto)
@@ -215,6 +217,65 @@ class VerificadorConstitucional:
 
     # ── Embedding ──────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _extraer_unidades_proyecto(texto_proyecto: str) -> List[Dict[str, str]]:
+        """Separa el proyecto por artículo y, cuando están identificados, por parágrafo."""
+        from sma_unified.utils.parser_normativa import parsear_articulos
+
+        articulos: List[Dict[str, str]] = []
+        encabezados = list(re.finditer(
+            r"(?im)^\s*art[ií]culo\s+([0-9]+(?:\s*(?:bis|ter))?)\s*[°ºo]?\s*\.?\s*-?\s*(?:\([^)]+\)\s*\.?\s*)?",
+            texto_proyecto or "",
+        ))
+        if encabezados:
+            for indice, match in enumerate(encabezados):
+                fin = encabezados[indice + 1].start() if indice + 1 < len(encabezados) else len(texto_proyecto)
+                cuerpo = texto_proyecto[match.end():fin].strip()
+                if cuerpo:
+                    articulos.append({"numero": match.group(1).strip(), "texto": cuerpo})
+        if not articulos:
+            try:
+                articulos = [
+                    {"numero": str(item.get("numero_articulo", "")), "texto": str(item.get("texto", ""))}
+                    for item in parsear_articulos(texto_proyecto or "")
+                    if item.get("texto")
+                ]
+            except Exception as exc:
+                logger.warning(f"[VerificadorCPE] No se pudo separar el articulado: {exc}")
+
+        if not articulos and (texto_proyecto or "").strip():
+            articulos = [{"numero": "Documento completo", "texto": texto_proyecto.strip()}]
+
+        unidades: List[Dict[str, str]] = []
+        marcador_parrafo = re.compile(
+            r"(?<!\w)(?:(?:par[aá]grafo|p[aá]rrafo)\s+)?"
+            r"(I{1,3}|IV|V|VI{0,3}|IX|X|[0-9]+)\s*[.)]\s+",
+            re.IGNORECASE,
+        )
+        for articulo in articulos:
+            contenido = articulo["texto"]
+            bloques = [bloque.strip() for bloque in re.split(r"\n\s*\n+", contenido) if bloque.strip()]
+            if len(bloques) == 1:
+                marcas = list(marcador_parrafo.finditer(bloques[0]))
+                if len(marcas) > 1 or (marcas and marcas[0].start() < 3):
+                    texto = bloques[0]
+                    prefijo = texto[:marcas[0].start()].strip()
+                    if prefijo:
+                        unidades.append({"articulo": articulo["numero"], "parrafo": "Párrafo introductorio", "texto": prefijo})
+                    for indice, marca in enumerate(marcas):
+                        fin = marcas[indice + 1].start() if indice + 1 < len(marcas) else len(texto)
+                        fragmento = texto[marca.end():fin].strip()
+                        if fragmento:
+                            unidades.append({"articulo": articulo["numero"], "parrafo": f"Parágrafo {marca.group(1).upper()}", "texto": fragmento})
+                    continue
+            for indice, bloque in enumerate(bloques, start=1):
+                unidades.append({
+                    "articulo": articulo["numero"],
+                    "parrafo": f"Párrafo {indice}" if len(bloques) > 1 else "Párrafo único",
+                    "texto": bloque,
+                })
+        return [unidad for unidad in unidades if unidad["texto"].strip()]
+
     def _embed(self, texto: str) -> List[float]:
         return embeber_pregunta(texto[:MAX_CHARS_BLOQUE])
 
@@ -223,15 +284,18 @@ class VerificadorConstitucional:
     def _recuperar_articulos_cpe(self, texto_proyecto: str) -> List[Dict[str, Any]]:
         """Búsqueda semántica con fallback por palabras clave generales."""
         try:
-            articulos = obtener_articulos_constitucion(
-                texto_query=texto_proyecto[:700],
-                limit=TOP_K_CPE,
-            )
-            if not articulos:
+            # Neon usa una conexión psycopg2 compartida: proteger solo la
+            # consulta permite solapar el resto del cotejo sin cruzar cursores.
+            with ANALISIS_NEON_LOCK:
                 articulos = obtener_articulos_constitucion(
-                    texto_query="derechos garantias principios estado bolivia",
+                    texto_query=texto_proyecto[:700],
                     limit=TOP_K_CPE,
                 )
+                if not articulos:
+                    articulos = obtener_articulos_constitucion(
+                        texto_query="derechos garantias principios estado bolivia",
+                        limit=TOP_K_CPE,
+                    )
             # Deduplicación por número de artículo
             vistos: set = set()
             unicos: List[Dict] = []
@@ -259,6 +323,7 @@ class VerificadorConstitucional:
                     temperature=0.0,
                     max_tokens=MAX_TOKENS_CRIBA * (intento + 1),
                     response_format={"type": "json_object"},
+                    modelo_preferido="openai/gpt-oss-20b",
                 )
                 data = extraer_json_de_llm(contenido)
                 clases = {"A_FAVOR", "EN_CONTRA", "NEUTRAL", "RAF", "REQUIERE_ANALISIS_DE_FONDO"}
@@ -334,6 +399,7 @@ class VerificadorConstitucional:
                 timeout=(5, 30),
                 max_model_attempts=2,
                 max_tokens=MAX_TOKENS_DEEPCHECK,
+                modelo_preferido="openai/gpt-oss-20b",
             )
             data = extraer_json_de_llm(contenido)
             if not isinstance(data, dict):
@@ -409,6 +475,7 @@ class VerificadorConstitucional:
                 timeout=(5, 30),
                 max_model_attempts=2,
                 max_tokens=MAX_TOKENS_ANALISIS,
+                modelo_preferido="openai/gpt-oss-20b",
             )
             analisis = extraer_json_de_llm(contenido)
             # Garantizar que todos los campos clave existen
@@ -480,6 +547,7 @@ class VerificadorConstitucional:
                 timeout=(5, 30),
                 max_model_attempts=2,
                 max_tokens=MAX_TOKENS_ANALISIS,
+                modelo_preferido="openai/gpt-oss-20b",
             )
             analisis = extraer_json_de_llm(contenido)
             analisis.setdefault(
@@ -675,6 +743,187 @@ class VerificadorConstitucional:
         id_proyecto: Optional[int] = None,
         task_id_mongo: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """Evalúa cada unidad párrafo por párrafo contra artículos CPE relevantes."""
+        unidades = self._extraer_unidades_proyecto(texto_proyecto)
+        if not unidades:
+            unidades = [{"articulo": "Documento completo", "parrafo": "Párrafo único", "texto": texto_proyecto or ""}]
+
+        def _analizar_unidad_proyecto(unidad):
+            parcial = self._analizar_unidad(
+                unidad["texto"], sesion_id, id_proyecto=id_proyecto, task_id_mongo=task_id_mongo
+            )
+            return unidad, parcial
+
+        # Cada párrafo se coteja de forma independiente. Dos workers permiten
+        # solapar búsqueda y preparación; el cliente LLM limita llamadas externas.
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            parciales = map_con_contexto_auditoria(executor, _analizar_unidad_proyecto, unidades)
+
+        contradicciones, a_favor, requieren_fondo = [], [], []
+        articulos_consultados, analisis, pendientes = [], [], []
+        consultados_vistos = set()
+
+        def numero_cpe(item):
+            numero = item.get("numero")
+            if numero:
+                return str(numero).strip()
+            texto = str(item.get("articulo_constitucional", ""))
+            match = re.search(r"(?:Art(?:ículo)?\.?\s*)([0-9]+(?:\s*(?:bis|ter))?)", texto, re.IGNORECASE)
+            return match.group(1).strip() if match else ""
+
+        for unidad, parcial in parciales:
+            pendientes.extend({
+                **pendiente,
+                "articulo_proyecto": f"Artículo {unidad['articulo']}",
+                "parrafo_proyecto": unidad["parrafo"],
+            } for pendiente in parcial.get("pendientes_revision", []))
+
+            relaciones = {}
+            for contra in parcial.get("contradicciones", []):
+                cpe_num = numero_cpe(contra)
+                contra.update({
+                    "articulo_proyecto": f"Artículo {unidad['articulo']}",
+                    "parrafo_proyecto": unidad["parrafo"],
+                    "texto_parrafo": unidad["texto"],
+                    "fragmento_proyecto": contra.get("cita_proyecto") or unidad["texto"],
+                })
+                contradicciones.append(contra)
+                relaciones[cpe_num] = ("contradiccion", contra)
+            for favorable in parcial.get("articulos_a_favor", []):
+                cpe_num = numero_cpe(favorable)
+                favorable["evaluacion_detallada_articulos_parrafos"] = [{
+                    "articulo_proyecto": f"Artículo {unidad['articulo']}",
+                    "parrafo_proyecto": unidad["parrafo"],
+                    "texto_parrafo": unidad["texto"],
+                    "explicacion_concordancia": favorable.get("fundamento", ""),
+                }]
+                favorable.update({"articulo_proyecto": f"Artículo {unidad['articulo']}", "parrafo_proyecto": unidad["parrafo"]})
+                a_favor.append(favorable)
+                relaciones[cpe_num] = ("complementario", favorable)
+            for pendiente_fondo in parcial.get("requieren_analisis_fondo", []):
+                cpe_num = numero_cpe(pendiente_fondo)
+                pendiente_fondo.update({"articulo_proyecto": f"Artículo {unidad['articulo']}", "parrafo_proyecto": unidad["parrafo"], "texto_parrafo": unidad["texto"]})
+                requieren_fondo.append(pendiente_fondo)
+                relaciones[cpe_num] = ("requiere_analisis_de_fondo", pendiente_fondo)
+
+            for cpe in parcial.get("articulos_consultados", []):
+                cpe_num = str(cpe.get("numero", "")).strip()
+                if not cpe_num:
+                    continue
+                if cpe_num not in consultados_vistos:
+                    consultados_vistos.add(cpe_num)
+                    articulos_consultados.append({**cpe, "norma": "CPE 2009"})
+                tipo_relacion, relacionado = relaciones.get(cpe_num, ("sin_relacion", {}))
+                deep = relacionado.get("analisis_profundo", {}) or {}
+                cita_proyecto = relacionado.get("cita_proyecto") or relacionado.get("fragmento_proyecto") or unidad["texto"]
+                cita_cpe = relacionado.get("cita_constitucional") or cpe.get("texto", cpe.get("extracto", ""))
+                severidad = relacionado.get("severidad", "ninguna")
+                riesgo = {"bloqueante": "alto", "grave": "alto", "leve": "medio", "ninguna": "ninguno"}.get(str(severidad).lower(), "medio")
+                analisis.append({
+                    "articulo_proyecto": f"Artículo {unidad['articulo']}",
+                    "parrafo_proyecto": unidad["parrafo"],
+                    "texto_parrafo": unidad["texto"],
+                    "cita_proyecto": cita_proyecto,
+                    "fragmento_proyecto": cita_proyecto,
+                    "numero_articulo": cpe_num,
+                    "articulo_constitucional": f"Art. {cpe_num} - {cpe.get('titulo', '')}".strip(" -"),
+                    "norma": "Constitución Política del Estado (CPE 2009)",
+                    "cita_constitucional": cita_cpe,
+                    "texto_constitucional_verificado": cita_cpe,
+                    "similitud": float(cpe.get("similitud", 0) or 0),
+                    "tipo_relacion": tipo_relacion,
+                    "verificado": True,
+                    "estado": "COMPLETADO",
+                    "justificacion": relacionado.get("fundamento") or relacionado.get("razon") or deep.get("argumento_constitucional", "Sin colisión directa detectada en este cotejo."),
+                    "sugerencia": relacionado.get("recomendacion") or deep.get("redaccion_corregida", "Mantener el texto revisado."),
+                    "riesgo": riesgo,
+                    "severidad": severidad,
+                    "tipo_colision": relacionado.get("tipo_colision", ""),
+                    "analisis_profundo": deep,
+                })
+
+            for pendiente in parcial.get("pendientes_revision", []):
+                cpe_num = str(pendiente.get("articulo_constitucional", "")).strip()
+                cpe_label = f"Art. {cpe_num}" if cpe_num else "Artículo CPE no recuperado"
+                if any(fila.get("articulo_proyecto") == f"Artículo {unidad['articulo']}"
+                       and fila.get("parrafo_proyecto") == unidad["parrafo"]
+                       and (fila.get("numero_articulo") == cpe_num or (not cpe_num and fila.get("tipo_relacion") == "pendiente_revision")) for fila in analisis):
+                    continue
+                analisis.append({
+                    "articulo_proyecto": f"Artículo {unidad['articulo']}",
+                    "parrafo_proyecto": unidad["parrafo"],
+                    "texto_parrafo": unidad["texto"],
+                    "cita_proyecto": unidad["texto"],
+                    "fragmento_proyecto": unidad["texto"],
+                    "numero_articulo": cpe_num or "N/D",
+                    "articulo_constitucional": cpe_label,
+                    "norma": "Constitución Política del Estado (CPE 2009)",
+                    "cita_constitucional": "Cotejo pendiente: no se pudo recuperar o validar el texto constitucional.",
+                    "texto_constitucional_verificado": "",
+                    "similitud": 0,
+                    "tipo_relacion": "pendiente_revision",
+                    "verificado": False,
+                    "estado": "PENDIENTE_REVISION",
+                    "motivo": pendiente.get("motivo"),
+                    "justificacion": pendiente.get("motivo", "Requiere revisión manual."),
+                    "sugerencia": "Reintentar el cotejo o remitirlo a revisión jurídica manual.",
+                    "riesgo": "desconocido",
+                    "severidad": "desconocida",
+                    "tipo_colision": "",
+                    "analisis_profundo": {},
+                })
+
+        resumen = self._generar_resumen_ejecutivo(contradicciones, a_favor, requieren_fondo, articulos_consultados)
+        resumen_por_tipo = {}
+        for fila in analisis:
+            resumen_por_tipo[fila["tipo_relacion"]] = resumen_por_tipo.get(fila["tipo_relacion"], 0) + 1
+        riesgo_global = "DESCONOCIDO" if pendientes else (
+            "ALTO" if any(fila["riesgo"] == "alto" for fila in analisis) else
+            "MEDIO" if requieren_fondo or any(fila["riesgo"] == "medio" for fila in analisis) else "NINGUNO"
+        )
+        resumen.update({
+            "nivel_riesgo": riesgo_global,
+            "nivel_riesgo_global": riesgo_global,
+            "resumen_por_tipo": resumen_por_tipo,
+            "total_hallazgos": sum(fila["tipo_relacion"] != "sin_relacion" for fila in analisis),
+            "total_parrafos_evaluados": len(unidades),
+            "total_cotejos": len(analisis),
+            "score_cobertura_cpe_pct": round(100 * sum(1 for fila in analisis if fila["verificado"]) / max(1, len(analisis)), 1),
+        })
+        valido = not pendientes and not contradicciones and not requieren_fondo
+        severidad_maxima = "bloqueante" if any(c.get("severidad") == "bloqueante" for c in contradicciones) else (
+            "grave" if any(c.get("severidad") == "grave" for c in contradicciones) else "leve" if contradicciones else "ninguna"
+        )
+        return {
+            "estado": "PENDIENTE_REVISION" if pendientes else "COMPLETADO",
+            "pendientes_revision": pendientes,
+            "total_pendientes": len(pendientes),
+            "resultado_final": "PENDIENTE_REVISION" if pendientes else "CONTRADICCIONES_DETECTADAS" if contradicciones else "ARTICULADO_VALIDO",
+            "valido": valido,
+            "confianza": 0 if pendientes else resumen.get("score_confianza", 0),
+            "severidad_maxima": severidad_maxima,
+            "num_contradicciones": len(contradicciones),
+            "contradicciones": contradicciones,
+            "requieren_analisis_fondo": requieren_fondo,
+            "articulos_a_favor": a_favor,
+            "articulos_consultados": articulos_consultados,
+            "analisis": analisis,
+            "total_hallazgos": resumen["total_hallazgos"],
+            "total_parrafos_evaluados": len(unidades),
+            "total_cotejos": len(analisis),
+            "nivel_riesgo_global": riesgo_global,
+            "resumen_por_tipo": resumen_por_tipo,
+            "resumen_ejecutivo": resumen,
+        }
+
+    def _analizar_unidad(
+        self,
+        texto_proyecto: str,
+        sesion_id: str,
+        id_proyecto: Optional[int] = None,
+        task_id_mongo: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Pipeline de tres fases:
           Fase A — Cribado rápido paralelo (tokens mínimos, descarta neutrales).
@@ -693,7 +942,7 @@ class VerificadorConstitucional:
             return art, self._cribar_relacion_cpe(texto_proyecto, art)
 
         with ThreadPoolExecutor(max_workers=2) as exe:
-            cribados = list(exe.map(_cribar, articulos_cpe))
+            cribados = map_con_contexto_auditoria(exe, _cribar, articulos_cpe)
 
         pendientes_revision = [
             {"articulo_constitucional": art.get("numero"), "fase": "criba", "motivo": criba.get("motivo")}
@@ -727,7 +976,7 @@ class VerificadorConstitucional:
             return art, self._verificar_profundo_cpe(texto_proyecto, art)
 
         with ThreadPoolExecutor(max_workers=2) as exe:
-            deep_resultados = list(exe.map(_deepcheck, candidatos_deep))
+            deep_resultados = map_con_contexto_auditoria(exe, _deepcheck, candidatos_deep)
 
         # ── Consolidación Fase B ───────────────────────────────────────────────
         contradicciones:  List[Dict[str, Any]] = []
@@ -758,6 +1007,8 @@ class VerificadorConstitucional:
                 "numero":   num,
                 "titulo":   titulo,
                 "extracto": extracto,
+                "texto":    texto_cpe,
+                "similitud": float(art.get("similitud", 0) or 0),
             })
 
             tipo = clasificacion.get("clasificacion", "NEUTRAL")
@@ -818,6 +1069,8 @@ class VerificadorConstitucional:
                     "numero":   num,
                     "titulo":   art.get("titulo", ""),
                     "extracto": art.get("texto", "")[:250],
+                    "texto":    art.get("texto", ""),
+                    "similitud": float(art.get("similitud", 0) or 0),
                 })
 
         # ── Fase C: Análisis profundo paralelo (Críticos y A FAVOR) ───────────
@@ -837,11 +1090,11 @@ class VerificadorConstitucional:
         # Ejecución concurrente Fase C
         with ThreadPoolExecutor(max_workers=2) as exe:
             futuros_criticos = (
-                list(exe.map(_analizar_profundo_critico, criticos_para_fase_c))
+                map_con_contexto_auditoria(exe, _analizar_profundo_critico, criticos_para_fase_c)
                 if criticos_para_fase_c else []
             )
             futuros_afavor = (
-                list(exe.map(_analizar_profundo_afavor, afavor_para_fase_c))
+                map_con_contexto_auditoria(exe, _analizar_profundo_afavor, afavor_para_fase_c)
                 if afavor_para_fase_c else []
             )
 

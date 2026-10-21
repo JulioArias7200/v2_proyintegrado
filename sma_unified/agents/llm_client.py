@@ -12,6 +12,8 @@ Implementa la arquitectura de alta resiliencia recomendada para producción:
 5. Registro continuo de latencias y métricas (P50, P95, tasa de timeouts y fallos).
 """
 import collections
+from contextlib import contextmanager
+from contextvars import ContextVar, copy_context
 from datetime import datetime
 import json
 import re
@@ -35,21 +37,72 @@ NVIDIA_API_BASE = "https://integrate.api.nvidia.com/v1"
 _AUDITORIA_LLM_SLOTS = BoundedSemaphore(2)
 # Retiro confirmado por HTTP 410 en el proveedor; se amplía durante la sesión.
 _MODELOS_RETIRADOS: Set[str] = {"z-ai/glm-5.2"}
+_AUDIT_DEADLINE = ContextVar("sma_audit_deadline", default=None)
+
+
+@contextmanager
+def limite_tiempo_auditoria(segundos: float):
+    """Limita las llamadas LLM de un cotejo y sus tareas paralelas."""
+    deadline = time.monotonic() + max(0.1, float(segundos))
+    token = _AUDIT_DEADLINE.set(deadline)
+    try:
+        yield deadline
+    finally:
+        _AUDIT_DEADLINE.reset(token)
+
+
+def map_con_contexto_auditoria(executor, funcion, elementos):
+    """Mantiene el presupuesto temporal al enviar análisis a hilos de trabajo."""
+    futuros = [executor.submit(copy_context().run, funcion, elemento) for elemento in elementos]
+    return [futuro.result() for futuro in futuros]
+
+
+def _timeout_con_limite(timeout, deadline):
+    restante = deadline - time.monotonic()
+    if restante <= 0.05:
+        raise TimeoutError("Se agotó el tiempo máximo de auditoría")
+    if isinstance(timeout, (int, float)):
+        connect, read = 5.0, float(timeout)
+    elif isinstance(timeout, (tuple, list)) and len(timeout) == 2:
+        connect, read = float(timeout[0]), float(timeout[1])
+    else:
+        connect, read = 5.0, 30.0
+    connect = min(connect, max(0.1, restante * 0.15))
+    read = min(read, max(0.1, restante - connect))
+    return (connect, read)
 
 
 def chat_completion_auditoria(**kwargs: Any) -> Tuple[str, str]:
     """Prioriza el respaldo que respondió y limita la carga conjunta a NVIDIA."""
-    with _AUDITORIA_LLM_SLOTS:
+    modelo_preferido = kwargs.pop("modelo_preferido", "openai/gpt-oss-20b")
+    deadline = _AUDIT_DEADLINE.get()
+    espera = max(0.05, deadline - time.monotonic()) if deadline else None
+    if not _AUDITORIA_LLM_SLOTS.acquire(timeout=espera):
+        raise TimeoutError("Se agotó el tiempo de espera para ejecutar la auditoría")
+    try:
         # La lista general filtra el catálogo NIM; no confiar en un .env antiguo.
         disponibles = _lista_modelos_razonamiento()
-        modelos = sorted(disponibles, key=lambda m: m != "openai/gpt-oss-20b")
+        modelos = sorted(disponibles, key=lambda m: m != modelo_preferido)
         modelos = [m for m in modelos if m not in _MODELOS_RETIRADOS]
+        if modelo_preferido and modelo_preferido not in _MODELOS_RETIRADOS and modelo_preferido not in modelos:
+            # El catálogo puede estar desactualizado; intentar primero el modelo
+            # solicitado y dejar que el fallback actúe si NIM lo rechaza.
+            modelos.insert(0, modelo_preferido)
         if not modelos:
             raise RuntimeError("No hay modelos de auditoría disponibles en el catálogo NIM")
         # connect también afecta la negociación TLS: 5s era insuficiente.
-        kwargs.update(modelos=modelos, timeout=(30, 60), max_model_attempts=2,
-                      require_final_content=True)
+        # Respetar los límites definidos por cada etapa auditora. Antes se
+        # reemplazaban todos por 30/60s, alargando incluso los cotejos que
+        # especificaban un timeout corto para respuestas JSON.
+        kwargs.setdefault("timeout", (30, 60))
+        kwargs.setdefault("max_model_attempts", 2)
+        kwargs.update(modelos=modelos, require_final_content=True)
+        kwargs["deadline_monotonic"] = deadline
+        if deadline:
+            kwargs["timeout"] = _timeout_con_limite(kwargs["timeout"], deadline)
         return chat_completion_resiliente(**kwargs)
+    finally:
+        _AUDITORIA_LLM_SLOTS.release()
 
 # ── Circuit Breaker State ──────────────────────────────────────────────────
 CIRCUIT_FAILURE_THRESHOLD: int = 3
@@ -433,6 +486,7 @@ def chat_completion_resiliente(
     response_format: Optional[Dict[str, str]] = None,
     max_model_attempts: Optional[int] = None,
     require_final_content: bool = False,
+    deadline_monotonic: Optional[float] = None,
     **kwargs: Any,
 ) -> Tuple[str, str]:
     """
@@ -454,6 +508,8 @@ def chat_completion_resiliente(
     intentos = 0
 
     for modelo in modelos:
+        if deadline_monotonic is not None:
+            timeout_efectivo = _timeout_con_limite(timeout_efectivo, deadline_monotonic)
         if modelo in _MODELOS_RETIRADOS:
             ultimo_error = RuntimeError(f"Modelo '{modelo}' retirado del proveedor")
             continue
@@ -505,6 +561,8 @@ def chat_completion_resiliente(
                 logger.info(f"Modelo '{modelo}' no soporta 'response_format', reintentando sin él...")
                 payload_sin_rf = dict(payload)
                 payload_sin_rf.pop("response_format", None)
+                if deadline_monotonic is not None:
+                    timeout_efectivo = _timeout_con_limite(timeout_efectivo, deadline_monotonic)
                 resp = requests.post(
                     f"{NVIDIA_API_BASE}/chat/completions",
                     headers={"Authorization": f"Bearer {settings.NVIDIA_API_KEY}"},

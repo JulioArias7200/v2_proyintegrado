@@ -1,7 +1,7 @@
 import React from 'react';
 
 export default function AuditResultsNav({ constitucional, consistencia, selected, onSelect }) {
-  return <section className="revision-panel" aria-label="Resultados de las auditorías">
+  return <section className="revision-panel audit-results-panel" aria-label="Resultados de las auditorías">
     <h3>Resultados de Constitucional y Consistencia</h3>
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
       {[
