@@ -36,6 +36,9 @@ except ImportError:  # pragma: no cover
 
 from sma_unified.db.neon_postgres import get_conn
 from sma_unified.agents.llm_client import chat_completion_resiliente, extraer_json_de_llm
+from sma_unified.agents.reglamentos_profesionales import (
+    LOGO, INSTRUCCION_PROFESIONAL, recuperar, contexto_fuentes, fuentes_publicas,
+)
 
 NOMBRE_AGENTE = "Agente_Multifaceta_Ciudadano"
 TABLA = "sistema.agentes_ciudadanos"
@@ -50,7 +53,7 @@ _tabla_lista = False
 AGENTES_POR_DEFECTO: List[Dict[str, Any]] = [
     {
         "nombre": "Arquitectura y Urbanismo",
-        "logo": "🏗️",
+        "logo": LOGO,
         "trigger_description": (
             "Consultas sobre construcción, permisos de edificación, planos, "
             "catastro, uso de suelo, línea y nivel, o regularización de "
@@ -71,7 +74,7 @@ AGENTES_POR_DEFECTO: List[Dict[str, Any]] = [
     },
     {
         "nombre": "Salud",
-        "logo": "🏥",
+        "logo": LOGO,
         "trigger_description": (
             "Consultas sobre afiliación a seguros de salud, coberturas médicas, "
             "cómo acceder a hospitales o centros de salud, citas médicas o "
@@ -91,7 +94,7 @@ AGENTES_POR_DEFECTO: List[Dict[str, Any]] = [
     },
     {
         "nombre": "Educación",
-        "logo": "🎓",
+        "logo": LOGO,
         "trigger_description": (
             "Consultas sobre inscripciones escolares o universitarias, becas, "
             "trámites académicos, convalidación de títulos o calendario escolar"
@@ -107,7 +110,7 @@ AGENTES_POR_DEFECTO: List[Dict[str, Any]] = [
     },
     {
         "nombre": "Trámites Legislativos",
-        "logo": "⚖️",
+        "logo": LOGO,
         "trigger_description": (
             "Consultas sobre proyectos de ley, el estado de un expediente "
             "legislativo, comisiones camerales, normativa boliviana o cómo "
@@ -128,6 +131,17 @@ AGENTES_POR_DEFECTO: List[Dict[str, Any]] = [
         "temperature": 0.3,
     },
 ]
+
+AGENTES_POR_DEFECTO.extend([
+    {"nombre": "Abogacía", "logo": LOGO,
+     "trigger_description": "Ejercicio de la abogacía, registro de abogados, deberes y ética profesional",
+     "system_prompt": "Orienta sobre el ejercicio profesional de la abogacía en Bolivia con las fuentes aportadas.",
+     "temperature": 0.2},
+    {"nombre": "Seguridad ciudadana", "logo": LOGO,
+     "trigger_description": "Seguridad ciudadana, policía, prevención y coordinación institucional",
+     "system_prompt": "Orienta sobre seguridad ciudadana en Bolivia con las fuentes aportadas.",
+     "temperature": 0.2},
+])
 
 
 def _ensure_tabla() -> None:
@@ -158,7 +172,44 @@ def _ensure_tabla() -> None:
 
     _tabla_lista = True
     _sembrar_por_defecto(conn)
+    _migrar_facetas(conn)
     _registrar_en_catalogo(conn)
+
+
+def _migrar_facetas(conn):
+    """Actualiza instalaciones existentes sin sobrescribir prompts personalizados."""
+    with conn.cursor() as cur:
+        cur.execute(f"""UPDATE {TABLA} SET logo=%s
+            WHERE logo IS NULL OR logo='' OR
+            (logo NOT LIKE '/%%' AND logo NOT LIKE 'https://%%' AND logo NOT LIKE 'http://%%')""", (LOGO,))
+        for datos in AGENTES_POR_DEFECTO:
+            cur.execute(f"""INSERT INTO {TABLA}
+                (id,nombre,logo,system_prompt,trigger_description,temperature)
+                SELECT %s,%s,%s,%s,%s,%s
+                WHERE NOT EXISTS (SELECT 1 FROM {TABLA} WHERE nombre=%s)""",
+                (str(uuid.uuid4()), datos['nombre'], LOGO, datos['system_prompt'],
+                 datos['trigger_description'], datos['temperature'], datos['nombre']))
+
+
+def sincronizar_profesiones():
+    """Registra nuevas facetas a partir del catálogo cargado, sin cambiar código."""
+    from sma_unified.agents.reglamentos_profesionales import catalogo, detectar_profesiones
+    _ensure_tabla()
+    with get_conn().cursor() as cur:
+        cur.execute(f"SELECT nombre FROM {TABLA}")
+        nombres = [r[0] for r in cur.fetchall()]
+        for documento in catalogo():
+            if any(detectar_profesiones(nombre, [documento]) for nombre in nombres):
+                continue
+            profesion = documento['profesion']
+            cur.execute(f"""INSERT INTO {TABLA}
+                (id,nombre,logo,system_prompt,trigger_description,temperature)
+                SELECT %s,%s,%s,%s,%s,0.2
+                WHERE NOT EXISTS (SELECT 1 FROM {TABLA} WHERE nombre=%s)""",
+                (str(uuid.uuid4()), profesion, LOGO,
+                 f"Orienta profesionalmente sobre {profesion} en Bolivia usando las fuentes proporcionadas.",
+                 ', '.join(documento['alias']), profesion))
+            nombres.append(profesion)
 
 
 def _sembrar_por_defecto(conn) -> None:
@@ -183,13 +234,13 @@ def _registrar_en_catalogo(conn) -> None:
                 INSERT INTO sistema.agentes_registrados
                     (nombre_agente, tipo_agente, descripcion, logo_url, estado_operativo, capabilities)
                 VALUES (%s, %s, %s, %s, TRUE, %s::jsonb)
-                ON CONFLICT (nombre_agente) DO NOTHING
+                ON CONFLICT (nombre_agente) DO UPDATE SET logo_url=EXCLUDED.logo_url
             """, (
                 "Agente Multi-Faceta Ciudadano",
                 "ATENCION_CIUDADANA",
                 "Asistente ciudadano con múltiples facetas (arquitectura, salud, educación, "
                 "trámites legislativos). Enruta automáticamente cada consulta al prompt adecuado.",
-                "/robots/robot_ciudadano.jpg",
+                LOGO,
                 json.dumps({"routing_automatico": True, "multi_prompt": True, "sin_estado": True}),
             ))
     except Exception as e:
@@ -322,6 +373,8 @@ def elegir_agente(mensaje: str, agentes: List[Dict[str, Any]]) -> Dict[str, Any]
             ],
             temperature=0.0,
             max_tokens=120,
+            timeout=15,
+            max_model_attempts=2,
         )
         elegido = extraer_json_de_llm(contenido).get("agent_id")
         for a in agentes:
@@ -331,7 +384,8 @@ def elegir_agente(mensaje: str, agentes: List[Dict[str, Any]]) -> Dict[str, Any]
     except Exception as e:
         logger.warning(f"[Multifaceta] Falló el routing automático, usando fallback: {e}")
 
-    return agentes[0]
+    # Un fallo del router no debe enviar una pregunta general al arquitecto.
+    return next((a for a in agentes if a['nombre'] == 'Trámites Legislativos'), agentes[0])
 
 
 def responder_ciudadano(
@@ -360,12 +414,24 @@ def responder_ciudadano(
         return _responder_especialista(
             mensaje, caso_texto, caso_nombre, dictamen, sesion_id, t0
         )
+    if (caso_texto or '').strip():
+        from sma_unified.agents.facetas_semanticas import analizar_multifaceta
+        analisis = analizar_multifaceta(caso_texto, titulo=caso_nombre, sesion_id=sesion_id, pregunta=mensaje)
+        if analisis['estado'] != 'NO_APLICA':
+            return {
+                'success': True, 'reply': analisis.get('informe') or 'La revisión de las facetas está pendiente: ' + analisis.get('error', ''),
+                'agente_id': 'multifaceta_profesional', 'agente_nombre': ' · '.join(analisis['profesiones']) or 'Asistente profesional',
+                'agente_logo': LOGO, 'facetas': analisis['facetas'], 'fuentes': analisis['fuentes'],
+                'informe_profesional': analisis, 'routing_automatico': True, 'con_caso_adjunto': True,
+                'modelo_usado': analisis.get('modelo_selector'), 'duracion_ms': int((time.time()-t0)*1000),
+                'aviso_fuentes': 'Hay facetas pendientes de revisión.' if analisis['estado']=='PENDIENTE_REVISION' else None,
+            }
     agentes = listar_agentes(solo_activos=True)
     if not agentes:
         raise RuntimeError("No hay sub-agentes ciudadanos activos. Crea uno con POST /api/ciudadana/agentes")
 
     forzado = next((a for a in agentes if a["id"] == agente_id), None) if agente_id else None
-    agente = forzado or elegir_agente(mensaje, agentes)
+    agente = forzado or elegir_agente(f"{mensaje}\n{(caso_texto or '')[:4000]}", agentes)
 
     task_id = _publicar_mongo(agente, mensaje, sesion_id)
 
@@ -377,15 +443,26 @@ def responder_ciudadano(
             f"Consulta:\n{mensaje}"
         )
 
+    fuentes = []
+    aviso_fuentes = None
+    try:
+        # Si el selector confirmó NO_APLICA en el documento, no introducir
+        # fuentes de otras profesiones por una coincidencia vectorial superficial.
+        fuentes = [] if (caso_texto or '').strip() else recuperar(mensaje)
+    except Exception as exc:
+        logger.warning(f"[Multifaceta] Corpus no disponible: {exc}")
+        aviso_fuentes = 'No se pudo consultar el corpus profesional; esta respuesta no acredita requisitos normativos.'
+    base = contexto_fuentes(fuentes) or 'No hay fuentes profesionales recuperadas para esta consulta.'
     contenido, modelo_usado = chat_completion_resiliente(
         messages=[
-            {"role": "system", "content": agente["system_prompt"]},
-            {"role": "user", "content": consulta},
+            {"role": "system", "content": agente["system_prompt"] + '\n' + INSTRUCCION_PROFESIONAL},
+            {"role": "user", "content": f"FUENTES DOCUMENTALES:\n{base}\n\n{consulta}"},
         ],
         temperature=agente["temperature"],
         max_tokens=agente["max_tokens"],
         top_p=agente["top_p"],
         timeout=30,
+        max_model_attempts=2,
     )
 
     duracion_ms = int((time.time() - t0) * 1000)
@@ -394,7 +471,9 @@ def responder_ciudadano(
         "reply": contenido,
         "agente_id": agente["id"],
         "agente_nombre": agente["nombre"],
-        "agente_logo": agente["logo"],
+        "agente_logo": agente.get("logo") if str(agente.get("logo") or '').startswith(('/', 'https://', 'http://')) else LOGO,
+        "fuentes": fuentes_publicas(fuentes),
+        "aviso_fuentes": aviso_fuentes,
         "routing_automatico": forzado is None,
         "modelo_usado": modelo_usado,
         "duracion_ms": duracion_ms,
@@ -430,6 +509,8 @@ def _responder_especialista(
     return {
         "success": True,
         "reply": res["reply"],
+        "fuentes": res.get("fuentes", []),
+        "aviso_fuentes": res.get("aviso_fuentes"),
         "agente_id": "especialista_tecnico",
         "agente_nombre": NOMBRE_FACETA,
         "agente_logo": LOGO_FACETA,
@@ -476,9 +557,11 @@ def _cerrar_mongo(task_id: Optional[str], resultado: Dict[str, Any], duracion_ms
         marcar_completado(
             task_id,
             resultado={
-                "faceta": resultado["agente_nombre"],
-                "respuesta_preview": (resultado["reply"] or "")[:400],
-                "modelo_usado": resultado["modelo_usado"],
+                "faceta": resultado.get("agente_nombre", "Multifacético profesional"),
+                "respuesta_preview": (resultado.get("reply") or resultado.get("informe") or "")[:400],
+                "modelo_usado": resultado.get("modelo_usado"),
+                "informe_profesional": resultado if "informe" in resultado else None,
+                "fuentes": resultado.get("fuentes", []),
             },
             duracion_ms=duracion_ms,
         )

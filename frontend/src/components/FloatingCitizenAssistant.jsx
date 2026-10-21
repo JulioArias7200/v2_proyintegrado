@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  MessageSquare, 
-  X, 
-  Sparkles, 
-  Maximize2, 
-  Minimize2, 
-  Bot,
-  ChevronDown,
-  ShieldAlert
-} from 'lucide-react';
+import { X, Maximize2, Minimize2 } from 'lucide-react';
 import AsistenteMultifacetaPanel from './AsistenteMultifacetaPanel';
 import { api } from '../services/api';
 
@@ -85,7 +76,7 @@ export default function FloatingCitizenAssistant({ sesionId = null }) {
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <Sparkles size={16} color="#FFFFFF" />
+              <img src="/robots/logos/asistente_profesional.jpg" alt="Asistente ciudadano" style={{ width: 26, height: 26, objectFit: 'cover', borderRadius: '50%' }} />
             </div>
             <span>Atención Ciudadana</span>
             {totalFacetas > 0 && (
@@ -146,7 +137,7 @@ export default function FloatingCitizenAssistant({ sesionId = null }) {
                 justifyContent: 'center',
                 boxShadow: '0 0 12px rgba(0, 180, 216, 0.5)'
               }}>
-                <Bot size={18} color="#FFFFFF" />
+                <img src="/robots/logos/asistente_profesional.jpg" alt="Asistente multifacético" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 10 }} />
               </div>
               <div>
                 <div style={{
@@ -166,7 +157,7 @@ export default function FloatingCitizenAssistant({ sesionId = null }) {
                   gap: '5px'
                 }}>
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-                  Routing Automático · NVIDIA NIM
+                  Orientación profesional y ciudadana
                 </div>
               </div>
             </div>

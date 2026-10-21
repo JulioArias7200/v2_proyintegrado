@@ -29,6 +29,9 @@ export default function AsistenteMultifacetaPanel({ sesionId = null, onNavigateL
   const [invitado, setInvitado] = useState(false);
   const [caso, setCaso] = useState(null);
   const [subiendo, setSubiendo] = useState(false);
+  const [analizandoFacetas, setAnalizandoFacetas] = useState(false);
+  const [analisisProfesional, setAnalisisProfesional] = useState(null);
+  const archivoVersion = useRef(0);
   const [usarEspecialista, setUsarEspecialista] = useState(false);
   const [dictamen, setDictamen] = useState(null);
   const [peritando, setPeritando] = useState(false);
@@ -55,18 +58,26 @@ export default function AsistenteMultifacetaPanel({ sesionId = null, onNavigateL
       setError('El archivo supera el máximo de 10 MB. Elige uno más pequeño.');
       return;
     }
-    setSubiendo(true); setError(null);
+    const version = ++archivoVersion.current;
+    setSubiendo(true); setError(null); setAnalisisProfesional(null);
     try {
       const res = await api.uploadDocument(archivo);
-      setCaso({ nombre: archivo.name, texto: res.texto_completo || res.texto_preview || '' });
+      if (version !== archivoVersion.current) return;
+      const textoCaso = res.texto_completo || res.texto_preview || '';
+      setCaso({ nombre: archivo.name, texto: textoCaso });
       setDictamen(null); setUsarEspecialista(false);
+      setAnalizandoFacetas(true);
+      const analisis = res.analisis_profesional ? { data: res.analisis_profesional }
+        : await api.analizarFacetasDocumento({ casoTexto: textoCaso, casoNombre: archivo.name, sesionId });
+      if (version !== archivoVersion.current) return;
+      setAnalisisProfesional(analisis.data);
     } catch (err) {
-      setError(err.message || 'No se pudo leer el documento.');
-    } finally { setSubiendo(false); }
+      if (version === archivoVersion.current) setError(err.message || 'No se pudo leer el documento.');
+    } finally { if (version === archivoVersion.current) { setSubiendo(false); setAnalizandoFacetas(false); } }
   };
 
   const subirCaso = e => { procesarArchivo(e.target.files?.[0]); e.target.value = ''; };
-  const quitarCaso = () => { setCaso(null); setDictamen(null); setUsarEspecialista(false); };
+  const quitarCaso = () => { archivoVersion.current++; setCaso(null); setDictamen(null); setUsarEspecialista(false); setAnalisisProfesional(null); setSubiendo(false); setAnalizandoFacetas(false); };
 
   const alternarEspecialista = async () => {
     if (usarEspecialista) { setUsarEspecialista(false); return; }
@@ -85,7 +96,7 @@ export default function AsistenteMultifacetaPanel({ sesionId = null, onNavigateL
   const enviar = async e => {
     e?.preventDefault();
     const consulta = texto.trim();
-    if (!consulta || enviando) return;
+    if (!consulta || enviando || subiendo || analizandoFacetas) return;
     setTexto(''); setError(null);
     setMensajes(prev => [...prev, { rol: 'ciudadano', texto: consulta }]);
     setEnviando(true);
@@ -98,6 +109,8 @@ export default function AsistenteMultifacetaPanel({ sesionId = null, onNavigateL
       setMensajes(prev => [...prev, {
         rol: 'agente', texto: res.reply, faceta: res.agente_nombre, logo: res.agente_logo,
         modelo: res.modelo_usado, ms: res.duracion_ms, especialista: !!res.especialista,
+        fuentes: res.fuentes || [], avisoFuentes: res.aviso_fuentes,
+        facetas: res.facetas || [],
       }]);
     } catch (err) { setError(err.message || 'No se pudo contactar al asistente ciudadano.'); }
     finally { setEnviando(false); }
@@ -150,14 +163,25 @@ export default function AsistenteMultifacetaPanel({ sesionId = null, onNavigateL
             <small>{!user ? 'Inicia sesión para subir documentos y analizarlos.' : 'Formatos aceptados: PDF, DOCX (máx. 10 MB).'}</small></div>
           {user ? <label className="citizen-drop-button">
             <input type="file" accept=".pdf,.docx" disabled={subiendo} onChange={subirCaso} />
-            <Paperclip size={16} /> {subiendo ? 'Leyendo archivo…' : 'Haz clic para buscar'}
+            <Paperclip size={16} /> {subiendo ? 'Leyendo y consultando especialidades…' : 'Haz clic para buscar'}
           </label> : <button type="button" className="citizen-drop-button" onClick={onNavigateLogin}>Iniciar sesión</button>}
         </div> : <div className="citizen-chat-case">
-          <FileText size={18} /><span><strong>{caso.nombre}</strong><small>Documento listo para consultar</small></span>
+          <FileText size={18} /><span><strong>{caso.nombre}</strong><small>{analizandoFacetas ? 'Identificando y consultando las especialidades del documento…' : 'Documento listo para consultar'}</small></span>
           <button type="button" onClick={quitarCaso} aria-label="Quitar documento"><X size={17} /></button>
           <button type="button" className={`citizen-expert-button${usarEspecialista ? ' active' : ''}`} onClick={alternarEspecialista} disabled={peritando}>
             <FlaskConical size={15} />{peritando ? 'Analizando…' : usarEspecialista ? 'Especialista activo' : 'Análisis técnico'}
           </button>
+        </div>}
+
+        {analisisProfesional && <div className="citizen-expert-result">
+          <strong>Facetas del documento: {analisisProfesional.profesiones?.join(' · ') || (analisisProfesional.estado === 'NO_APLICA' ? 'Sin especialidad profesional aplicable' : 'Revisión pendiente')}</strong>
+          {analisisProfesional.cobertura_parcial && <p>Documento extenso: se revisó una muestra distribuida de su contenido.</p>}
+          {analisisProfesional.error && <p role="status">{analisisProfesional.error}</p>}
+          {analisisProfesional.facetas?.map(f => <details key={f.profesion}>
+            <summary>{f.profesion} · {f.estado === 'COMPLETADO' ? 'Aporte disponible' : 'Pendiente'}</summary>
+            <p>{f.motivo}</p><p style={{ whiteSpace: 'pre-wrap' }}>{f.informe || f.error}</p>
+            <ul>{f.fuentes?.map(s => <li key={s.referencia}>[{s.referencia}] {s.titulo}, página PDF {s.pagina}</li>)}</ul>
+          </details>)}
         </div>}
 
         {usarEspecialista && dictamen && <div className="citizen-expert-result">
@@ -173,10 +197,19 @@ export default function AsistenteMultifacetaPanel({ sesionId = null, onNavigateL
               <button type="button" onClick={() => elegirCategoria('Legislación')}>¿En qué etapa está un proyecto de ley?</button></div>
           </div>}
           {mensajes.map((m, i) => <div key={i} className={`citizen-chat-message ${m.rol}`}>
-            <span className="citizen-message-avatar">{m.rol === 'ciudadano' ? <User size={16} /> : (m.logo || <Bot size={16} />)}</span>
+            <span className="citizen-message-avatar">{m.rol === 'ciudadano' ? <User size={16} /> :
+              <img src={/^(\/|https?:\/\/)/.test(m.logo || '') ? m.logo : '/robots/logos/asistente_profesional.jpg'}
+                alt={m.faceta || 'Asistente profesional'} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }}
+                onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = '/robots/logos/asistente_profesional.jpg'; }} />}</span>
             <div className="citizen-message-content">
               {m.rol === 'agente' && <small>{m.faceta || 'Asistente ciudadano'}{m.ms ? ` · ${(m.ms / 1000).toFixed(1)} s` : ''}</small>}
               <p>{m.texto}</p>
+              {m.facetas?.length > 0 && <small>Facetas consultadas: {m.facetas.map(f => f.profesion).join(' · ')}</small>}
+              {m.avisoFuentes && <small role="status">{m.avisoFuentes}</small>}
+              {m.fuentes?.length > 0 && <details className="citizen-professional-sources">
+                <summary>Fuentes consultadas ({m.fuentes.length})</summary>
+                <ul>{m.fuentes.map(f => <li key={f.referencia}>[{f.referencia}] {f.titulo} — {f.archivo}, página PDF {f.pagina}</li>)}</ul>
+              </details>}
             </div>
           </div>)}
           {enviando && <div className="citizen-chat-loading"><Zap size={15} />{usarEspecialista ? 'Revisando tu caso…' : 'Buscando orientación para tu consulta…'}</div>}
@@ -188,10 +221,10 @@ export default function AsistenteMultifacetaPanel({ sesionId = null, onNavigateL
           <label htmlFor="citizen-chat-input">Escribe tu consulta</label>
           <textarea id="citizen-chat-input" ref={textoRef} value={texto} onChange={e => setTexto(e.target.value)}
             placeholder={usarEspecialista ? 'Pregunta sobre el documento que adjuntaste…' : 'Ej.: ¿Qué necesito para aprobar los planos de una ampliación?'}
-            disabled={enviando} rows={3} />
+            disabled={enviando || subiendo || analizandoFacetas} rows={3} />
           <div className="citizen-chat-composer-footer">
             <small>El asistente elegirá automáticamente la especialidad adecuada.</small>
-            <button type="submit" disabled={enviando || !texto.trim()}><Send size={16} /> Enviar consulta</button>
+            <button type="submit" disabled={enviando || subiendo || analizandoFacetas || !texto.trim()}><Send size={16} /> Enviar consulta</button>
           </div>
         </form>
       </>}

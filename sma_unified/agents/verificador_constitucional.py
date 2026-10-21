@@ -1,46 +1,16 @@
 """
-Agente Verificador de Constitucionalidad (CPE)  — v3
-======================================================
-Módulo INDEPENDIENTE que analiza un proyecto de ley contra la
-Constitución Política del Estado de Bolivia (CPE).
+Agente Verificador de Constitucionalidad (CPE).
 
-Fuente de datos: sistema.articulos_constitucion (Neon PostgreSQL + pgvector)
+Recupera artículos de sistema.articulos_constitucion y coteja los candidatos
+con cada párrafo del proyecto en una sola llamada estructurada a NVIDIA.
+Clasifica relaciones, valida citas literales y conserva los fundamentos y
+recomendaciones. Los cotejos exitosos se reutilizan durante 30 minutos;
+los errores y resultados incompletos quedan pendientes y se reintentan.
 
-Pipeline Prometheus v3 — ANÁLISIS PROFUNDO:
-  1. Genera embedding del texto del proyecto (NVIDIA NIM).
-  2. Recupera artículos CPE (TOP_K = 18, umbral 0.40) con doble consulta semántica.
-  3. Fase A — Cribado rápido paralelo (tokens mínimos 220):
-       descarta neutrales evidentes sin segunda llamada LLM.
-  4. Fase B — Deep-check (candidatos no-NEUTRAL):
-       árbol de decisión + citas literales obligatorias.
-  5. Fase C — Análisis profundo POR HALLAZGO (EN_CONTRA y RAF):
-       - impacto_juridico: descripción del impacto en el ordenamiento (≤100 palabras).
-       - argumento_constitucional: argumento jurídico detallado (≤120 palabras).
-       - argumento_defensa: contraargumento posible del proyecto (≤80 palabras).
-       - articulos_cpe_relacionados: otros artículos CPE que refuerzan el hallazgo.
-       - redaccion_corregida: texto alternativo concreto para resolver la contradicción.
-       - precedentes_tcp: menciona si el TCP ha resuelto casos similares.
-       - dictamen: veredicto jurídico formal (INCONSTITUCIONAL/CONDICIONALMENTE_CONSTITUCIONAL/
-                   CONSTITUCIONAL/REQUIERE_CONSULTA_TCP).
-  6. Genera resumen_ejecutivo enriquecido:
-       nivel_riesgo (BLOQUEANTE/ALTO/MEDIO/BAJO/NINGUNO)
-       score_confianza calibrado (30-98 %)
-       score_cobertura_cpe_pct
-       matriz_riesgo: tabla por artículo con dictamen y severidad
-       recomendaciones_globales con emojis de prioridad
-  7. Persiste dictamen en Neon PostgreSQL y MongoDB Atlas.
-  8. Genera correcciones automáticas detalladas para Mesa Senadores y autor.
-
-Mejoras v3 respecto a v2:
-  - Nueva Fase C de análisis narrativo profundo por cada hallazgo crítico.
-  - TOP_K ampliado a 18 artículos CPE, umbral bajado a 0.40.
-  - Max tokens deep-check aumentados a 900 para citas extendidas.
-  - Campo redaccion_corregida: sugerencia concreta de texto legislativo.
-  - Campo argumento_constitucional + argumento_defensa para visión bilateral.
-  - Campo precedentes_tcp para referencias jurisprudenciales.
-  - Campo dictamen formal por artículo analizado.
-  - Matriz de riesgo por artículo en resumen_ejecutivo.
-  - Cada contradicción y RAF se enriquece con análisis_profundo completo.
+Las auditorías incompletas tienen riesgo DESCONOCIDO y confianza cero tanto
+en el dictamen como en su resumen. Solo se persisten correcciones cuando
+se completa la evaluación. Se conservan los métodos auxiliares de análisis
+individual para llamadas específicas, fuera del flujo conjunto habitual.
 """
 import time
 import re
@@ -210,9 +180,8 @@ class VerificadorConstitucional:
     """
     Coteja un proyecto de ley contra la CPE artículo por artículo.
 
-    Pipeline de dos fases:
-      Fase A — Cribado rápido paralelo (tokens mínimos).
-      Fase B — Deep-check sólo en candidatos EN_CONTRA / A_FAVOR / RAF (máxima precisión).
+    Cotejo conjunto por párrafo: clasificación, fundamento y citas en una
+    llamada. Valida las citas y reutiliza únicamente resultados completos.
     """
 
     # ── Embedding ──────────────────────────────────────────────────────────────
@@ -407,7 +376,7 @@ class VerificadorConstitucional:
             if data.get("clasificacion") not in {"A_FAVOR", "EN_CONTRA", "NEUTRAL", "REQUIERE_ANALISIS_DE_FONDO"}:
                 raise ValueError("Cotejo constitucional incompleto")
         except Exception as e:
-            logger.warning(f"[DeepCheck] Art. {num}: fallback heurístico por error LLM: {e}")
+            logger.warning(f"[DeepCheck] Art. {num}: cotejo pendiente por error LLM: {e}")
             return {"clasificacion": "PENDIENTE_REVISION", "verificado": False,
                     "pendiente_revision": True, "motivo": str(e)}
 
@@ -885,6 +854,7 @@ class VerificadorConstitucional:
         resumen.update({
             "nivel_riesgo": riesgo_global,
             "nivel_riesgo_global": riesgo_global,
+            "score_confianza": 0 if pendientes else resumen.get("score_confianza", 0),
             "resumen_por_tipo": resumen_por_tipo,
             "total_hallazgos": sum(fila["tipo_relacion"] != "sin_relacion" for fila in analisis),
             "total_parrafos_evaluados": len(unidades),
@@ -925,11 +895,8 @@ class VerificadorConstitucional:
         task_id_mongo: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Pipeline de tres fases:
-          Fase A — Cribado rápido paralelo (tokens mínimos, descarta neutrales).
-          Fase B — Deep-check paralelo (citas + tipo de colisión).
-          Fase C — Análisis profundo por hallazgo EN_CONTRA y RAF
-                   (impacto, argumento, redacción corregida, dictamen formal).
+        Recupera los candidatos CPE, los coteja juntos y consolida las
+        relaciones. Reutiliza el fundamento del lote sin rondas redundantes.
         """
         articulos_cpe = self._recuperar_articulos_cpe(texto_proyecto)
         if not articulos_cpe:
@@ -937,46 +904,16 @@ class VerificadorConstitucional:
 
         from concurrent.futures import ThreadPoolExecutor
 
-        # ── Fase A: Cribado paralelo ──────────────────────────────────────────
-        def _cribar(art: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-            return art, self._cribar_relacion_cpe(texto_proyecto, art)
-
-        with ThreadPoolExecutor(max_workers=2) as exe:
-            cribados = map_con_contexto_auditoria(exe, _cribar, articulos_cpe)
-
-        pendientes_revision = [
-            {"articulo_constitucional": art.get("numero"), "fase": "criba", "motivo": criba.get("motivo")}
-            for art, criba in cribados if criba.get("pendiente_revision")
-        ]
+        # Un único cotejo conjunto por párrafo sustituye cribas, deep-checks
+        # y ampliaciones repetidas por cada candidato constitucional.
+        from sma_unified.agents.cotejo_constitucional import cotejar_lote
+        deep_resultados = cotejar_lote(texto_proyecto, articulos_cpe,
+            solicitar=chat_completion_auditoria, parsear=extraer_json_de_llm)
+        neutrales_directos = []
+        pendientes_revision = []
         if not articulos_cpe:
             pendientes_revision.append({"fase": "recuperacion", "motivo": "Sin articulos CPE disponibles"})
-
-        candidatos_deep:    List[Tuple[Dict, Dict]] = []
-        neutrales_directos: List[Tuple[Dict, Dict]] = []
-
-        for art, criba in cribados:
-            if criba.get("pendiente_revision"):
-                continue
-            c = criba.get("clasificacion", "NEUTRAL")
-            if c == "RAF":
-                c = "REQUIERE_ANALISIS_DE_FONDO"
-            if c in ("EN_CONTRA", "REQUIERE_ANALISIS_DE_FONDO", "A_FAVOR"):
-                candidatos_deep.append((art, criba))
-            else:
-                neutrales_directos.append((art, criba))
-
-        logger.info(
-            f"[VerificadorCPE] Criba: {len(candidatos_deep)} para deep-check, "
-            f"{len(neutrales_directos)} neutrales directos."
-        )
-
-        # ── Fase B: Deep-check paralelo ────────────────────────────────────────
-        def _deepcheck(art_criba: Tuple[Dict, Dict]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-            art, _ = art_criba
-            return art, self._verificar_profundo_cpe(texto_proyecto, art)
-
-        with ThreadPoolExecutor(max_workers=2) as exe:
-            deep_resultados = map_con_contexto_auditoria(exe, _deepcheck, candidatos_deep)
+        logger.info(f"[VerificadorCPE] Cotejo por lote: {len(articulos_cpe)} candidatos constitucionales")
 
         # ── Consolidación Fase B ───────────────────────────────────────────────
         contradicciones:  List[Dict[str, Any]] = []
@@ -1081,11 +1018,11 @@ class VerificadorConstitucional:
 
         def _analizar_profundo_critico(triple: Tuple) -> Dict[str, Any]:
             art, deep_result, _ = triple
-            return self._analizar_impacto_profundo(texto_proyecto, art, deep_result)
+            return deep_result.get("analisis_profundo") or self._analizar_impacto_profundo(texto_proyecto, art, deep_result)
 
         def _analizar_profundo_afavor(triple: Tuple) -> Dict[str, Any]:
             art, deep_result, _ = triple
-            return self._analizar_afavor_profundo(texto_proyecto, art, deep_result)
+            return deep_result.get("analisis_profundo") or self._analizar_afavor_profundo(texto_proyecto, art, deep_result)
 
         # Ejecución concurrente Fase C
         with ThreadPoolExecutor(max_workers=2) as exe:
@@ -1245,8 +1182,9 @@ def verificar_constitucionalidad(
         else:
             marcar_completado(task_id, resultado={"valido": resultado["valido"]}, duracion_ms=duracion_ms)
         resumen_ej = resultado.get("resumen_ejecutivo", {})
-        logger.info(
-            f"[VerificadorCPE] Completado: valido={resultado['valido']}, "
+        registrar = logger.warning if resultado.get("total_pendientes") else logger.info
+        registrar(
+            f"[VerificadorCPE] Estado={resultado.get('estado')}, pendientes={resultado.get('total_pendientes', 0)}, valido={resultado['valido']}, "
             f"riesgo={resumen_ej.get('nivel_riesgo','?')}, "
             f"confianza={resumen_ej.get('score_confianza','?')}% [{duracion_ms}ms]"
         )

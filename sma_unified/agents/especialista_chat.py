@@ -28,7 +28,7 @@ except ImportError:  # pragma: no cover
 from sma_unified.agents.llm_client import chat_completion_resiliente
 
 NOMBRE_FACETA = "Especialista Técnico"
-LOGO_FACETA = "🔬"
+LOGO_FACETA = "/robots/logos/asistente_profesional.jpg"
 
 # Prefijo no numérico a propósito: `AgenteEspecialistaTecnico.ejecutar` solo
 # persiste el dictamen en Neon cuando el id es numérico, y un caso ciudadano
@@ -125,10 +125,20 @@ def responder_con_especialista(
         f"PREGUNTA DE LA PERSONA:\n{mensaje}"
     )
 
+    from sma_unified.agents.reglamentos_profesionales import (
+        recuperar, contexto_fuentes, fuentes_publicas, INSTRUCCION_PROFESIONAL,
+    )
+    aviso_fuentes = None
+    try:
+        fuentes = recuperar(f"{mensaje}\n{titulo or ''}\n{texto_caso}")
+    except Exception as exc:
+        logger.warning(f"[Especialista] Corpus no disponible: {exc}")
+        fuentes = []
+        aviso_fuentes = 'No se pudo consultar el corpus profesional; los requisitos normativos quedan pendientes de revisión.'
     contenido, modelo = chat_completion_resiliente(
         messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "system", "content": system_prompt + '\n' + INSTRUCCION_PROFESIONAL},
+            {"role": "user", "content": f"FUENTES:\n{contexto_fuentes(fuentes)}\n\n{user_prompt}"},
         ],
         temperature=0.2,
         max_tokens=1200,
@@ -137,6 +147,8 @@ def responder_con_especialista(
 
     return {
         "reply": contenido,
+        "fuentes": fuentes_publicas(fuentes),
+        "aviso_fuentes": aviso_fuentes,
         "dictamen": dictamen,
         "dictamen_generado_ahora": generado_ahora,
         "modelo_usado": modelo,

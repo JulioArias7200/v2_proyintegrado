@@ -65,7 +65,7 @@ def _embed_una_llamada(textos: List[str], input_type: str) -> List[List[float]]:
             encoding_format="float",
             extra_body={"input_type": input_type, "truncate": "NONE"},
         )
-        return [d.embedding for d in resp.data]
+        return [d.embedding for d in sorted(resp.data, key=lambda d: d.index)]
 
     # Fallback vía HTTP directo con requests
     url = f"{settings.NVIDIA_BASE_URL.rstrip('/')}/embeddings"
@@ -83,7 +83,7 @@ def _embed_una_llamada(textos: List[str], input_type: str) -> List[List[float]]:
     resp = requests.post(url, json=payload, headers=headers, timeout=60)
     resp.raise_for_status()
     data = resp.json().get("data", [])
-    return [d["embedding"] for d in data]
+    return [d["embedding"] for d in sorted(data, key=lambda d: d["index"])]
 
 
 def generar_embeddings(

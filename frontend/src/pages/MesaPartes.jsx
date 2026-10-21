@@ -605,6 +605,7 @@ export default function MesaPartes({ onNavigateExpedientes, onNavigateEjecutivo,
       const res = await api.uploadDocument(selectedFile);
       updateActiveSession({
         documentText: res.texto_completo,
+          informeProfesionalData: res.analisis_profesional || null,
         uploadStats: {
           paginas: res.paginas,
           palabras: res.palabras,
@@ -1897,6 +1898,18 @@ export default function MesaPartes({ onNavigateExpedientes, onNavigateEjecutivo,
                       )}
                     </div>
                   )}
+                  {activeSession.informeProfesionalData && <div style={{ padding: 14, marginTop: 12, border: '1px solid #38bdf8', borderRadius: 10 }}>
+                    <strong>Facetas profesionales del documento</strong>
+                    <p>{activeSession.informeProfesionalData.profesiones?.join(' · ') ||
+                      (activeSession.informeProfesionalData.estado === 'NO_APLICA' ? 'No requiere las especialidades del catálogo.' : 'Revisión pendiente.')}</p>
+                    {activeSession.informeProfesionalData.cobertura_parcial && <p>Se revisó una muestra distribuida del documento por su extensión.</p>}
+                    {activeSession.informeProfesionalData.error && <p role="status">{activeSession.informeProfesionalData.error}</p>}
+                    {activeSession.informeProfesionalData.facetas?.map(f => <details key={f.profesion}>
+                      <summary>{f.profesion} · {f.estado === 'COMPLETADO' ? 'Aporte disponible' : 'Revisión pendiente'}</summary>
+                      <p>{f.motivo}</p><p style={{ whiteSpace: 'pre-wrap' }}>{f.informe || f.error}</p>
+                      <ul>{f.fuentes?.map(s => <li key={s.referencia}>[{s.referencia}] {s.titulo}, página PDF {s.pagina}</li>)}</ul>
+                    </details>)}
+                  </div>}
                 </div>
               ) : (
                 <div style={{ marginBottom: '24px' }}>
@@ -3847,6 +3860,24 @@ export default function MesaPartes({ onNavigateExpedientes, onNavigateEjecutivo,
                       </div>
                     </div>
 
+                    {concentradorData.informe_profesional && concentradorData.informe_profesional.estado !== 'NO_APLICA' && (
+                      <section style={{ padding: 18, border: '1px solid #38bdf8', borderRadius: 12, marginBottom: 20 }}>
+                        <h4 style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                          <img src="/robots/logos/asistente_profesional.jpg" alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} />
+                          Agente multifacético · Informe profesional
+                        </h4>
+                        <p>{concentradorData.informe_profesional.profesiones?.join(' · ')}</p>
+                        <p style={{ whiteSpace: 'pre-wrap' }}>{concentradorData.informe_profesional.informe || 'Revisión profesional pendiente.'}</p>
+                        {concentradorData.informe_profesional.error && <p role="status">{concentradorData.informe_profesional.error}</p>}
+                        <small>Orientación complementaria a las auditorías constitucional y normativa.</small>
+                        {concentradorData.informe_profesional.fuentes?.length > 0 && <details>
+                          <summary>Reglamentos y páginas consultados</summary>
+                          <ul>{concentradorData.informe_profesional.fuentes.map(f => (
+                            <li key={f.referencia}>[{f.referencia}] {f.titulo} — {f.archivo}, página PDF {f.pagina}</li>
+                          ))}</ul>
+                        </details>}
+                      </section>
+                    )}
                     {/* Resumen Ejecutivo */}
                     <div style={{ background: 'rgba(11,37,69,0.6)', border: '1px solid rgba(0,180,216,0.3)', padding: '18px', borderRadius: '12px', marginBottom: '20px' }}>
                       <h4 style={{ color: '#00B4D8', fontSize: '0.9rem', marginBottom: '6px' }}>📋 Resumen Ejecutivo Consolidado</h4>

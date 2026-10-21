@@ -272,6 +272,11 @@ export const api = {
         dictamen,
       }),
     }),
+  analizarFacetasDocumento: ({ casoTexto, casoNombre = null, sesionId = null }) =>
+    request('/ciudadana/facetas/documento', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ caso_texto: casoTexto, caso_nombre: casoNombre, sesion_id: sesionId }),
+    }),
   dictamenEspecialista: ({ casoTexto, casoNombre = null, materia = null, sesionId = null }) =>
     request('/ciudadana/especialista/dictamen', {
       method: 'POST',

@@ -1056,10 +1056,16 @@ async def upload_document(file: UploadFile = File(...), usuario=Depends(usuario_
         _registrar_documento_drive(upload_id, original_name, unique_name, drive_res, "MESA_DE_PARTES", file_bytes, usuario)
         logger.info(f"✅ [Mesa de Partes] Carga {upload_id} registrada en Drive: {drive_link or drive_file_id}")
 
+        from sma_unified.agents.reglamentos_profesionales import analizar_documento
+        from starlette.concurrency import run_in_threadpool
+        analisis_profesional = await run_in_threadpool(
+            analizar_documento, texto_extraido, titulo=original_name, sesion_id=upload_id)
+
         return {
             "success": True,
             "filename": original_name,
             "upload_id": upload_id,
+            "analisis_profesional": analisis_profesional,
             "saved_as": unique_name,
             "local_path": str(dest_path),
             "size_bytes": len(file_bytes),
@@ -2820,6 +2826,16 @@ def api_eliminar_agente_ciudadano(agente_id: str):
     if not eliminar_agente(agente_id):
         raise HTTPException(status_code=404, detail="Agente ciudadano no encontrado")
     return {"success": True}
+
+
+@app.post("/api/ciudadana/facetas/documento")
+def api_facetas_documento(req: DictamenCasoRequest, usuario=Depends(usuario_revision)):
+    """Identifica y ejecuta las facetas profesionales del documento adjunto."""
+    if not req.caso_texto.strip():
+        raise HTTPException(status_code=400, detail="El documento no tiene texto que analizar.")
+    from sma_unified.agents.reglamentos_profesionales import analizar_documento
+    return {"success": True, "data": analizar_documento(
+        req.caso_texto, titulo=req.caso_nombre, sesion_id=req.sesion_id)}
 
 
 @app.post("/api/ciudadana/chat")

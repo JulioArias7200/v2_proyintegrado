@@ -4,7 +4,7 @@ import { api } from '../services/api';
 
 const VACIO = {
   nombre: '',
-  logo: '',
+  logo: '/robots/logos/asistente_profesional.jpg',
   trigger_description: '',
   system_prompt: '',
   temperature: 0.4,
@@ -179,12 +179,12 @@ export default function GestionFacetasPanel() {
                   />
                 </div>
                 <div>
-                  <label style={labelEstilo}>Logo (emoji)</label>
+                  <label style={labelEstilo}>Logo (ruta o URL de imagen)</label>
                   <input
                     type="text"
                     value={form.logo}
                     onChange={(e) => setForm({ ...form, logo: e.target.value })}
-                    placeholder="🧾"
+                    placeholder="/robots/logos/asistente_profesional.jpg"
                     style={campoEstilo}
                   />
                 </div>
@@ -251,7 +251,8 @@ export default function GestionFacetasPanel() {
                   border: `1px solid ${f.activo ? 'rgba(16, 185, 129, 0.25)' : 'rgba(148, 163, 184, 0.2)'}`,
                   opacity: f.activo ? 1 : 0.55,
                 }}>
-                  <span style={{ fontSize: '1.2rem' }}>{f.logo || '🤖'}</span>
+                  <img src={/^(\/|https?:\/\/)/.test(f.logo || '') ? f.logo : '/robots/logos/asistente_profesional.jpg'}
+                    alt={f.nombre} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '0.88rem' }}>{f.nombre}</div>
                     <div style={{

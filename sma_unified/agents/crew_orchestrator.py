@@ -148,7 +148,7 @@ def ejecutar_pipeline_completo(
         agente_conc = AgenteConcentrador(base_agent=base)
         resultado_conc = agente_conc.ejecutar(
             observaciones=obs,
-            proyecto_info=proyecto_info
+            proyecto_info={**proyecto_info, 'texto_proyecto': texto_documento}
         )
         resultados["concentrador"] = resultado_conc
         expediente = resultado_conc.get("expediente_consolidado", {})

@@ -59,7 +59,7 @@ def map_con_contexto_auditoria(executor, funcion, elementos):
 
 def _timeout_con_limite(timeout, deadline):
     restante = deadline - time.monotonic()
-    if restante <= 0.05:
+    if restante < 8.0:
         raise TimeoutError("Se agotó el tiempo máximo de auditoría")
     if isinstance(timeout, (int, float)):
         connect, read = 5.0, float(timeout)
@@ -82,9 +82,15 @@ def chat_completion_auditoria(**kwargs: Any) -> Tuple[str, str]:
     try:
         # La lista general filtra el catálogo NIM; no confiar en un .env antiguo.
         disponibles = _lista_modelos_razonamiento()
-        modelos = sorted(disponibles, key=lambda m: m != modelo_preferido)
+        # Los cotejos son de texto: evitar el modelo Omni que devuelve
+        # ResourceExhausted y priorizar respaldos antes de razonadores largos.
+        disponibles = [m for m in disponibles if not any(
+            marca in m.lower() for marca in ("omni", "vision", "-vl-"))]
+        prioridad = [modelo_preferido, "openai/gpt-oss-20b", "stepfun-ai/step-5-preview"]
+        modelos = sorted(disponibles, key=lambda m: prioridad.index(m) if m in prioridad else len(prioridad))
         modelos = [m for m in modelos if m not in _MODELOS_RETIRADOS]
-        if modelo_preferido and modelo_preferido not in _MODELOS_RETIRADOS and modelo_preferido not in modelos:
+        if (modelo_preferido and not any(marca in modelo_preferido.lower() for marca in ("omni", "vision", "-vl-"))
+                and modelo_preferido not in _MODELOS_RETIRADOS and modelo_preferido not in modelos):
             # El catálogo puede estar desactualizado; intentar primero el modelo
             # solicitado y dejar que el fallback actúe si NIM lo rechaza.
             modelos.insert(0, modelo_preferido)
@@ -339,12 +345,26 @@ def _lista_modelos_razonamiento() -> List[str]:
 
 
 def _parece_modelo_no_disponible(status_code: Optional[int], texto_error: str) -> bool:
-    if status_code in (404, 410, 503):
+    if status_code in (404, 410):
         return True
     texto_error = (texto_error or "").lower()
     return any(s in texto_error for s in [
         "end of life", "no longer available", "gone", "model_not_found", "unknown model", "unavailable"
     ])
+
+
+def _registrar_saturacion(modelo, respuesta):
+    """Un 429/503 es transitorio; suspender el modelo sin declararlo retirado."""
+    try:
+        espera = float(respuesta.headers.get("Retry-After", 30))
+        if not 0 < espera < 3600:
+            espera = 30
+    except (TypeError, ValueError, AttributeError):
+        espera = 30
+    espera = max(CIRCUIT_COOLDOWN_SECONDS, espera)
+    _registrar_fallo_circuito(modelo, f"Proveedor saturado (HTTP {respuesta.status_code})")
+    _CIRCUIT_OPEN_UNTIL[modelo] = max(_CIRCUIT_OPEN_UNTIL.get(modelo, 0), time.time() + espera)
+    logger.warning(f"[NVIDIA] {modelo}: proveedor saturado; se omite durante {espera:.0f}s")
 
 
 def _esta_circuito_abierto(modelo: str) -> Tuple[bool, float]:
@@ -486,6 +506,7 @@ def chat_completion_resiliente(
     response_format: Optional[Dict[str, str]] = None,
     max_model_attempts: Optional[int] = None,
     require_final_content: bool = False,
+    razonamiento_breve: bool = False,
     deadline_monotonic: Optional[float] = None,
     **kwargs: Any,
 ) -> Tuple[str, str]:
@@ -500,12 +521,13 @@ def chat_completion_resiliente(
     if timeout is None:
         timeout_efectivo = (30, 90)
     elif isinstance(timeout, (int, float)):
-        timeout_efectivo = (30, int(timeout))
+        timeout_efectivo = (30, float(timeout))
     else:
         timeout_efectivo = timeout
 
     ultimo_error: Optional[Exception] = None
     intentos = 0
+    probados = []
 
     for modelo in modelos:
         if deadline_monotonic is not None:
@@ -534,6 +556,7 @@ def chat_completion_resiliente(
         if max_model_attempts is not None and intentos >= max_model_attempts:
             break
         intentos += 1
+        probados.append(modelo)
         t_inicio = time.time()
         try:
             payload: Dict[str, Any] = {
@@ -545,6 +568,10 @@ def chat_completion_resiliente(
             if response_format:
                 payload["response_format"] = response_format
             payload.update(kwargs)
+            if razonamiento_breve and modelo.startswith("openai/gpt-oss-"):
+                # Parámetro oficial NIM para evitar agotar tokens en razonamiento
+                # interno antes de entregar el JSON final del cotejo.
+                payload["reasoning_effort"] = "low"
 
             # Intentar llamada al endpoint de NVIDIA NIM
             resp = requests.post(
@@ -571,7 +598,14 @@ def chat_completion_resiliente(
                 )
                 duracion = time.time() - t_inicio
 
-            # Verificar si el modelo fue retirado o no existe (404/410/503)
+            if resp.status_code in (429, 503):
+                _registrar_saturacion(modelo, resp)
+                _registrar_metrica_latencia(modelo=modelo, duracion=duracion,
+                    status="saturado", status_code=resp.status_code, error_msg=resp.text[:250])
+                ultimo_error = RuntimeError(f"Proveedor saturado para '{modelo}' (HTTP {resp.status_code})")
+                continue
+
+            # Verificar si el modelo fue retirado o no existe (404/410).
             if _parece_modelo_no_disponible(resp.status_code, resp.text):
                 if resp.status_code == 410:
                     _MODELOS_RETIRADOS.add(modelo)
@@ -601,6 +635,8 @@ def chat_completion_resiliente(
                 )
             if not contenido:
                 contenido = (msg_obj.get("reasoning_content") or "").strip()
+            if not contenido:
+                raise ValueError("El proveedor devolvió una respuesta vacía")
 
             # Registrar éxito en Circuit Breaker y Métricas
             _registrar_exito_circuito(modelo)
@@ -618,6 +654,13 @@ def chat_completion_resiliente(
                 logger.debug(f"Respuesta exitosa de '{modelo}' en {duracion:.2f}s.")
 
             return contenido, modelo
+
+        except (ValueError, KeyError, IndexError) as e:
+            _registrar_fallo_circuito(modelo, f"Respuesta incompleta o inválida: {e}")
+            _registrar_metrica_latencia(modelo=modelo, duracion=time.time()-t_inicio,
+                status="respuesta_invalida", error_msg=str(e))
+            ultimo_error = e
+            continue
 
         except requests.exceptions.Timeout as e:
             duracion = time.time() - t_inicio
@@ -648,6 +691,6 @@ def chat_completion_resiliente(
             continue
 
     raise RuntimeError(
-        f"Ningún modelo LLM de razonamiento disponible respondió (probados: {', '.join(modelos)}). "
+        f"Ningún modelo LLM de razonamiento disponible respondió (probados: {', '.join(probados) or 'ninguno: circuitos abiertos'}). "
         f"Último error: {ultimo_error}"
     )

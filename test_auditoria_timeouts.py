@@ -1,6 +1,7 @@
 """Pruebas aisladas de red: no requieren credenciales ni escriben en la BD."""
 import ast
 import json
+import re
 from pathlib import Path
 import time
 import typing
@@ -15,7 +16,7 @@ def cargar_funcion(archivo, nombre, entorno):
     fuente = Path('sma_unified/agents', archivo).read_text(encoding='utf-8')
     nodo = next(n for n in ast.parse(fuente).body
                 if isinstance(n, ast.FunctionDef) and n.name == nombre)
-    espacio = dict(vars(typing), **entorno)
+    espacio = {**vars(typing), '_AUDIT_DEADLINE':SimpleNamespace(get=lambda: None), **entorno}
     exec(compile(ast.Module(body=[nodo], type_ignores=[]), archivo, 'exec'), espacio)
     return espacio[nombre]
 
@@ -23,7 +24,9 @@ def cargar_funcion(archivo, nombre, entorno):
 def cargar_agente(archivo, nombre, entorno):
     arbol = ast.parse(Path('sma_unified/agents', archivo).read_text(encoding='utf-8'))
     nodos = [n for n in arbol.body if isinstance(n, (ast.Assign, ast.AnnAssign, ast.ClassDef))]
-    espacio = dict(vars(typing), logger=Mock(), **entorno)
+    espacio = {**vars(typing), 'logger':Mock(), 're':re, 'ANALISIS_NEON_LOCK':Lock(),
+               'map_con_contexto_auditoria':lambda executor, fn, elementos: list(executor.map(fn, elementos)),
+               'extraer_json_de_llm':json.loads, **entorno}
     exec(compile(ast.Module(body=nodos, type_ignores=[]), archivo, 'exec'), espacio)
     return espacio[nombre]
 
@@ -208,7 +211,7 @@ class AuditoriaTimeoutTests(unittest.TestCase):
         respuesta.json.return_value = {'choices': [{'finish_reason': 'length',
             'message': {'content': '', 'reasoning_content': 'razonamiento incompleto'}}]}
         post = Mock(return_value=respuesta)
-        with self.assertRaisesRegex(ValueError, 'respuesta final'):
+        with self.assertRaisesRegex(RuntimeError, 'respuesta final'):
             self.cliente(post)([], require_final_content=True)
         self.assertNotIn('require_final_content', post.call_args.kwargs['json'])
 

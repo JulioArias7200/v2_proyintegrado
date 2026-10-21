@@ -374,6 +374,10 @@ DATOS DEL PROYECTO:
 DETALLE DE OBSERVACIONES VERIFICADAS:
 {json.dumps(obs_verificadas[:15], ensure_ascii=False, indent=2)}
 
+INFORME PROFESIONAL COMPLEMENTARIO (orientación, no auditoría verificada;
+no modificar el riesgo global ni convertirlo en observaciones verificadas):
+{json.dumps(proyecto_info.get('informe_profesional', {}), ensure_ascii=False)}
+
 INSTRUCCIÓN: Devuelve un JSON estructurado con exactamente estas claves:
 {{
   "resumen_ejecutivo": "Síntesis ejecutiva de 2 a 3 frases en español formal",
@@ -454,6 +458,7 @@ def generar_pdf_informe_concentrador(
     insumos_no_validos: List[Dict],
     obs_cpe_detalle: Optional[List[Dict]] = None,
     obs_normativas_detalle: Optional[List[Dict]] = None,
+    informe_profesional: Optional[Dict] = None,
 ) -> Dict[str, Any]:
     """
     Construye y almacena el documento oficial en formato PDF institucional en letra negra.
@@ -843,6 +848,19 @@ def generar_pdf_informe_concentrador(
     pdf.f_regular(6.5)
     pdf.cell(65, 3, pdf.safe("Razonamiento Ampliado (CoT / Nemotron)"), 0, 1, 'C')
 
+    if informe_profesional and informe_profesional.get('estado') != 'NO_APLICA':
+        pdf.add_page()
+        pdf.seccion_titulo("ANEXO: ORIENTACION PROFESIONAL COMPLEMENTARIA")
+        pdf.f_regular(8)
+        pdf.multi_cell(epw, 4.2, pdf.safe(
+            "Este informe complementa las auditorias; sus interpretaciones no constituyen cotejos verificados.\n"
+            + (informe_profesional.get('informe') or
+               'Revision pendiente: ' + informe_profesional.get('error', 'Sin informe'))))
+        for fuente in informe_profesional.get('fuentes', []):
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(epw, 4.2, pdf.safe(
+                f"[{fuente['referencia']}] {fuente['titulo']} - {fuente['archivo']}, pagina PDF {fuente['pagina']}"))
+
     # Guardar en disco
     pdf.output(filepath)
 
@@ -974,6 +992,11 @@ class AgenteConcentrador:
         t0 = time.time()
         id_proyecto = int(proyecto_info.get("id") or proyecto_info.get("id_proyecto") or 0)
         titulo = proyecto_info.get("titulo") or proyecto_info.get("titulo_proyecto") or "Proyecto de Ley"
+        from sma_unified.agents.reglamentos_profesionales import analizar_documento
+        informe_profesional = analizar_documento(
+            proyecto_info.get('texto_proyecto') or proyecto_info.get('texto_documento') or '',
+            titulo=titulo, sesion_id=proyecto_info.get('sesion_id'))
+        proyecto_info = {**proyecto_info, 'informe_profesional': informe_profesional}
 
         # ── PASO 1: VALIDACIÓN DE INSUMOS ─────────────────────────────────────
         validos = []
@@ -992,8 +1015,10 @@ class AgenteConcentrador:
         if not validos:
             logger.warning("[Concentrador] Sin insumos válidos — expediente no puede consolidarse")
             return {
+                "informe_profesional": informe_profesional,
                 "expediente_consolidado": {
                     "estado": "ERROR_INSUFICIENTE",
+                    "informe_profesional": informe_profesional,
                     "insumos_no_validos": no_validos,
                     "resumen_ejecutivo": "ERROR: No hay insumos válidos para consolidar.",
                     "observaciones_integradas": [],
@@ -1085,6 +1110,7 @@ class AgenteConcentrador:
                 insumos_no_validos=no_validos,
                 obs_cpe_detalle=obs_cpe_raw or None,
                 obs_normativas_detalle=obs_norm_raw or None,
+                informe_profesional=informe_profesional,
             )
 
         except Exception as e_pdf:
@@ -1099,6 +1125,7 @@ class AgenteConcentrador:
         # ── RESULTADO FINAL CON EXPEDIENTE, RESUMEN, CONCLUSIONES Y PDF ───────
         resultado = {
             "estado": "CONSOLIDADO_COMPLETADO",
+            "informe_profesional": informe_profesional,
             "consolidado": {
                 "observaciones": lista_observaciones_final,
                 "redundancias_fusionadas": len(fusionadas),
@@ -1110,6 +1137,7 @@ class AgenteConcentrador:
             "pdf": pdf_info,
             "pdf_filename": pdf_info.get("filename", ""),
             "expediente_consolidado": {
+                "informe_profesional": informe_profesional,
                 "resumen_ejecutivo": resumen_ejecutivo,
                 "resumen_proyecto_detallado": analisis_ampliado.get("resumen_proyecto_detallado", ""),
                 "sintesis_constitucional": analisis_ampliado.get("sintesis_constitucional", ""),
