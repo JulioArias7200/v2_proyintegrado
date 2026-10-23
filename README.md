@@ -2,22 +2,33 @@
 
 Sistema Multi-Agente inteligente diseñado para la **recepción, clasificación, auditoría constitucional y verificación de consistencia normativa** de proyectos de ley y documentos oficiales del Congreso de Bolivia.
 
+La **ciudadanía es la puerta de entrada del sistema**: cualquier persona puede conversar con el *Agente de Interacción Ciudadana* (por texto o voz), consultar leyes y trámites, o **presentar un proyecto de ley o una propuesta** que entra al mismo circuito de auditoría que los demás expedientes.
+
 El sistema combina modelos de lenguaje de última generación (**NVIDIA NIM API**), búsqueda vectorial semántica (**pgvector en PostgreSQL Neon**), un bus de mensajería asíncrono (**MongoDB Atlas**), y una interfaz moderna en **React + Vite**.
 
 ---
 
 ## 📐 Arquitectura del Sistema
 
-El pipeline procesa cada expediente en dos fases secuenciales con un **punto de control humano de confirmación (Pausable/Confirmable)**:
+El flujo **comienza en la ciudadanía**. El primer agente que interviene es el **Agente de Interacción Ciudadana** (Ventanilla multimodal): detecta la intención de la persona y, cuando esta presenta un **proyecto de ley o propuesta**, lo entrega al pipeline legislativo. Desde ahí cada expediente se procesa en dos fases secuenciales con un **punto de control humano de confirmación (Pausable/Confirmable)**:
 
 ```mermaid
 flowchart TD
-    A[📄 Entrada: PDF / Documento de Ley] --> B[Fase 1: Agente Distribuidor]
+    CIU[👤 Ciudadanía\nTexto · Voz STT · PDF/DOCX] --> IC[💬 Agente Interacción Ciudadana\nVentanilla multimodal · Primer agente]
+    IC --> INT{Intención detectada}
+
+    INT -->|CONSULTA_INFORMACION| R1[Respuesta en lenguaje claro\nFacetas profesionales + Especialista Técnico]
+    INT -->|ESTADO_TRAMITE| R2[Consulta del estado del expediente]
+    INT -->|RECLAMO_QUEJA| F[Agente Atención Ciudadana\nPrioridad y área responsable]
+    INT -->|PRESENTACION_INICIATIVA| P[📜 Proyecto de Ley o Propuesta Ciudadana\nPOST /api/ciudadana/presentaciones]
+
+    A[📄 Entrada interna: PDF / Documento de Ley\nOperador] --> B
+    P --> B[Fase 1: Agente Distribuidor]
     B --> C{🛑 Punto de Control Humano\nConfirmar o Ajustar Categoría}
     C -->|Aprobado| D[Fase 2: Ejecución de Agentes de Nivel 2]
-    
+
     D -->|Proyectos de Ley| E[Agente Registro Legislativo]
-    D -->|Peticiones / Reclamos| F[Agente Atención Ciudadana]
+    D -->|Peticiones / Reclamos| F
     D -->|Oficios / Cartas| G[Agente Gestión Correspondencia]
 
     E --> H[Agente Comisión Legislativa\nAsignación automática de comisión]
@@ -27,24 +38,95 @@ flowchart TD
     H --> K[(PostgreSQL Neon\nRegistro Relacional + pgvector)]
     I --> K
     J --> K
-    
+
     H --> L[(MongoDB Atlas\nBus de Eventos SMA + Snapshots)]
     I --> L
     J --> L
+
+    H --> M[Agente Concentrador\nExpediente consolidado + Dictamen PDF]
+    I --> M
+    J --> M
+    M --> N[🏛️ Cámara de destino\nSeguimiento por Diputado / Senador]
+    N -.->|Estado y resultados del caso| CIU
+```
+
+### 🧑‍🤝‍🧑 Ruta de la iniciativa ciudadana (proyecto de ley o propuesta)
+
+1. **Ingreso:** la persona escribe o dicta (STT) su mensaje, o adjunta el texto/archivo, en la página **Interacción Ciudadana**.
+2. **Detección de intención:** el `Agente_Interaccion_Ciudadana` distingue entre `CONSULTA_INFORMACION`, `ESTADO_TRAMITE`, `PRESENTACION_INICIATIVA` y `RECLAMO_QUEJA`. Si la confianza es baja (< 0.7) pide aclaración en lugar de asumir.
+3. **Presentación:** ante una `PRESENTACION_INICIATIVA`, el ciudadano envía título, texto, tipo (`iniciativa`) y **cámara de destino** (`Diputados`, `Senadores` o `Ambas`). El servidor responde `202` y procesa en segundo plano.
+4. **Fase 1:** el `Agente_Distribuidor` clasifica el documento y registra el expediente (`sistema.proyecto_ley`).
+5. **Fase 2 automática:** se ejecutan Comisión Legislativa, Verificador Constitucional y Consistencia Normativa, y el **Concentrador** consolida todo en un expediente con dictamen.
+6. **Seguimiento legislativo:** el caso queda en estado `PENDIENTE_SEGUIMIENTO_LEGISLADOR` (o `..._CON_OBSERVACIONES` si alguna auditoría quedó pendiente). A partir del Concentrador solo un **Diputado o Senador** puede continuar el trámite; el ciudadano consulta resultados y puede **reanudar** auditorías pendientes de su propio caso, pero no editar el trámite.
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/api/ciudadana/presentaciones` | Presentar proyecto de ley o propuesta (devuelve `202`) |
+| POST | `/api/ciudadana/presentaciones/{id}/reanudar` | Reanudar auditorías pendientes sin repetir el Distribuidor (`403` si es otro ciudadano, `409` si ya está procesando) |
+| GET | `/api/casos` | Listar casos compartidos, con resultados de dictamen y consistencia |
+
+```json
+{
+  "titulo": "Iniciativa de prueba",
+  "texto": "Artículo 1. Objeto de esta iniciativa ciudadana.",
+  "tipo": "iniciativa",
+  "camara_destino": "Senadores"
+}
+```
+
+Los casos se guardan con control de versiones en la colección `casos_compartidos` de MongoDB Atlas (`sma_unified/db/casos_compartidos.py`).
+
+### 🔁 Proceso legislativo extendido (5 fases)
+
+Tras la auditoría, el orquestador CrewAI (`config/workflows.yaml`, `crew_orchestrator.py`) cubre el ciclo completo y **vuelve a la ciudadanía** en la última fase:
+
+```mermaid
+flowchart LR
+    F1[Fase 1\nIngreso y Atención Ciudadana] --> F2[Fase 2\nComisión y Dictámenes]
+    F2 --> F3[Fase 3\nPlenaria y Trámite Bicameral]
+    F3 --> F4[Fase 4\nVeto / Promulgación y Publicación]
+    F4 --> F5[Fase 5\nDifusión Ciudadana y Fiscalización]
+    F5 -.->|Lenguaje claro| CIU[👤 Ciudadanía]
 ```
 
 ---
 
 ## 🤖 Catálogo de Agentes Inteligentes
 
+### Ciudadanía — primer punto de contacto
+
 | Agente | Nivel | Función Principal | Tecnología / Modelo |
 |---|---|---|---|
-| **`Agente_Distribuidor`** | Nivel 1 | Clasifica el documento en: Registro Legislativo, Atención Ciudadana o Correspondencia. | LLM NVIDIA NIM |
+| **`Agente_Interaccion_Ciudadana`** (`Interaccion_Ciudadana`) | Entrada · Fase 1 | **Primer agente del sistema.** Atiende por voz (STT) o texto, detecta la intención (`CONSULTA_INFORMACION`, `ESTADO_TRAMITE`, `PRESENTACION_INICIATIVA`, `RECLAMO_QUEJA`), responde en lenguaje accesible y **recibe el proyecto de ley o propuesta ciudadana para derivarlo al Distribuidor**. No da asesoría legal vinculante. | LLM NIM (`gpt-oss-20b`, temp 0.2) + `voz_agent` (STT/TTS) |
+| **`Agente_Multifaceta_Ciudadano`** | Entrada · Chat | Asistente con facetas (Arquitectura y Urbanismo, Salud, Educación, Trámites Legislativos, etc.). El router elige la faceta de cada mensaje; sin estado. Con un caso adjunto puede activar el **Especialista Técnico**. | LLM NIM con fallback resiliente + pgvector (corpus profesional) |
+
+### Auditoría y registro (Fases 1 y 2)
+
+| Agente | Nivel | Función Principal | Tecnología / Modelo |
+|---|---|---|---|
+| **`Agente_Distribuidor`** | Nivel 1 | Recibe lo enviado por la ciudadanía o el operador y lo clasifica en: Registro Legislativo, Atención Ciudadana o Correspondencia. | LLM NVIDIA NIM |
 | **`Agente_Comision_Legislativa`** | Nivel 2 | Determina la comisión parlamentaria competente (Justicia Plural, Economía, Derechos Humanos, etc.). | LLM NVIDIA NIM + Neon PostgreSQL |
 | **`Agente_Verificador_Constitucional`** | Nivel 2 | Audita el proyecto contra la Constitución Política del Estado (CPE 2009), clasificando hallazgos en `A_FAVOR`, `EN_CONTRA` o `NEUTRAL`. | Embedding NVIDIA + Postgres Vector + LLM (Temp 0.0) |
 | **`Agente_Consistencia_Normativa`** | Nivel 2 | Coteja el proyecto contra el corpus de leyes vigentes (Códigos, Leyes Sectoriales, Decretos) para detectar derogaciones tácitas y conflictos de especialidad. | Búsqueda Semántica pgvector + LLM Multihilo Paralelo |
-| **`Agente_Atencion_Ciudadana`** | Nivel 2 | Clasifica solicitudes y peticiones de la población asignando prioridad y área responsable. | LLM NIM |
+| **`Agente_Atencion_Ciudadana`** | Nivel 2 | Clasifica solicitudes, peticiones y reclamos de la población asignando prioridad y área responsable. | LLM NIM |
 | **`Agente_Gestion_Correspondencia`** | Nivel 2 | Procesa notas oficiales, cartas e informes identificando remitente, urgencia y unidad de destino. | LLM NIM |
+| **`Agente_Especialista_Tecnico`** | Fase 2 | Evalúa factibilidad técnica y estándares de la materia; también responde al ciudadano sobre su caso adjunto. | LLM NIM |
+| **`Agente_Presidencia_Comision`** | Fase 2 | Conduce el trabajo y planifica el debate en comisión. | LLM NIM |
+| **`Agente_Constitucion_Fondo`** | Fase 2 | Análisis hermenéutico de fondo y precedentes del TCP. | LLM NIM + pgvector |
+| **`Agente_Presupuesto`** | Fase 2 | Evalúa sostenibilidad presupuestaria y techos del TGN. | LLM NIM |
+| **`Agente_Concentrador`** | Fase 2 | Integra los dictámenes, emite el expediente consolidado y el **Dictamen Oficial en PDF**. | LLM NIM + generación PDF |
+
+### Plenaria, Ejecutivo y retorno a la ciudadanía (Fases 3 a 5)
+
+| Agente | Nivel | Función Principal | Tecnología / Modelo |
+|---|---|---|---|
+| **`Agente_Secretario_Camara`** | Fase 3 | Registra el debate en la Cámara de Origen (quórum, oradores, votación en grande y en detalle). Control humano de aprobación. | LLM NIM + reglas deterministas |
+| **`Agente_Bicameral`** | Fase 3 | Gestiona el trámite entre Cámara de Origen y Revisora, enmiendas y retorno a comisiones. | LLM NIM + reglas deterministas |
+| **`Agente_Veto_Promulgacion`** | Fase 4 | Asesoría al Ejecutivo (Arts. 163-165 CPE) con decisión humana de promulgar u observar. | LLM NIM |
+| **`Agente_Publicacion_Oficial`** | Fase 4 | Asigna número y vigencia, y publica en Gaceta Oficial (lógica determinista). | Reglas + PDF |
+| **`Agente_Difusion_Ciudadana`** | Fase 5 | Explica la ley en **lenguaje claro** para devolverla a la ciudadanía. | LLM NIM |
+| **`Agente_Fiscalizacion`** | Fase 5 | Monitorea decretos reglamentarios y ejecución presupuestaria. | LLM NIM + Neon |
+| **`Agente_Notificador_Comision`** | Fase 5 | Envía notificaciones formales HTML/email a la comisión con el dictamen. | SMTP + HTML |
 
 ---
 
@@ -107,31 +189,54 @@ Esta separación YAML/Python permite ajustar los "prompts" de los agentes y la e
 ```
 .
 ├── server.py                   # API Backend REST principal (FastAPI + Uvicorn)
-├── cargar_normativa.py        # CLI para ingesta e indización de PDFs de leyes en pgvector
-├── upload_server.py           # Servidor independiente de carga y procesamiento de documentos
-├── test_sma.py                # Script de prueba de conexiones (Mongo, Neon, NVIDIA NIM)
-├── requirements.txt           # Dependencias de Python
-├── .env.example               # Plantilla de variables de entorno
-├── scratch/                   # Scripts de prueba y depuración
-├── frontend/                  # Aplicación Frontend React 19 + Vite
+├── cargar_normativa.py         # CLI para ingesta e indización de PDFs de leyes en pgvector
+├── cargar_reglamentos_profesionales.py  # Ingesta del corpus de reglamentos profesionales (facetas)
+├── aplicar_migracion_004.py    # Aplica la migración 004 (circuito bicameral / ejecutivo)
+├── upload_server.py            # Servidor independiente de carga y procesamiento de documentos
+├── test_*.py                   # Pruebas (conexiones, bicameral, cotejo CPE, facetas, presentación ciudadana, etc.)
+├── requirements.txt            # Dependencias de Python
+├── .env.example                # Plantilla de variables de entorno
+├── migrations/                 # Esquemas SQL (001–004, incl. agentes ciudadanos)
+├── frontend/                   # Aplicación Frontend React 19 + Vite
 │   ├── src/
-│   │   ├── components/        # Componentes UI de la interfaz
-│   │   ├── main.jsx           # Punto de entrada React
-│   │   └── index.css          # Estilos globales y tokens
+│   │   ├── components/         # UI (AsistenteMultifacetaPanel, GestionFacetasPanel, ...)
+│   │   ├── main.jsx            # Punto de entrada React
+│   │   └── index.css           # Estilos globales y tokens
 │   └── package.json
-└── sma_unified/               # Paquete principal del SMA
+└── sma_unified/                # Paquete principal del SMA
+    ├── config.py               # Configuración central (.env, settings)
+    ├── config/
+    │   ├── agents.yaml         # Rol, objetivo y backstory de cada agente
+    │   ├── tasks.yaml          # Tareas y salidas esperadas
+    │   └── workflows.yaml      # Pipelines de 5 fases y filtro rápido
     ├── agents/
-    │   ├── pipeline.py                # Orquestador del pipeline en 2 fases
-    │   ├── llm_client.py              # Cliente resiliente de NVIDIA NIM + Parser JSON
-    │   ├── verificador_constitucional.py # Agente de auditoría CPE 2009
-    │   ├── consistencia_normativa.py  # Agente de consistencia del ordenamiento vigente
-    │   ├── tools_constitucional.py    # Herramientas LangChain de búsqueda y cotejo
-    │   ├── distribuidor.py            # Agente clasificador Nivel 1
-    │   └── comision.py                # Agente de asignación de comisiones
+    │   ├── ── Ciudadanía (entrada) ──
+    │   ├── ciudadana.py                 # Atención ciudadana (peticiones y reclamos)
+    │   ├── multiagente_ciudadano.py     # Chat multifaceta con routing automático
+    │   ├── facetas_semanticas.py        # Selección y análisis de facetas profesionales
+    │   ├── especialista_chat.py         # Especialista Técnico sobre el caso adjunto
+    │   ├── voz_agent.py                 # STT/TTS y comandos de voz por agente
+    │   ├── ── Pipeline y auditoría ──
+    │   ├── pipeline.py                  # Orquestador del pipeline en 2 fases
+    │   ├── crew_orchestrator.py         # Orquestador CrewAI de las 5 fases
+    │   ├── distribuidor.py              # Agente clasificador Nivel 1
+    │   ├── comision.py                  # Asignación de comisiones
+    │   ├── verificador_constitucional.py# Auditoría CPE 2009
+    │   ├── cotejo_constitucional.py     # Cotejo conjunto de candidatos CPE
+    │   ├── consistencia_normativa.py    # Consistencia con el ordenamiento vigente
+    │   ├── tools_constitucional.py      # Herramientas LangChain de búsqueda y cotejo
+    │   ├── concentrador.py              # Expediente consolidado + dictamen
+    │   ├── emisor_resultados.py         # Dictamen PDF tricolor
+    │   ├── ── Plenaria, Ejecutivo y difusión ──
+    │   ├── secretario.py · bicameral.py · control_legislativo.py
+    │   ├── veto_promulgacion.py · publicacion.py · gaceta_pdf_generator.py
+    │   ├── difusion_ciudadana.py · fiscalizacion.py · notificador_comision.py
+    │   └── llm_client.py                # Cliente resiliente de NVIDIA NIM + Parser JSON
     ├── db/
-    │   ├── neon_postgres.py           # Consultas relacionales y pgvector en Neon
-    │   └── mongo_atlas.py             # Bus de eventos SMA y Snapshots en MongoDB
-    └── config.py                      # Configuración central (.env, settings)
+    │   ├── neon_postgres.py · neon_client.py  # Relacional y pgvector en Neon
+    │   ├── mongo_atlas.py                     # Bus de eventos SMA y Snapshots
+    │   └── casos_compartidos.py               # Casos ciudadanos versionados entre equipos
+    └── utils/                   # Extracción de documentos, parser de normativa, Drive
 ```
 
 ---
@@ -152,7 +257,7 @@ Esta separación YAML/Python permite ajustar los "prompts" de los agentes y la e
 
 ```bash
 # Clonar el proyecto
-git clone <URL_DEL_REPOSISTORIO>
+git clone <URL_DEL_REPOSITORIO>
 cd proy_integrado
 
 # Crear y activar entorno virtual
@@ -253,7 +358,8 @@ npm run dev
 
 ## 🔄 Flujo de Auditoría Legislativa
 
-1. **Carga del Expediente:** Se sube el archivo (PDF/DOCX/Texto) desde la plataforma.
+0. **Interacción Ciudadana (primer paso):** la persona conversa con el `Agente_Interaccion_Ciudadana` y, si desea participar legislativamente, **presenta su proyecto de ley o propuesta**.
+1. **Carga del Expediente:** el documento ingresa como texto o archivo (PDF/DOCX/Texto), ya sea desde la ciudadanía o desde la plataforma interna.
 2. **Fase 1 (Clasificación):** El `Agente_Distribuidor` clasifica el documento y propone la ruta.
 3. **Punto de Control Humano (🛑 Pause/Confirm):** El operador aprueba o corrige la clasificación sugerida.
 4. **Fase 2 (Auditoría Paralela Nivel 2):**
@@ -261,6 +367,7 @@ npm run dev
    - Auditoría Constitucional contra la CPE 2009.
    - Análisis de Consistencia contra el corpus legal vigente.
 5. **Emisión de Dictamen:** Generación automatizada de reportes con contradicciones, artículos respaldados, derogas tácitas y nivel de riesgo normativo.
+6. **Seguimiento por la cámara de destino:** el caso pasa a un Diputado o Senador, y la ciudadanía recibe el resultado y, al final del ciclo, la explicación en lenguaje claro.
 
 ---
 
@@ -269,7 +376,8 @@ npm run dev
 Desarrollado para el análisis y auditoría legislativa del Congreso. Reservados todos los derechos.
 
 
-## necesito la eliminacionn 
+## 🧹 Tablas candidatas a eliminación
+
 public.Solicitudes_Documentos: Entrada de documentos de atención ciudadana y correspondencia institucional externa.
 public.Clasificacion_Agente: (Candidata a unificación/eliminación) Guarda el resultado inicial del Agente Distribuidor para solicitudes.
 public.Clasificacion_Comision: (Candidata a unificación/eliminación) Guarda la comisión y metadatos derivados para solicitudes.
@@ -278,6 +386,8 @@ public.Clasificacion_Comision: (Candidata a unificación/eliminación) Guarda la
 ---
 
 ## Agente Multi-Faceta de Atención Ciudadana (routing automático de prompts)
+
+> Forma parte de la capa de **Ciudadanía**, el primer eslabón del sistema (ver *Arquitectura*). Para presentar un proyecto de ley o propuesta, ver *Ruta de la iniciativa ciudadana*.
 
 Módulo: `sma_unified/agents/multiagente_ciudadano.py` · Tabla: `sistema.agentes_ciudadanos`
 
@@ -312,7 +422,7 @@ Salud, Educación y Trámites Legislativos.
 | DELETE | `/api/ciudadana/agentes/{id}`    | Eliminar faceta                                |
 
 ```bash
-curl -X POST http://localhost:8000/api/ciudadana/chat \
+curl -X POST http://localhost:8085/api/ciudadana/chat \
   -H "Content-Type: application/json" \
   -d '{"mensaje": "¿Qué necesito para aprobar los planos de una ampliación?"}'
 ```
