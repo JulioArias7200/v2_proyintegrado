@@ -57,6 +57,7 @@ def _get_llm():
         model=f"openai/{settings.LLM_MODEL_CREW}",
         api_key=settings.NVIDIA_API_KEY,
         base_url=settings.NVIDIA_BASE_URL,
+        additional_params={"chat_template_kwargs": {"enable_thinking": False}},
     )
 
 
@@ -136,12 +137,12 @@ def procesar_legislativo(
     agente_asignador = _get_asignador_agent(comisiones)
 
     tasks_cfg = load_tasks_yaml().get("tarea_clasificacion_comision", {})
-    desc_comision = tasks_cfg.get("description", "Determina la comisión:\n{texto_documento}")
-    desc_comision = desc_comision.replace("{texto_documento}", muestrear_texto(texto_documento, 4000)).replace("{comisiones_info}", comisiones_str)
+    plantilla = tasks_cfg.get("prompt_operativo") or tasks_cfg.get("description", "Determina la comisión:\n{texto_documento}")
+    desc_comision = plantilla.replace("{texto_documento}", muestrear_texto(texto_documento, 4000)).replace("{comisiones_info}", comisiones_str)
 
     tarea_comision = Task(
         description=desc_comision,
-        expected_output=tasks_cfg.get("expected_output", 'JSON: {"comision_principal": "..."}'),
+        expected_output=tasks_cfg.get("expected_output", 'JSON: {"comision_principal": "...", "comision_coadyuvante": "...", "fundamentacion_competencia": "..."}'),
         agent=agente_asignador,
     )
 
@@ -160,15 +161,21 @@ def procesar_legislativo(
     except Exception:
         comision_data = {
             "comision_principal": comisiones[0] if comisiones else "COMISION_DE_CONSTITUCION",
-            "palabras_clave": ["Legislación", "Normativa"],
-            "resumen": "Proyecto legislativo en análisis.",
+            "comision_coadyuvante": "COMISION_DE_PLANIFICACION_Y_FINANZAS",
+            "fundamentacion_competencia": "Asignación reglamentaria según materia sustantiva del proyecto e impacto fiscal conexo.",
+            "palabras_clave": ["Legislación", "Normativa", "Políticas Públicas"],
+            "resumen": "Proyecto legislativo en análisis parlamentario.",
             "complejidad": "Media",
             "prioridad": "Normal",
+            "plazo_dias": 20,
         }
 
     duracion_a = int((time.time() - t_a) * 1000)
     marcar_completado(task_id_comision, resultado=comision_data, duracion_ms=duracion_a)
-    logger.info(f"✅ Comisión asignada: {comision_data.get('comision_principal')} [{duracion_a}ms]")
+    logger.info(
+        f"✅ Comisiones asignadas: Principal='{comision_data.get('comision_principal')}' | "
+        f"Coadyuvante='{comision_data.get('comision_coadyuvante')}' [{duracion_a}ms]"
+    )
 
     # ── Paso B: Verificación Constitucional ────────────────────────────────
     task_id_verif = publicar_mensaje(
@@ -195,7 +202,7 @@ def procesar_legislativo(
     arts_constitucion = obtener_articulos_constitucion(palabras_busqueda)
     arts_constitucion_str = "\n\n".join([
         f"Art. {a['numero']} — {a['titulo']}\n{a['texto'][:400]}"
-        for a in arts_constitucion[:10]
+        for a in arts_constitucion[:15]
     ]) if arts_constitucion else "No se obtuvieron artículos constitucionales de la base de datos."
 
     agente_verif = _get_verificador_constitucional_agent()

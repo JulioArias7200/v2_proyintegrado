@@ -99,6 +99,7 @@ def _refinar_con_llm(texto_crudo: str, filename: str) -> str:
             ],
             temperature=0.1,
             max_tokens=4000,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
         
         texto_refinado = response.choices[0].message.content

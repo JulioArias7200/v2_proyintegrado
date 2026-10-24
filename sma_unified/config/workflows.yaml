@@ -1,99 +1,86 @@
-# ============================================================================
-# DEFINICIÓN DE WORKFLOWS — SMA CONGRESO (CrewAI Orchestration)
-# Proceso Legislativo Plurinacional de Bolivia — 5 Fases Canónicas
-# ============================================================================
-
+version: '3.0'
 workflows:
-  # ========== WORKFLOW INTEGRAL COMPLETO (5 FASES) ==========
   Pipeline_Legislativo_Completo:
-    nombre: "Pipeline Legislativo Completo de Bolivia"
-    descripcion: "Flujo integral desde la Mesa de Entradas hasta la Difusión Ciudadana y Fiscalización Posterior"
-
+    nombre: Pipeline Legislativo Completo
+    descripcion: Flujo desde interacción ciudadana e ingreso hasta publicación y fiscalización con controles
+      humanos.
     etapas:
-      Fase_1_Ingreso_Admision:
-        nombre: "Fase 1: Ingreso, Admisión y Atención"
+      Fase_1_Ingreso_Interaccion:
+        nombre: 'Fase 1: Interacción ciudadana e ingreso'
         tareas:
-          - Clasificar_Documento
-          - Atender_Consulta_Ciudadana
+        - Atender_Consulta_Ciudadana
+        - Clasificar_Documento
+        orden:
+        - Interaccion_Ciudadana
+        - Distribuidor
         punto_control: true
-        descripcion: "Recepción de iniciativa legislativa, validación formal y asignación de expediente"
-
-      Fase_2_Comision_Dictamenes:
-        nombre: "Fase 2: Trabajo en Comisión y Dictámenes Especializados"
+      Fase_2_Distribucion_y_Revision:
+        nombre: 'Fase 2: Distribución y revisión especializada'
         tareas:
-          - Auditar_Constitucionalidad
-          - Analizar_Consistencia
-          - Evaluar_Viabilidad_Tecnica
-          - Planificar_Debate_Comision
-          - Analizar_Fondo_Constitucional
-          - Evaluar_Impacto_Presupuestario
-          - Concentrar_Observaciones
+        - Distribuir_Analisis_Especializado
+        - Auditar_Constitucionalidad
+        - Analizar_Consistencia
+        - Evaluar_Viabilidad_Tecnica
+        - Planificar_Debate_Comision
+        - Analizar_Fondo_Constitucional
+        - Evaluar_Impacto_Presupuestario
+        - Concentrar_Observaciones
+        - Coordinar_Tarea_Comodin
+        agente_control: Distribuidor
         paralelo: true
-        dependencias:
-          - Fase_1_Ingreso_Admision
-        descripcion: "Auditoría legal (forma y fondo), técnica, presupuestaria y consolidación de expediente"
-
-      Fase_3_Plenaria_Bicameral:
-        nombre: "Fase 3: Debate en Plenaria y Trámite Bicameral"
+        requiere_fuentes_verificables: true
+      Fase_3_Actas_y_Bicameral:
+        nombre: 'Fase 3: Secretaría de actas y trámite bicameral'
         tareas:
-          - Registrar_Debate
-          - Gestionar_Bicameral
+        - Registrar_Debate
+        - Emitir_Documentos_Oficiales
+        - Gestionar_Bicameral
         punto_control: true
         control_aprobacion:
           requiere_aprobacion_humana: true
-          roles_permitidos: [Diputado, Senador, Admin, Administrador]
+          roles_permitidos:
+          - Diputado
+          - Senador
+          - Admin
+          - Administrador
           requiere_verificacion_normativa: true
           requiere_motivo_revision: true
-          estados: [PENDIENTE_APROBACION_HUMANA, APROBADO_REVISION_HUMANA, EN_REVISION]
-        descripcion: "Debate en Cámara de Origen (verificación de quórum, oradores, votación en grande y detalle) y coordinación bicameral de enmiendas"
-        dependencias:
-          - Fase_2_Comision_Dictamenes
-
-      Fase_4_Ejecutivo_Promulgacion:
-        nombre: "Fase 4: Evaluación de Veto/Promulgación y Publicación Oficial"
+          estados:
+          - PENDIENTE_APROBACION_HUMANA
+          - APROBADO_REVISION_HUMANA
+          - EN_REVISION
+      Fase_4_Veto_Promulgacion_y_Publicacion:
+        nombre: 'Fase 4: Veto, promulgación y publicación'
         tareas:
-          - Evaluar_Veto_Promulgacion
-          - Publicar_Ley_Oficial
+        - Evaluar_Veto_Promulgacion
+        - Publicar_Ley_Oficial
         punto_control: true
-        descripcion: "Asesoría técnica ejecutiva (10 días) con control humano de decisión (Human-in-the-Loop) y publicación oficial en Gaceta"
-        dependencias:
-          - Fase_3_Plenaria_Bicameral
-
-      Fase_5_Ciudadania_Fiscalizacion:
-        nombre: "Fase 5: Difusión en Lenguaje Claro y Control Posterior"
+        depende_de:
+        - Fase_3_Actas_y_Bicameral
+        decision_ejecutiva_humana: true
+      Fase_5_Difusion_y_Fiscalizacion:
+        nombre: 'Fase 5: Difusión ciudadana y fiscalización'
         tareas:
-          - Generar_Difusion_Ciudadana
-          - Monitorear_Fiscalizacion
-          - Notificar_Comision
-        descripcion: "Explicación pedagógica ciudadana, monitoreo de decretos reglamentarios y auditoría de ejecución presupuestaria"
-        dependencias:
-          - Fase_4_Ejecutivo_Promulgacion
-
+        - Generar_Difusion_Ciudadana
+        - Monitorear_Fiscalizacion
+        - Notificar_Comision
+        depende_de:
+        - Fase_4_Veto_Promulgacion_y_Publicacion
     tiempo_estimado_minutos: 90
-
-  # ========== WORKFLOW RÁPIDO DE AUDITORÍA Y FILTRO INICIAL ==========
   Pipeline_Auditoria_Rapida:
-    nombre: "Filtro Rápido de Admisibilidad y Coherencia"
-    descripcion: "Verificación de forma, constitucionalidad literal y antinomias para admisión inmediata"
-
+    nombre: Auditoría rápida
+    descripcion: Clasificación, distribución y revisión jurídica resumida.
     etapas:
-      Etapa_Clasificacion:
-        nombre: "Clasificación"
+      Etapa_1:
         tareas:
-          - Clasificar_Documento
-        punto_control: false
-
-      Etapa_Auditoria:
-        nombre: "Auditoría Legal Inmediata"
+        - Clasificar_Documento
+        - Distribuir_Analisis_Especializado
+      Etapa_2:
         tareas:
-          - Auditar_Constitucionalidad
-          - Analizar_Consistencia
+        - Auditar_Constitucionalidad
+        - Analizar_Consistencia
         paralelo: true
-
-      Etapa_Informe:
-        nombre: "Consolidación de Admisibilidad"
+      Etapa_3:
         tareas:
-          - Concentrar_Observaciones
+        - Concentrar_Observaciones
         punto_control: true
-
-    tiempo_estimado_minutos: 10

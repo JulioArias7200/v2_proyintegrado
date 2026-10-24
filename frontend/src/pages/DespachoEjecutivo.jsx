@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Building2, CheckCircle2, Clock3, Download, FileCheck2, FileText, Gavel, RefreshCw, Scale, ShieldCheck } from 'lucide-react';
 import { api } from '../services/api';
 import { useCasosCompartidos } from '../hooks/useCasosCompartidos';
@@ -31,6 +31,7 @@ export default function DespachoEjecutivo({ currentUser, activeCase, onActiveCas
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const autoRunCase = useRef(null);
   const shared = useCasosCompartidos(cases, setCases, item => ({ ...item, isProcessing: false }));
 
   useEffect(() => { if (activeCase?.id) setSelectedId(activeCase.id); }, [activeCase?.id]);
@@ -45,8 +46,17 @@ export default function DespachoEjecutivo({ currentUser, activeCase, onActiveCas
       ? { ...item, ...activeCase } : item));
   }, [activeCase?.id, activeCase?.bicameralData?.ciclo_bicameral?.aprobacion_humana?.accion, cases]);
 
-  const selectedCase = useMemo(() => cases.find(item => item.id === selectedId) ||
-    (activeCase?.id === selectedId ? activeCase : null), [cases, selectedId, activeCase]);
+  const selectedCase = useMemo(() => {
+    const stored = cases.find(item => item.id === selectedId);
+    const activeApproval = activeCase?.bicameralData?.ciclo_bicameral?.aprobacion_humana?.accion === 'APROBAR';
+    const storedApproval = stored?.bicameralData?.ciclo_bicameral?.aprobacion_humana?.accion === 'APROBAR';
+    // Keep the freshly approved in-memory expediente while the shared-case
+    // refresh catches up with its persisted snapshot.
+    if (activeCase?.id === selectedId && activeApproval && !storedApproval) {
+      return { ...stored, ...activeCase };
+    }
+    return stored || (activeCase?.id === selectedId ? activeCase : null);
+  }, [cases, selectedId, activeCase]);
 
   useEffect(() => {
     if (selectedCase) onActiveCaseChange?.(selectedCase);
@@ -120,6 +130,13 @@ export default function DespachoEjecutivo({ currentUser, activeCase, onActiveCas
     } catch (err) { setError(err.message || 'No se pudo ejecutar la evaluación.'); }
     finally { setBusy(false); }
   };
+
+  useEffect(() => {
+    if (!selectedCase || !bicameralApproved || vetoData || busy || !shared.ready) return;
+    if (autoRunCase.current === selectedCase.id) return;
+    autoRunCase.current = selectedCase.id;
+    runEvaluation();
+  }, [selectedCase?.id, bicameralApproved, vetoData, busy, shared.ready]);
 
   const registerDecision = async (action, reference, reason = '', manualLawNumber = '') => {
     if (!selectedCase || busy) return;

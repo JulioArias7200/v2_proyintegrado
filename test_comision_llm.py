@@ -53,20 +53,21 @@ Responde con JSON:
 }}"""
 
 print()
-print("--- Llamando a NVIDIA NIM Nemotron 120B ---")
+print("--- Llamando al modelo configurado en NVIDIA NIM ---")
 client = OpenAI(
-    base_url="https://integrate.api.nvidia.com/v1",
-    api_key=os.getenv("NVIDIA_API_KEY") or "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",
+    base_url=os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+    api_key=os.getenv("NVIDIA_API_KEY", ""),
     timeout=30.0
 )
 
 try:
     completion = client.chat.completions.create(
-        model="nvidia/nemotron-3-super-120b-a12b",
+        model=os.getenv("LLM_MODEL_CREW", "nvidia/nemotron-3.5-lightning-30b-a3b"),
         messages=[{"role": "system", "content": system_p}, {"role": "user", "content": user_p}],
         temperature=0.1,
         top_p=0.95,
         max_tokens=1500,
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         stream=False
     )
     msg = completion.choices[0].message

@@ -1077,6 +1077,17 @@ export default function MesaPartes({ onNavigateExpedientes, onNavigateEjecutivo,
     }
   };
 
+  const handleRemitirAlEjecutivo = () => {
+    const casoEjecutivo = {
+      ...activeSession,
+      pipelineStep: 14,
+      updatedAt: new Date().toISOString(),
+    };
+    updateActiveSession({ pipelineStep: 14, updatedAt: casoEjecutivo.updatedAt });
+    onActiveCaseChange?.(casoEjecutivo);
+    onNavigateEjecutivo?.();
+  };
+
   const handleDevolverComision = async (motivo) => {
     if (isProcessing) return;
     updateActiveSession({ isProcessing: true, errorMessage: '' });
@@ -2499,19 +2510,42 @@ export default function MesaPartes({ onNavigateExpedientes, onNavigateEjecutivo,
                 </div>
               </div>
 
-              {dictamenData.analisis?.length > 0 && (
+              {dictamenData.evaluaciones_por_articulo?.length > 0 && (
+                <section className="cpe-analysis-results" aria-label="Dictamen binario por artículo del proyecto">
+                  <header className="cpe-analysis-heading">
+                    <div><span>DICTAMEN POR ARTÍCULO DEL PROYECTO</span><h3>Clasificación y justificación técnica</h3><p>Cada artículo recibe una de dos etiquetas. La evidencia insuficiente se indica como limitación, sin crear una tercera etiqueta.</p></div>
+                    <div className="cpe-analysis-metrics"><strong>{dictamenData.evaluaciones_por_articulo.length}<small>Artículos clasificados</small></strong><strong>{dictamenData.limitaciones_revision?.length || 0}<small>Limitaciones de evidencia</small></strong></div>
+                  </header>
+                  <div className="cpe-analysis-list">
+                    {dictamenData.evaluaciones_por_articulo.map((item, idx) => (
+                      <article className={`cpe-analysis-item ${item.clasificacion === 'EN_CONTRA' ? 'cpe-contradiccion' : 'cpe-complementario'}`} key={`${item.articulo_proyecto}-${idx}`}>
+                        <div className="cpe-analysis-item-heading"><div><strong>{item.articulo_proyecto}</strong><span>{item.base_decision === 'COMPATIBILIDAD_PROVISIONAL_SIN_INCOMPATIBILIDAD_ACREDITADA' ? 'Compatibilidad provisional; sin apoyo constitucional expreso acreditado' : item.base_decision === 'INCOMPATIBILIDAD_DIRECTA_VERIFICADA' ? 'Colisión directa verificada' : 'Compatibilidad constitucional identificada'}</span></div><span className="cpe-analysis-label">{item.clasificacion}</span></div>
+                        <p className="cpe-analysis-justification">{item.justificacion_tecnica}</p>
+                        {item.comentario_analitico && <p><strong>Comentario analítico:</strong> {item.comentario_analitico}</p>}
+                        {item.sugerencia && <p><strong>Sugerencia:</strong> {item.sugerencia}</p>}
+                        {item.citas?.length > 0 && <details><summary>Ver citas y fragmentos cotejados ({item.citas.length})</summary>{item.citas.map((cita, citaIdx) => <div className="cpe-quote-grid" key={`${cita.articulo}-${citaIdx}`}><div><small>Artículo CPE: {cita.articulo || 'referencia no disponible'}</small><p>{cita.texto || 'Texto constitucional no disponible.'}</p></div><div><small>Fragmento del proyecto</small><p>{cita.cita_proyecto || 'Fragmento no disponible.'}</p></div></div>)}</details>}
+                        {item.articulos_relacionados?.length > 0 && <div style={{ marginTop: '14px' }}><strong>Artículos CPE relacionados ({item.total_articulos_relacionados || item.articulos_relacionados.length})</strong><div className="cpe-analysis-list" style={{ marginTop: '8px' }}>{item.articulos_relacionados.map((rel, relIdx) => <article className="cpe-analysis-item" key={`${item.articulo_proyecto}-cpe-${rel.numero}-${relIdx}`}><div className="cpe-analysis-item-heading"><div><strong>Art. {rel.numero}{rel.titulo ? ` · ${rel.titulo}` : ''}</strong><span>{rel.estado_cotejo === 'COTEJADO' ? 'Cotejado individualmente; dictamen binario visible arriba' : 'Relacionado por búsqueda; no cotejado individualmente'}</span></div><span className="cpe-analysis-label">{rel.estado_cotejo === 'COTEJADO' ? 'COTEJADO' : 'RELACIONADO'}</span></div><p>{rel.texto || rel.fundamento_relacion}</p><p><strong>Clasificación:</strong> {rel.clasificacion_cotejo}</p><p><strong>Comentario analítico:</strong> {rel.comentario_analitico}</p><p><strong>Sugerencia:</strong> {rel.sugerencia}</p></article>)}</div></div>}
+                        {item.limitaciones?.length > 0 && <details><summary>Limitaciones del cotejo ({item.limitaciones.length})</summary>{item.limitaciones.map((lim, limIdx) => <p key={limIdx}>{lim.motivo || lim.fase || 'Evidencia incompleta'}</p>)}</details>}
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {dictamenData.analisis?.some((fila) => fila.tipo_relacion !== 'pendiente_revision') && (
                 <section className="cpe-analysis-results">
                   <header className="cpe-analysis-heading">
                     <div><span>ANÁLISIS DETALLADO</span><h3>Cotejo párrafo por párrafo con la Constitución</h3><p>Cada bloque del proyecto se contrasta con los artículos pertinentes de la CPE 2009.</p></div>
                     <div className="cpe-analysis-metrics"><strong>{dictamenData.total_parrafos_evaluados || 0}<small>Párrafos</small></strong><strong>{dictamenData.total_cotejos || dictamenData.analisis.length}<small>Cotejos CPE</small></strong><strong>{dictamenData.nivel_riesgo_global || dictamenData.resumen_ejecutivo?.nivel_riesgo || '—'}<small>Riesgo global</small></strong></div>
                   </header>
                   <div className="cpe-analysis-list">
-                    {dictamenData.analisis.map((fila, idx) => {
+                    {dictamenData.analisis.filter((fila) => fila.tipo_relacion !== 'pendiente_revision').map((fila, idx) => {
                       const labels = { contradiccion: 'Contradicción', complementario: 'Compatible', requiere_analisis_de_fondo: 'Requiere análisis de fondo', sin_relacion: 'Sin colisión detectada', pendiente_revision: 'Pendiente de revisión' };
                       return <article className={`cpe-analysis-item cpe-${fila.tipo_relacion || 'sin_relacion'}`} key={`${fila.articulo_proyecto}-${fila.parrafo_proyecto}-${fila.numero_articulo}-${idx}`}>
-                        <div className="cpe-analysis-item-heading"><div><strong>{fila.articulo_proyecto} · {fila.parrafo_proyecto}</strong><span>{fila.articulo_constitucional}{fila.similitud > 0 && ` · ${Math.round((fila.similitud <= 1 ? fila.similitud : fila.similitud / 100) * 100)}% de relevancia`}</span></div><span className="cpe-analysis-label">{labels[fila.tipo_relacion] || fila.tipo_relacion}</span></div>
+                        <div className="cpe-analysis-item-heading"><div><strong>{fila.articulo_proyecto} · {fila.parrafo_proyecto}</strong><span>{fila.articulo_constitucional}{fila.similitud > 0 && ` · ${Math.round((fila.similitud <= 1 ? fila.similitud : fila.similitud / 100) * 100)}% de relevancia`}</span></div><span className="cpe-analysis-label">{fila.clasificacion}</span></div>
                         <div className="cpe-quote-grid"><div><small>Fragmento del proyecto</small><p>{fila.cita_proyecto || fila.texto_parrafo || 'Fragmento no disponible.'}</p></div><div><small>Artículo de la Constitución</small><p>{fila.cita_constitucional || fila.texto_constitucional_verificado || 'Texto constitucional no disponible.'}</p></div></div>
                         <p className="cpe-analysis-justification">{fila.justificacion || 'Sin observación jurídica adicional.'}</p>
+                        {fila.comentario_analitico && <p><strong>Comentario analítico:</strong> {fila.comentario_analitico}</p>}
                         {fila.sugerencia && <details><summary>Ver recomendación y fundamento</summary><p>{fila.sugerencia}</p>{fila.analisis_profundo?.redaccion_corregida && <p><strong>Redacción sugerida:</strong> {fila.analisis_profundo.redaccion_corregida}</p>}{fila.analisis_profundo?.precedentes_tcp && <p><strong>Precedente TCP:</strong> {fila.analisis_profundo.precedentes_tcp}</p>}</details>}
                       </article>;
                     })}
@@ -2533,15 +2567,13 @@ export default function MesaPartes({ onNavigateExpedientes, onNavigateEjecutivo,
 
                 {/* ── SECCIÓN A FAVOR ── */}
                 {(() => {
-                  const aFavor = dictamenData.articulos_a_favor?.length > 0
-                    ? dictamenData.articulos_a_favor
-                    : (dictamenData.articulos_consultados || []);
+                  const aFavor = dictamenData.articulos_a_favor || [];
                   return aFavor.length > 0 && (
                     <div style={{ marginBottom: '32px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid rgba(16,185,129,0.25)' }}>
                         <div style={{ width: '4px', height: '24px', background: '#10b981', borderRadius: '2px' }} />
                         <h3 style={{ fontSize: '1.05rem', color: '#34d399', margin: 0, fontWeight: 700 }}>
-                          Artículos CPE — RESPALDO A FAVOR ({aFavor.length})
+                          Artículos CPE — APOYO CONSTITUCIONAL IDENTIFICADO ({aFavor.length})
                         </h3>
                         <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', marginLeft: 'auto' }}>
                           Fuente: public.articulos_constitucion
@@ -4426,7 +4458,7 @@ export default function MesaPartes({ onNavigateExpedientes, onNavigateEjecutivo,
                 procesando={readOnly || isProcessing}
                 onDecision={handleResolverBicameral}
                 onActualizar={handleActualizarBicameral}
-                onContinuar={() => { onActiveCaseChange?.(activeSession); onNavigateEjecutivo?.(); }}
+                onContinuar={handleRemitirAlEjecutivo}
                 onDevolverComision={handleDevolverComision}
                 onCorregir={() => updateActiveSession({ pipelineStep: 11, inspectedAgentId: null })}
               />

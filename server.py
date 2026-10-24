@@ -195,7 +195,9 @@ class Phase2Request(BaseModel):
     solicitud_id: Optional[int] = None
     t_inicio_fase1: Optional[float] = None
     local_filepath: Optional[str] = None
-    presupuesto_segundos: int = Field(default=240, ge=1, le=240)
+    # Las auditorías constitucional y normativa corren en paralelo en el
+    # expediente ciudadano. El límite es por auditoría, no por secuencia.
+    presupuesto_segundos: int = Field(default=90, ge=1, le=240)
 
 
 class SearchNormativaRequest(BaseModel):
@@ -449,7 +451,7 @@ def get_health_status():
     api_key = os.getenv("NVIDIA_API_KEY", "")
     status["services"]["nvidia_nim"] = {
         "configured": bool(api_key and not api_key.startswith("nvapi-placeholder")),
-        "model_crew": os.getenv("LLM_MODEL_CREW", "openai/gpt-oss-20b"),
+        "model_crew": os.getenv("LLM_MODEL_CREW", "nvidia/nemotron-3.5-lightning-30b-a3b"),
         "model_embed": os.getenv("NVIDIA_EMBED_MODEL", "nvidia/nemotron-3-embed-1b"),
     }
 
@@ -467,7 +469,7 @@ def get_llm_metrics():
     return {
         "status": "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "modelo_principal": getattr(settings, "LLM_MODEL_NVIDIA", "openai/gpt-oss-20b"),
+        "modelo_principal": getattr(settings, "LLM_MODEL_NVIDIA", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"),
         "metricas": obtener_metricas_latencia_llm(),
     }
 
@@ -724,31 +726,32 @@ def _procesar_caso_ciudadano(caso_id, req, usuario, reanudar=False):
                     logger.error(f"[Caso {caso_id}] ERROR agente={agente_id}: {getattr(e, 'detail', e)}")
                     raise
 
-            limite_auditoria = time.monotonic() + 240
-            try:
-                cpe = auditar("constitucional", lambda p: run_agent_constitucional(
-                    p.copy(update={"presupuesto_segundos": 240})
-                ))["data"]
-            except Exception as e:
-                detalle = str(getattr(e, "detail", e))
-                cpe = {"estado": "PENDIENTE_REVISION", "error": detalle, "confianza": 0,
-                       "pendientes_revision": [{"motivo": detalle}]}
-            progreso("AUDITORIAS_EN_PROCESO", dictamenData=cpe, pipelineStep=6,
-                     agentesEnProceso=["consistencia"])
-            restante = max(0, int(limite_auditoria - time.monotonic()))
-            if restante > 0:
+            presupuesto_revision = 90
+
+            def ejecutar_auditoria_con_respaldo(agente_id, endpoint):
                 try:
-                    normas = auditar("consistencia", lambda p: run_agent_consistencia(
-                        p.copy(update={"presupuesto_segundos": restante})
+                    return auditar(agente_id, lambda p: endpoint(
+                        p.copy(update={"presupuesto_segundos": presupuesto_revision})
                     ))["data"]
                 except Exception as e:
                     detalle = str(getattr(e, "detail", e))
-                    normas = {"estado": "PENDIENTE_REVISION", "error": detalle, "confianza": 0,
-                              "pendientes_revision": [{"motivo": detalle}]}
-            else:
-                detalle = "Se agotó el presupuesto máximo de 4 minutos; Consistencia queda pendiente de revisión."
-                normas = {"estado": "PENDIENTE_REVISION", "error": detalle, "confianza": 0,
-                          "pendientes_revision": [{"motivo": detalle}]}
+                    return {"estado": "PENDIENTE_REVISION", "error": detalle, "confianza": 0,
+                            "pendientes_revision": [{"motivo": detalle}]}
+
+            # Ejecutar ambas auditorías simultáneamente elimina la espera
+            # acumulada; cada agente conserva su plazo y estado independiente.
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=2) as auditorias:
+                futuro_cpe = auditorias.submit(
+                    ejecutar_auditoria_con_respaldo, "constitucional", run_agent_constitucional
+                )
+                futuro_normas = auditorias.submit(
+                    ejecutar_auditoria_con_respaldo, "consistencia", run_agent_consistencia
+                )
+                cpe = futuro_cpe.result()
+                progreso("AUDITORIAS_EN_PROCESO", dictamenData=cpe, pipelineStep=6,
+                         agentesEnProceso=["consistencia"] if not futuro_normas.done() else [])
+                normas = futuro_normas.result()
             progreso("AUDITORIAS_EN_PROCESO", consistenciaData=normas, pipelineStep=6, agentesEnProceso=[])
             progreso("AUDITORIAS_REVISADAS", dictamenData=cpe, consistenciaData=normas)
             if any(d.get("error") or d.get("estado") == "PENDIENTE_REVISION" for d in (cpe, normas)):
@@ -1374,13 +1377,10 @@ def run_agent_comision(req: Phase2Request):
                 "metodo": "heuristica_tematica",
             }
 
-        # ── 3. LLM NVIDIA NIM: Nemotron Super 120B (via OpenAI client) ────────
+        # ── 3. LLM NVIDIA NIM (modelo configurado en el entorno) ─────────────
         data = None
         modelo_usado = "heuristica"
-        nvidia_api_key = (
-            os.getenv("NVIDIA_API_KEY")
-            or "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"
-        )
+        nvidia_api_key = os.getenv("NVIDIA_API_KEY") or settings.NVIDIA_API_KEY
 
         system_prompt_comision = (
             "Eres el Asignador Oficial de Comisiones de la Asamblea Legislativa Plurinacional de Bolivia. "
@@ -1422,10 +1422,10 @@ Responde con este JSON exacto:
         # 3a. Intento primario: NVIDIA NIM con modelo primario de alto rendimiento
         try:
             modelo_principal = getattr(
-                settings, "LLM_MODEL_NVIDIA", "openai/gpt-oss-20b"
+                settings, "LLM_MODEL_CREW", "nvidia/nemotron-3.5-lightning-30b-a3b"
             )
             client_nim = OpenAI(
-                base_url="https://integrate.api.nvidia.com/v1",
+                base_url=getattr(settings, "NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
                 api_key=nvidia_api_key,
                 timeout=90.0,
             )
@@ -1438,6 +1438,7 @@ Responde con este JSON exacto:
                 temperature=0.1,
                 top_p=0.95,
                 max_tokens=400,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 stream=False,
             )
             msg_obj = completion.choices[0].message

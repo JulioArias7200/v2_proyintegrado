@@ -303,6 +303,8 @@ export function RevisionBicameralPanel({
   const expediente = ciclo.expediente_consolidado || {};
   const normativa = ciclo.normativa_en_tratamiento || {};
   const circuito = ciclo.circuito_dos_camaras || {};
+  const verificacionesPendientes = (ciclo.verificaciones_normativas || [])
+    .filter(verificacion => verificacion.estado !== 'CUMPLE');
 
   const handleCopiarFicha = () => {
     const texto = ciclo.ficha_resumen_texto || '';
@@ -639,6 +641,19 @@ export function RevisionBicameralPanel({
               Registrada por: <strong>{decision.nombre_usuario}</strong> · Fecha: {decision.fecha}
             </p>
             {decision.motivo && <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>Fundamentación: {decision.motivo}</p>}
+            {decision.aprobado_con_observaciones && (
+              <div style={{ marginTop: 10, color: '#fde68a', fontSize: '0.82rem' }}>
+                Aprobada con observaciones registradas:
+                <ul style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+                  {(decision.observaciones_al_decidir || []).map((observacion, index) => (
+                    <li key={`${observacion.requisito || 'observacion'}-${index}`}>
+                      <strong>{observacion.requisito || 'Verificación pendiente'}:</strong>{' '}
+                      {observacion.fundamento || observacion.evidencia || observacion.estado}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -650,19 +665,41 @@ export function RevisionBicameralPanel({
                 disabled={procesando || !autorizado}
               />
               <span style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>
-                Confirmo que revisé la autenticidad de las actas de ambas cámaras (en grande y en detalle) y que la norma cumple los requisitos constitucionales.
+                {verificacionesPendientes.length
+                  ? `Confirmo que revisé las actas y las ${verificacionesPendientes.length} observación(es) listadas. Decido continuar y acepto que queden registradas en el expediente.`
+                  : 'Confirmo que revisé la autenticidad de las actas de ambas cámaras (en grande y en detalle) y las verificaciones del expediente.'}
               </span>
             </label>
+
+            {verificacionesPendientes.length > 0 && (
+              <div role="status" style={{ margin: '0 0 14px', padding: '12px 14px', borderRadius: 8, border: '1px solid #f59e0b', background: 'rgba(120, 53, 15, 0.24)', color: '#fde68a' }}>
+                <strong>Observaciones que acompañarán la decisión</strong>
+                <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+                  {verificacionesPendientes.map((verificacion, index) => (
+                    <li key={`${verificacion.requisito || 'observacion'}-${index}`} style={{ marginTop: 4 }}>
+                      <strong>{verificacion.requisito || 'Verificación pendiente'}:</strong>{' '}
+                      {verificacion.fundamento || verificacion.evidencia || 'Requiere revisión documentada.'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="revision-actions" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className="btn-primary"
                 style={{ background: '#2563eb', padding: '10px 20px', fontWeight: 700 }}
-                disabled={procesando || !autorizado || !ciclo.puede_aprobar || !confirmado}
-                onClick={() => onDecision('APROBAR', 'Aprobado formalmente en trámite bicameral', confirmado)}
+                disabled={procesando || !autorizado || !confirmado}
+                onClick={() => onDecision(
+                  'APROBAR',
+                  verificacionesPendientes.length
+                    ? `Aprobado con ${verificacionesPendientes.length} observación(es) expresamente revisada(s) por el operador.`
+                    : 'Aprobado formalmente en trámite bicameral',
+                  confirmado
+                )}
               >
-                Aprobar Sanción Bicameral
+                {verificacionesPendientes.length ? 'Aprobar con Observaciones' : 'Aprobar Sanción Bicameral'}
               </button>
 
               {/* ── BOTÓN DE BUCLE DE RETORNO / RETROALIMENTACIÓN A COMISIONES ── */}

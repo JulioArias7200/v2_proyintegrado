@@ -31,7 +31,7 @@ except ImportError:
 
 from sma_unified.config import settings
 
-NVIDIA_API_BASE = "https://integrate.api.nvidia.com/v1"
+NVIDIA_API_BASE = settings.NVIDIA_BASE_URL.rstrip("/")
 
 # Compartido por los dos agentes, incluso cuando corren en paralelo.
 _AUDITORIA_LLM_SLOTS = BoundedSemaphore(2)
@@ -74,7 +74,7 @@ def _timeout_con_limite(timeout, deadline):
 
 def chat_completion_auditoria(**kwargs: Any) -> Tuple[str, str]:
     """Prioriza el respaldo que respondió y limita la carga conjunta a NVIDIA."""
-    modelo_preferido = kwargs.pop("modelo_preferido", "openai/gpt-oss-20b")
+    modelo_preferido = kwargs.pop("modelo_preferido", settings.LLM_MODEL_CONSISTENCIA)
     deadline = _AUDIT_DEADLINE.get()
     espera = max(0.05, deadline - time.monotonic()) if deadline else None
     if not _AUDITORIA_LLM_SLOTS.acquire(timeout=espera):
@@ -84,13 +84,14 @@ def chat_completion_auditoria(**kwargs: Any) -> Tuple[str, str]:
         disponibles = _lista_modelos_razonamiento()
         # Los cotejos son de texto: evitar el modelo Omni que devuelve
         # ResourceExhausted y priorizar respaldos antes de razonadores largos.
-        disponibles = [m for m in disponibles if not any(
+        modelos_texto = [m for m in disponibles if not any(
             marca in m.lower() for marca in ("omni", "vision", "-vl-"))]
-        prioridad = [modelo_preferido, "openai/gpt-oss-20b", "stepfun-ai/step-5-preview"]
+        disponibles = modelos_texto + [m for m in disponibles if m not in modelos_texto]
+        prioridad = [modelo_preferido, settings.LLM_MODEL_CONSISTENCIA,
+                     settings.LLM_MODEL_CREW, "moonshotai/kimi-k3", settings.LLM_MODEL_NVIDIA]
         modelos = sorted(disponibles, key=lambda m: prioridad.index(m) if m in prioridad else len(prioridad))
         modelos = [m for m in modelos if m not in _MODELOS_RETIRADOS]
-        if (modelo_preferido and not any(marca in modelo_preferido.lower() for marca in ("omni", "vision", "-vl-"))
-                and modelo_preferido not in _MODELOS_RETIRADOS and modelo_preferido not in modelos):
+        if (modelo_preferido and modelo_preferido not in _MODELOS_RETIRADOS and modelo_preferido not in modelos):
             # El catálogo puede estar desactualizado; intentar primero el modelo
             # solicitado y dejar que el fallback actúe si NIM lo rechaza.
             modelos.insert(0, modelo_preferido)
@@ -101,7 +102,7 @@ def chat_completion_auditoria(**kwargs: Any) -> Tuple[str, str]:
         # reemplazaban todos por 30/60s, alargando incluso los cotejos que
         # especificaban un timeout corto para respuestas JSON.
         kwargs.setdefault("timeout", (30, 60))
-        kwargs.setdefault("max_model_attempts", 2)
+        kwargs.setdefault("max_model_attempts", 3)
         kwargs.update(modelos=modelos, require_final_content=True)
         kwargs["deadline_monotonic"] = deadline
         if deadline:
@@ -112,7 +113,7 @@ def chat_completion_auditoria(**kwargs: Any) -> Tuple[str, str]:
 
 # ── Circuit Breaker State ──────────────────────────────────────────────────
 CIRCUIT_FAILURE_THRESHOLD: int = 3
-CIRCUIT_COOLDOWN_SECONDS: float = 30.0
+CIRCUIT_COOLDOWN_SECONDS: float = 20.0   # reducido: ReadTimeouts son transitorios
 
 _CIRCUIT_FAILURES: Dict[str, int] = collections.defaultdict(int)
 _CIRCUIT_OPEN_UNTIL: Dict[str, float] = collections.defaultdict(float)
@@ -304,10 +305,7 @@ def obtener_modelos_disponibles_nim(force_refresh: bool = False) -> Set[str]:
 
 def _lista_modelos_razonamiento() -> List[str]:
     """
-    Orden de preferencia de modelos activos y probados en NVIDIA NIM API:
-    1. Modelo primario de alta velocidad configurado en .env (openai/gpt-oss-20b).
-    2. Modelos de respaldo de texto puro exclusivamente (sin modelos de visión multimodal).
-    3. Filtrado por estado de catálogo NVIDIA NIM.
+    Ordena los dos modelos configurados en .env y valida el catálogo NVIDIA NIM.
     """
     preferidos = [
         settings.LLM_MODEL_CONSISTENCIA,
@@ -315,13 +313,11 @@ def _lista_modelos_razonamiento() -> List[str]:
         settings.LLM_MODEL_CREW,
     ]
 
-    # Respaldos de texto puro comprobados en producción (baja latencia y fidelidad JSON):
+    # Respaldo local limitado a los modelos elegidos para este sistema.
     respaldos_vigentes = [
-        "openai/gpt-oss-20b",                           # ~2.0s P95 - Texto puro, excelente JSON
-        "stepfun-ai/step-5-preview",                     # ~1.7s P95 - Rápido y confiable
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", # ~2.2s P95 - Razonamiento ágil
-        "z-ai/glm-5.3",                                  # ~6.0s P95 - Razonamiento profundo
-        "nvidia/nemotron-3-super-120b-a12b",             # Respaldo de alta capacidad
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "moonshotai/kimi-k3",
     ]
 
     todos_candidatos = preferidos + respaldos_vigentes
@@ -371,11 +367,20 @@ def _esta_circuito_abierto(modelo: str) -> Tuple[bool, float]:
     """
     Verifica si el Circuit Breaker para un modelo está actualmente abierto.
     Retorna (abierto: bool, segundos_restantes: float).
+
+    Patrón de tres estados (CLOSED → OPEN → HALF-OPEN → CLOSED):
+    Cuando el cooldown expira, el contador se reinicia a 0 para que el
+    siguiente intento comience desde cero, sin acumular fallos históricos.
     """
     tiempo_limite = _CIRCUIT_OPEN_UNTIL.get(modelo, 0.0)
     ahora = time.time()
     if tiempo_limite > ahora:
         return True, round(tiempo_limite - ahora, 1)
+    # El cooldown expiró: transición OPEN → HALF-OPEN.
+    # Reiniciamos el contador para que la próxima falla cuente desde 0.
+    if _CIRCUIT_FAILURES.get(modelo, 0) >= CIRCUIT_FAILURE_THRESHOLD:
+        _CIRCUIT_FAILURES[modelo] = 0
+        logger.info(f"[Circuit Breaker] Modelo '{modelo}' en HALF-OPEN: cooldown expirado, contador reiniciado.")
     return False, 0.0
 
 
@@ -388,14 +393,23 @@ def _registrar_exito_circuito(modelo: str) -> None:
 def _registrar_fallo_circuito(modelo: str, motivo: str) -> None:
     """
     Incrementa el contador de fallos consecutivos y abre el circuito si alcanza el umbral.
+    Solo emite ERROR en la primera apertura del circuito (al alcanzar exactamente el umbral);
+    los fallos adicionales mientras el circuito ya está abierto solo refrescan el timestamp.
     """
     _CIRCUIT_FAILURES[modelo] += 1
     fallos = _CIRCUIT_FAILURES[modelo]
-    if fallos >= CIRCUIT_FAILURE_THRESHOLD:
+    if fallos == CIRCUIT_FAILURE_THRESHOLD:
+        # Primera apertura: notificación ERROR prominente.
         _CIRCUIT_OPEN_UNTIL[modelo] = time.time() + CIRCUIT_COOLDOWN_SECONDS
         logger.error(
-            f"[Circuit Breaker] Modelo '{modelo}' acumuló {fallos} fallos consecutivos ({motivo}). "
+            f"[Circuit Breaker] Modelo '{modelo}' alcanzó {fallos} fallos consecutivos ({motivo}). "
             f"CIRCUITO ABIERTO: se omitirá durante {CIRCUIT_COOLDOWN_SECONDS}s."
+        )
+    elif fallos > CIRCUIT_FAILURE_THRESHOLD:
+        # El circuito ya estaba abierto; solo refrescar el timestamp sin spam de ERRORs.
+        _CIRCUIT_OPEN_UNTIL[modelo] = time.time() + CIRCUIT_COOLDOWN_SECONDS
+        logger.debug(
+            f"[Circuit Breaker] Modelo '{modelo}' ({fallos} fallos acum.): circuito ya abierto, cooldown refrescado."
         )
     else:
         logger.warning(
@@ -568,6 +582,8 @@ def chat_completion_resiliente(
             if response_format:
                 payload["response_format"] = response_format
             payload.update(kwargs)
+            if modelo.startswith("nvidia/nemotron-"):
+                payload.setdefault("chat_template_kwargs", {"enable_thinking": False})
             if razonamiento_breve and modelo.startswith("openai/gpt-oss-"):
                 # Parámetro oficial NIM para evitar agotar tokens en razonamiento
                 # interno antes de entregar el JSON final del cotejo.

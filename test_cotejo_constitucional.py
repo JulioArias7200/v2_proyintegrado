@@ -126,10 +126,13 @@ class ProveedorTests(unittest.TestCase):
         pedir=Mock(return_value=('{}','modelo'))
         funcion=cargar_funcion('llm_client.py','chat_completion_auditoria',{
             '_AUDITORIA_LLM_SLOTS':BoundedSemaphore(2), '_MODELOS_RETIRADOS':set(),
-            '_lista_modelos_razonamiento':lambda:['nvidia/omni-reasoning','stepfun-ai/step-5-preview','openai/gpt-oss-20b'],
+            'settings':SimpleNamespace(LLM_MODEL_CONSISTENCIA='nvidia/nemotron-3.5-lightning-30b-a3b',
+                LLM_MODEL_CREW='nvidia/nemotron-3.5-lightning-30b-a3b',
+                LLM_MODEL_NVIDIA='nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'),
+            '_lista_modelos_razonamiento':lambda:['nvidia/nemotron-3-nano-omni-30b-a3b-reasoning','nvidia/nemotron-3.5-lightning-30b-a3b'],
             'chat_completion_resiliente':pedir})
         funcion(messages=[])
-        self.assertEqual(pedir.call_args.kwargs['modelos'],['openai/gpt-oss-20b','stepfun-ai/step-5-preview'])
+        self.assertEqual(pedir.call_args.kwargs['modelos'],['nvidia/nemotron-3.5-lightning-30b-a3b'])
 
 
 if __name__=='__main__':unittest.main()

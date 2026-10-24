@@ -3,7 +3,7 @@ Ingesta de Normativa Legal (Códigos, Leyes, Decretos, Resoluciones, etc.)
 ==========================================================================
 Mejora del `ingest.py` original: en vez de una tabla separada con
 credenciales de BD propias (`articulos_legales` + variables DB_* sueltas),
-guarda todo en `public.articulos_normativos` — una tabla propia, aparte de
+guarda todo en `sistema.articulos_normativos` — una tabla propia, aparte de
 `public.articulos_constitucion` (que sigue siendo solo la Constitución,
 sin tocar su esquema) — usando la misma conexión Neon que ya usa el resto
 del sistema. 100% invocable desde un evento de Reflex, sin Flask.
@@ -16,7 +16,7 @@ Pipeline:
   3. Se detectan artículos derogados (y, si el texto lo indica, con qué
      norma y fecha).
   4. Se generan embeddings NVIDIA en lotes y se hace upsert idempotente en
-     `public.articulos_normativos` (evita duplicados vía hash de contenido).
+     `sistema.articulos_normativos` (evita duplicados vía hash de contenido).
 """
 import hashlib
 import re
@@ -292,7 +292,7 @@ def ingestar_texto_normativo(
     """
     Procesa el texto completo de un cuerpo normativo (Código Penal, Código
     de Minería, una ley, un decreto, etc.) y lo guarda en
-    public.articulos_normativos, listo para búsqueda por palabras clave
+    sistema.articulos_normativos, listo para búsqueda por palabras clave
     y búsqueda semántica (RAG) del Agente de Interacción Ciudadana y del
     Agente de Verificación Constitucional.
 

@@ -14,7 +14,7 @@ Mejoras incorporadas:
      técnico-jurídicas vinculantes.
   4. Mención explícita de que la auditoría fue realizada por Agentes de Análisis
      Especializados con razonamiento y pensamiento analítico ampliado.
-  5. Cliente OpenAI integrado con NVIDIA NIM: 'nvidia/nemotron-3-super-120b-a12b'
+  5. Cliente OpenAI integrado con NVIDIA NIM: modelo configurado en LLM_MODEL_NVIDIA.
      y fallback resiliente.
 """
 
@@ -46,12 +46,11 @@ from sma_unified.db.mongo_atlas import get_db
 CAMPOS_REQUERIDOS_INSUMO = {"hallazgos", "agente_origen"}
 NIVEL_CONFIANZA_MINIMO = 0.70  # Hallazgos < 70% se descartan
 
-DEFAULT_NVIDIA_API_KEY = (
-    os.getenv("NVIDIA_API_KEY") or
-    "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"
-)
+DEFAULT_NVIDIA_API_KEY = settings.NVIDIA_API_KEY
 NVIDIA_BASE_URL = getattr(settings, "NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
-MODELO_RAZONAMIENTO_AMPLIADO = getattr(settings, "LLM_MODEL_NVIDIA", "openai/gpt-oss-20b")
+MODELO_RAZONAMIENTO_AMPLIADO = getattr(
+    settings, "LLM_MODEL_CREW", "nvidia/nemotron-3.5-lightning-30b-a3b"
+)
 
 
 def _clean_str(text: Any) -> str:
@@ -218,8 +217,19 @@ def _validar_insumo(obs: Dict) -> tuple[bool, str]:
         try:
             val = float(conf)
             import math
-            if math.isnan(val) or val < NIVEL_CONFIANZA_MINIMO or val > 1.0:
+            if math.isnan(val) or val > 1.0:
                 return False, f"Confianza {conf} fuera de rango [{NIVEL_CONFIANZA_MINIMO}, 1.0]"
+            if val < NIVEL_CONFIANZA_MINIMO:
+                # Un resultado parcial puede incluir hallazgos con verificación
+                # individual válida. Preservarlo y etiquetarlo como pendiente;
+                # el filtro por fila descarta lo no verificado más adelante.
+                tiene_respaldo = bool(
+                    obs.get("estado") == "PENDIENTE_REVISION"
+                    and (obs.get("pendientes_revision") or obs.get("hallazgos")
+                         or obs.get("contradicciones"))
+                )
+                if not tiene_respaldo:
+                    return False, f"Confianza {conf} fuera de rango [{NIVEL_CONFIANZA_MINIMO}, 1.0]"
         except (TypeError, ValueError):
             return False, f"Confianza no numérica: {conf}"
     return True, "OK"
@@ -249,18 +259,9 @@ def _extraer_observaciones_de_insumo(obs: Dict, start_id: int = 1) -> List[Dict]
                 h.get("articulo_num") or
                 "N/A"
             )
-            cita = (
-                h.get("cita_original") if h.get("cita_original") is not None else (
-                    h.get("explicacion") or
-                    h.get("analisis") or
-                    h.get("fundamento") or
-                    h.get("texto_cpe_literal") or
-                    h.get("contenido") or
-                    h.get("cita_proyecto") or
-                    h.get("descripcion") or
-                    ""
-                )
-            )
+            # No convertir el fundamento del agente en una supuesta cita legal.
+            cita = (h.get("cita_original") if h.get("cita_original") is not None else
+                    h.get("cita_proyecto") or h.get("fragmento_proyecto") or h.get("contenido") or "")
             cita_str = str(cita)
             resultado.append({
                 "id": f"OBS-{idx:03d}",
@@ -276,10 +277,16 @@ def _extraer_observaciones_de_insumo(obs: Dict, start_id: int = 1) -> List[Dict]
                 "verificado": h.get("verificado", True),
                 "norma": h.get("norma", ""),
                 "numero_articulo": h.get("numero_articulo", ""),
-                "articulo_cpe": h.get("articulo_cpe", ""),
-                "texto_cpe_literal": h.get("texto_cpe_literal", ""),
+                "articulo_cpe": h.get("articulo_cpe") or h.get("articulo_constitucional", ""),
+                "texto_cpe_literal": h.get("texto_cpe_literal") or h.get("texto_constitucional_verificado") or h.get("cita_constitucional", ""),
                 "fragmento_proyecto": h.get("fragmento_proyecto", ""),
-                "accion_recomendada": h.get("accion_recomendada", ""),
+                "accion_recomendada": h.get("accion_recomendada") or h.get("recomendacion", ""),
+                "cita_constitucional": h.get("cita_constitucional", ""),
+                "explicacion": h.get("analisis_constitucional") or h.get("fundamento") or h.get("razon", ""),
+                "evaluacion_criterios": h.get("evaluacion_criterios", {}),
+                "articulos_cpe_relacionados": h.get("articulos_cpe_relacionados", []),
+                "alcance_vicio": h.get("alcance_vicio", ""),
+                "analisis_profundo": h.get("analisis_profundo", {}),
                 "similitud": h.get("similitud", 0),
             })
     return resultado
@@ -340,7 +347,7 @@ def _analizar_con_pensamiento_ampliado_llm(
     proyecto_info: Dict
 ) -> Dict[str, str]:
     """
-    Invoca el modelo LLM de razonamiento profundo (nvidia/nemotron-3-super-120b-a12b)
+    Invoca el modelo LLM de razonamiento configurado en LLM_MODEL_NVIDIA
     mediante el cliente OpenAI con fallback resiliente.
     Genera resumen sustantivo del proyecto, síntesis de constitucionalidad y normativa,
     y conclusiones técnico-jurídicas vinculantes.
@@ -367,6 +374,8 @@ DATOS DEL PROYECTO:
 - ID Radicación: {id_proyecto}
 - Nivel de Riesgo Global Determinado: {riesgo_global}
 - Agentes de Análisis Involucrados: {agentes_presentes}
+- Estado y resumen reportado por cada agente (respeta COMPLETADO/PENDIENTE_REVISION):
+{json.dumps([{'agente': v.get('agente_origen'), 'estado': v.get('estado'), 'resumen': v.get('resumen'), 'pendientes_revision': (v.get('pendientes_revision') or [])[:5]} for v in insumos_validos], ensure_ascii=False)[:7000]}
 - Total Observaciones Verificadas: {len(obs_verificadas)}
 - Observaciones de Constitucionalidad (CPE): {len(obs_cpe)}
 - Observaciones de Consistencia Normativa: {len(obs_normativas)}
@@ -406,6 +415,7 @@ INSTRUCCIÓN: Devuelve un JSON estructurado con exactamente estas claves:
             temperature=0.2,
             top_p=0.95,
             max_tokens=2200,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             stream=False
         )
         msg_obj = completion.choices[0].message
@@ -527,6 +537,16 @@ def generar_pdf_informe_concentrador(
         "en la contrastacion contra la Constitucion Politica del Estado (CPE 2009, Arts. 1-410) y el catalogo normativo nacional vigente."
     )
     pdf.multi_cell(epw, 4.2, pdf.safe(decl_texto))
+    estados = analisis_dict.get("estado_auditorias") or {}
+    estado_cpe = estados.get("constitucionalidad", "DESCONOCIDO")
+    estado_norm = estados.get("consistencia_normativa", "DESCONOCIDO")
+    pendientes_cpe = estados.get("pendientes_constitucionalidad", 0)
+    pendientes_norm = estados.get("pendientes_normativa", 0)
+    pdf.f_bold(8)
+    pdf.multi_cell(epw, 4.2, pdf.safe(
+        f"Estado de revisión: Constitucionalidad {estado_cpe} ({pendientes_cpe} pendiente(s)); "
+        f"Consistencia normativa {estado_norm} ({pendientes_norm} pendiente(s))."
+    ))
     pdf.ln(2)
 
     # ══ SECCION 2: RESUMEN SUSTANTIVO ═════════════════════════════════════════
@@ -549,7 +569,13 @@ def generar_pdf_informe_concentrador(
     if not obs_cpe:
         pdf.f_italic(8)
         pdf.set_text_color(60, 60, 60)
-        pdf.cell(epw, 5, pdf.safe("No se registraron contradicciones constitucionales en este expediente."), 0, align='L', new_x="LMARGIN", new_y="NEXT")
+        estado_cpe = (analisis_dict.get("estado_auditorias") or {}).get("constitucionalidad", "DESCONOCIDO")
+        mensaje_cpe = ("Auditoría constitucional pendiente de revisión; este informe no concluye ausencia de contradicciones."
+                       if estado_cpe == "PENDIENTE_REVISION" else
+                       "No se registraron contradicciones constitucionales en la auditoría completada."
+                       if estado_cpe == "COMPLETADO" else
+                       "No hay dictamen constitucional completo disponible para este expediente.")
+        pdf.cell(epw, 5, pdf.safe(mensaje_cpe), 0, align='L', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
     else:
         pdf.f_regular(7.8)
@@ -578,9 +604,20 @@ def generar_pdf_informe_concentrador(
             pdf.ln(0.5)
             campos_cpe = [
                 ("Norma / Referencia", str(obs.get("norma", "CPE 2009"))[:120]),
-                ("Texto CPE Literal", str(obs.get("texto_cpe_literal") or obs.get("cita_original") or "")[:280]),
+                ("Texto CPE Literal", str(obs.get("texto_cpe_literal") or obs.get("cita_constitucional") or "")[:280]),
                 ("Fragmento del Proyecto", str(obs.get("fragmento_proyecto") or obs.get("contenido") or "")[:280]),
-                ("Fundamento / Explicacion", str(obs.get("explicacion") or obs.get("fundamento") or obs.get("cita_original") or "")[:280]),
+                ("Fundamento / Explicacion", str(obs.get("explicacion") or obs.get("fundamento") or "")[:280]),
+                ("Criterios evaluados", "; ".join(
+                    f"{clave}: {valor}" for clave, valor in (obs.get("evaluacion_criterios") or {}).items()
+                )[:280]),
+                ("Análisis de impacto", str((obs.get("analisis_profundo") or {}).get("impacto_juridico") or "")[:280]),
+                ("Dictamen preliminar", str((obs.get("analisis_profundo") or {}).get("dictamen") or "")[:120]),
+                ("Alcance del hallazgo", str(obs.get("alcance_vicio") or "")[:100]),
+                ("Artículos CPE conexos", ", ".join(
+                    str(ref.get("numero") or ref.get("articulo") or "") if isinstance(ref, dict) else str(ref)
+                    for ref in (obs.get("articulos_cpe_relacionados") or [])
+                    if not isinstance(ref, dict) or ref.get("numero") or ref.get("articulo")
+                )[:220]),
                 ("Accion Correctiva Recomendada", str(obs.get("accion_recomendada") or obs.get("accion_correctiva") or "Subsanar antes de la siguiente etapa procesal.")[:220]),
             ]
             for etiqueta, valor in campos_cpe:
@@ -598,6 +635,42 @@ def generar_pdf_informe_concentrador(
             pdf.line(pdf.l_margin, pdf.get_y(), pdf.l_margin + epw, pdf.get_y())
             pdf.ln(3)
 
+    articulos_favor = analisis_dict.get("articulos_a_favor_cpe", []) or []
+    pdf.subseccion_titulo(f"3.1 CONCORDANCIAS CONSTITUCIONALES A FAVOR — {len(articulos_favor)}")
+    if articulos_favor:
+        for item in articulos_favor:
+            art_cpe = item.get("numero") or item.get("articulo_constitucional") or "N/D"
+            art_proy = item.get("articulo_proyecto") or "Artículo del proyecto no identificado"
+            relacionados = item.get("articulos_cpe_relacionados", []) or []
+            relacionados_txt = ", ".join(
+                f"Art. {ref.get('numero')} {ref.get('titulo', '')}".strip()
+                for ref in relacionados if ref.get("numero")
+            ) or "Sin artículos conexos adicionales verificados"
+            pdf.f_bold(7.8)
+            pdf.multi_cell(epw, 4, pdf.safe(f"A FAVOR — Proyecto {art_proy} ↔ CPE Art. {art_cpe} {item.get('titulo', '')}"))
+            pdf.f_regular(7.5)
+            pdf.multi_cell(epw, 4, pdf.safe(f"Fundamento: {item.get('analisis_constitucional') or item.get('fundamento', 'Sin fundamento detallado')}"))
+            pdf.multi_cell(epw, 4, pdf.safe(f"Cita del proyecto: {item.get('cita_proyecto', 'No disponible')}"))
+            pdf.multi_cell(epw, 4, pdf.safe(f"Cita CPE: {item.get('cita_constitucional', 'No disponible')}"))
+            pdf.multi_cell(epw, 4, pdf.safe(f"Artículos CPE relacionados: {relacionados_txt}"))
+            criterios = item.get("evaluacion_criterios") or {}
+            if criterios:
+                pdf.multi_cell(epw, 4, pdf.safe("Criterios: " + "; ".join(f"{k}: {v}" for k,v in criterios.items())))
+            pdf.ln(1)
+    else:
+        pdf.f_italic(7.5)
+        pdf.multi_cell(epw, 4, pdf.safe("No se identificaron concordancias positivas verificadas en los artículos cotejados."))
+
+    analisis_fondo = analisis_dict.get("analisis_fondo_cpe", []) or []
+    pdf.subseccion_titulo(f"3.2 ASUNTOS QUE REQUIEREN ANÁLISIS DE FONDO — {len(analisis_fondo)}")
+    for item in analisis_fondo:
+        pdf.f_regular(7.5)
+        pdf.multi_cell(epw, 4, pdf.safe(
+            f"{item.get('articulo_constitucional', 'Artículo CPE N/D')} — "
+            f"{item.get('razon', 'Requiere ponderación o información adicional')} "
+            f"Recomendación: {item.get('recomendacion', 'Revisión jurídica especializada')}"
+        ))
+
     # ══ SECCION 4: OBSERVACIONES DE CONSISTENCIA NORMATIVA ════════════════════
     obs_norm = obs_normativas_detalle or [o for o in observaciones_finales
                                            if "consistencia" in str(o.get("fuente", "")).lower()
@@ -606,7 +679,13 @@ def generar_pdf_informe_concentrador(
     if not obs_norm:
         pdf.f_italic(8)
         pdf.set_text_color(60, 60, 60)
-        pdf.cell(epw, 5, pdf.safe("No se registraron colisiones normativas con las leyes vigentes en este expediente."), 0, align='L', new_x="LMARGIN", new_y="NEXT")
+        estado_norm = (analisis_dict.get("estado_auditorias") or {}).get("consistencia_normativa", "DESCONOCIDO")
+        mensaje_norm = ("Auditoría de consistencia normativa pendiente de revisión; no se concluye ausencia de colisiones."
+                        if estado_norm == "PENDIENTE_REVISION" else
+                        "No se registraron colisiones normativas en la auditoría completada."
+                        if estado_norm == "COMPLETADO" else
+                        "No hay dictamen normativo completo disponible para este expediente.")
+        pdf.cell(epw, 5, pdf.safe(mensaje_norm), 0, align='L', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
     else:
         pdf.f_regular(7.8)
@@ -1002,7 +1081,11 @@ class AgenteConcentrador:
         validos = []
         no_validos = []
         for obs in (observaciones or []):
-            ok, razon = _validar_insumo(obs)
+            validacion = _validar_insumo(obs)
+            if not isinstance(validacion, tuple) or len(validacion) != 2:
+                ok, razon = False, "El validador no devolvió el par (válido, razón)"
+            else:
+                ok, razon = validacion
             if ok:
                 validos.append(obs)
             else:
@@ -1054,6 +1137,22 @@ class AgenteConcentrador:
             insumos_validos=validos,
             proyecto_info=proyecto_info
         )
+        analisis_ampliado["estado_auditorias"] = {
+            "constitucionalidad": next((v.get("estado", "DESCONOCIDO") for v in validos
+                if "constitucional" in str(v.get("agente_origen", "")).lower()), "NO_EJECUTADA"),
+            "consistencia_normativa": next((v.get("estado", "DESCONOCIDO") for v in validos
+                if "consistencia" in str(v.get("agente_origen", "")).lower()
+                or "normat" in str(v.get("agente_origen", "")).lower()), "NO_EJECUTADA"),
+            "pendientes_constitucionalidad": sum(len(v.get("pendientes_revision") or []) for v in validos
+                if "constitucional" in str(v.get("agente_origen", "")).lower()),
+            "pendientes_normativa": sum(len(v.get("pendientes_revision") or []) for v in validos
+                if "consistencia" in str(v.get("agente_origen", "")).lower()
+                or "normat" in str(v.get("agente_origen", "")).lower()),
+        }
+        resumen_cpe = next((v.get("resumen", {}) for v in validos
+            if "constitucional" in str(v.get("agente_origen", "")).lower()), {})
+        analisis_ampliado["articulos_a_favor_cpe"] = resumen_cpe.get("articulos_a_favor", [])
+        analisis_ampliado["analisis_fondo_cpe"] = resumen_cpe.get("requieren_analisis_fondo", [])
 
         resumen_ejecutivo = analisis_ampliado.get(
             "resumen_ejecutivo",
@@ -1270,15 +1369,33 @@ def ejecutar_concentrador_emisor_notificador(
     insumos = []
     if datos_constitucionales:
         pendiente_cpe = bool(datos_constitucionales.get("error") or datos_constitucionales.get("estado") == "PENDIENTE_REVISION")
+        confianza_cpe = datos_constitucionales.get("confianza", 95)
+        try:
+            confianza_cpe = float(confianza_cpe)
+            if confianza_cpe > 1:
+                confianza_cpe /= 100.0
+            confianza_cpe = max(0.0, min(confianza_cpe, 1.0))
+        except (TypeError, ValueError):
+            confianza_cpe = 0.0 if pendiente_cpe else 0.90
         insumos.append({
             "agente_origen": "Agente_Verificador_Constitucional",
             "hallazgos": datos_constitucionales.get("contradicciones", []) or datos_constitucionales.get("hallazgos", []),
-            "confianza": 0 if pendiente_cpe else datos_constitucionales.get("confianza", 0.95),
-            "nivel_confianza": 0 if pendiente_cpe else datos_constitucionales.get("confianza", 0.95),
+            "confianza": 0 if pendiente_cpe else confianza_cpe,
+            "nivel_confianza": 0 if pendiente_cpe else confianza_cpe,
             "valido": False if pendiente_cpe else datos_constitucionales.get("valido", True),
             "estado": "PENDIENTE_REVISION" if pendiente_cpe else "COMPLETADO",
             "pendientes_revision": datos_constitucionales.get("pendientes_revision", []),
-            "resumen": datos_constitucionales.get("resumen", ""),
+            "resumen": {
+                "dictamen": datos_constitucionales.get("resultado_final", ""),
+                "estado": datos_constitucionales.get("estado", "COMPLETADO"),
+                "riesgo": datos_constitucionales.get("nivel_riesgo_global") or
+                          (datos_constitucionales.get("resumen_ejecutivo", {}).get("nivel_riesgo", "DESCONOCIDO")
+                           if isinstance(datos_constitucionales.get("resumen_ejecutivo"), dict) else "DESCONOCIDO"),
+                "resumen_ejecutivo": datos_constitucionales.get("resumen_ejecutivo", {}),
+                "pendientes_revision": datos_constitucionales.get("pendientes_revision", []),
+                "articulos_a_favor": datos_constitucionales.get("articulos_a_favor", []),
+                "requieren_analisis_fondo": datos_constitucionales.get("requieren_analisis_fondo", []),
+            },
         })
 
     if datos_consistencia:
@@ -1291,7 +1408,13 @@ def ejecutar_concentrador_emisor_notificador(
             "estado": "PENDIENTE_REVISION" if pendiente_normas else "COMPLETADO",
             "pendientes_revision": datos_consistencia.get("pendientes_revision", []),
             "nivel_riesgo_global": datos_consistencia.get("nivel_riesgo_global", "OK"),
-            "resumen": f"Total hallazgos: {datos_consistencia.get('total_hallazgos', 0)}",
+            "resumen": {
+                "estado": datos_consistencia.get("estado", "COMPLETADO"),
+                "nivel_riesgo_global": datos_consistencia.get("nivel_riesgo_global", "DESCONOCIDO"),
+                "resumen_por_tipo": datos_consistencia.get("resumen_por_tipo", {}),
+                "total_hallazgos": datos_consistencia.get("total_hallazgos", 0),
+                "pendientes_revision": datos_consistencia.get("pendientes_revision", []),
+            },
         })
 
     if datos_fondo:

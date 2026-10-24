@@ -14,6 +14,7 @@ individual para llamadas específicas, fuera del flujo conjunto habitual.
 """
 import time
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -35,7 +36,8 @@ from sma_unified.db.neon_postgres import (
 )
 
 # ── Constantes ────────────────────────────────────────────────────────────────
-TOP_K_CPE             = 6     # Artículos CPE relevantes por párrafo del proyecto
+TOP_K_CPE             = 15    # Artículos CPE relacionados que se muestran por disposición
+TOP_K_COTEJO_CPE      = 15    # Cada candidato relacionado recibe cotejo y dictamen binario
 UMBRAL_CPE            = 0.40  # Similitud mínima (más permisivo → mayor cobertura)
 MAX_CHARS_BLOQUE      = 2500  # Chars máximos para embedding
 MAX_TOKENS_CRIBA      = 800   # Fase A: cribado rápido (JSON compacto)
@@ -55,10 +57,9 @@ _SISTEMA_CRIBA = (
     "1. ¿El proyecto PERMITE u ORDENA algo que el CPE PROHÍBE, o viceversa? → EN_CONTRA\n"
     "2. ¿El proyecto OMITE una obligación que el CPE IMPONE expresamente? → EN_CONTRA\n"
     "3. ¿El proyecto desarrolla o garantiza lo que el CPE manda? → A_FAVOR\n"
-    "4. ¿La tensión requiere ponderar valores en conflicto? → RAF\n"
-    "5. Sin colisión directa → NEUTRAL\n\n"
-    "SALIDA: JSON mínimo de una línea, sin markdown:\n"
-    '{"c":"A_FAVOR|EN_CONTRA|NEUTRAL|RAF","s":"bloqueante|grave|leve|ninguna","ok":true|false}'
+    "4. Si no hay colisión directa probada, decide A_FAVOR provisional y marca evidencia_suficiente=false.\n\n"
+    "SALIDA: JSON mínimo de una línea, sin markdown; clasificación binaria obligatoria:\n"
+    '{"c":"A_FAVOR|EN_CONTRA","evidencia_suficiente":true|false,"s":"bloqueante|grave|leve|ninguna","ok":true|false}'
 )
 
 _SISTEMA_DEEPCHECK = (
@@ -77,15 +78,15 @@ _SISTEMA_DEEPCHECK = (
     "2) ¿Proyecto OMITE obligación que CPE IMPONE expresamente? → EN_CONTRA\n"
     "3) ¿Proyecto contradice jerarquía normativa o competencia citada en el artículo? → EN_CONTRA\n"
     "4) ¿Proyecto desarrolla, reglamenta o garantiza lo que CPE manda? → A_FAVOR\n"
-    "5) ¿La tensión exige ponderar derechos o valores en conflicto? → REQUIERE_ANALISIS_DE_FONDO\n"
-    "6) En cualquier otro caso → NEUTRAL\n\n"
-    "REGLA DE ORO: si NO puedes copiar literalmente 'cita_proyecto' Y 'cita_constitucional' "
-    "desde el input, la clasificación DEBE ser NEUTRAL y 'verificado'=false.\n\n"
+    "5) Si falta prueba suficiente de colisión directa, elige A_FAVOR provisional con evidencia_suficiente=false, "
+    "confianza baja y limitacion explícita. No existe clasificación neutral ni pendiente.\n\n"
+    "REGLA DE VALIDACIÓN: cita literalmente las fuentes disponibles; si la respuesta no permite validar el cotejo, "
+    "no inventes una colisión: usa A_FAVOR provisional, evidencia_suficiente=false y declara la limitación.\n\n"
     "SALIDA: SOLO JSON válido, sin markdown:\n"
-    '{"clasificacion":"A_FAVOR|EN_CONTRA|NEUTRAL|REQUIERE_ANALISIS_DE_FONDO",'
+    '{"clasificacion":"A_FAVOR|EN_CONTRA","evidencia_suficiente":true|false,"confianza":0-100,"motivo_limitacion":"...",'
     '"fundamento":"descripcion precisa <=80 palabras citando la regla aplicada (1-6)",'
     '"severidad":"bloqueante|grave|leve|ninguna",'
-    '"cita_proyecto":"fragmento LITERAL del proyecto (vacío si NEUTRAL)",'
+    '"cita_proyecto":"fragmento LITERAL del proyecto",'
     '"cita_constitucional":"fragmento LITERAL del artículo CPE",'
     '"tipo_colision":"prohibicion_vs_permiso|omision_obligacion|jerarquia|desarrollo|ponderacion|ninguna",'
     '"recomendacion":"accion concreta <=60 palabras",'
@@ -97,7 +98,7 @@ _SISTEMA_ANALISIS_PROFUNDO = (
     "en el Tribunal Constitucional Plurinacional (TCP). Tu tarea es elaborar un ANÁLISIS "
     "JURÍDICO COMPLETO Y DETALLADO de la relación entre el artículo CPE indicado y el "
     "fragmento del proyecto de ley.\n\n"
-    "Contexto: se te provee la clasificación previa (EN_CONTRA o REQUIERE_ANALISIS_DE_FONDO) "
+    "Contexto: se te provee una clasificación binaria previa; profundiza solo sobre los hallazgos EN_CONTRA verificados. "
     "y las citas literales ya extraídas. Profundiza en los siguientes aspectos:\n\n"
     "ANÁLISIS REQUERIDO (responde TODOS los campos):\n"
     "1. impacto_juridico: ¿Qué consecuencia jurídica concreta tendría aprobar el proyecto "
@@ -108,22 +109,21 @@ _SISTEMA_ANALISIS_PROFUNDO = (
     "3. argumento_defensa: ¿Qué argumento podría usar el legislador para defender el "
     "   proyecto y por qué no resulta suficiente desde la perspectiva constitucional? "
     "   (≤100 palabras)\n"
-    "4. articulos_cpe_relacionados: Lista de otros artículos CPE que refuerzan o modulan "
-    "   el hallazgo (solo artículos que razonablemente existan en la CPE 2009, ej: "
-    "   ['13', '14', '115']). Si no hay, lista vacía.\n"
+    "4. articulos_cpe_relacionados: Lista solo referencias conexas provistas y verificadas en "
+    "   <articulos_conexos_validados>. Si esa lista está vacía, no agregues referencias de memoria.\n"
     "5. redaccion_corregida: Texto alternativo CONCRETO que reemplazaría el fragmento "
     "   del proyecto para resolver la contradicción y cumplir la CPE. Debe ser redacción "
     "   legislativa formal boliviana. (≤120 palabras)\n"
-    "6. precedentes_tcp: ¿El TCP ha resuelto casos similares? Menciona la sentencia "
-    "   constitucional más probable (ej: SC 0064/2004) o indica 'Sin precedente conocido'. "
+    "6. precedentes_tcp: Cita solo precedentes TCP cuyo número y fuente verificable "
+    "   se hayan proporcionado; si no, indica 'Sin precedente verificado en los insumos'. "
     "   (≤60 palabras)\n"
     "7. dictamen: Veredicto jurídico formal del artículo analizado.\n"
     "   Opciones: INCONSTITUCIONAL | CONDICIONALMENTE_CONSTITUCIONAL | "
     "   CONSTITUCIONAL | REQUIERE_CONSULTA_TCP\n"
     "8. nivel_urgencia_correccion: INMEDIATA | ANTES_DEBATE_COMISION | "
     "   ANTES_SEGUNDA_LECTURA | RECOMENDADA | NO_REQUERIDA\n\n"
-    "IMPORTANTE: basa todo en los textos literales provistos. No inventes precedentes. "
-    "Si no hay precedente conocido, di exactamente 'Sin precedente conocido'.\n\n"
+    "IMPORTANTE: basa todo en los textos literales provistos. No inventes artículos ni precedentes TCP. "
+    "La conclusión es preliminar y no sustituye el control de constitucionalidad del TCP.\n\n"
     "SALIDA: JSON válido con exactamente estos campos, sin markdown:\n"
     '{"impacto_juridico":"...",'
     '"argumento_constitucional":"...",'
@@ -137,9 +137,10 @@ _SISTEMA_ANALISIS_PROFUNDO = (
 
 _SISTEMA_ANALISIS_AFAVOR = (
     "Eres un jurista constitucionalista boliviano de primer nivel, redactor y asesor de la Asamblea "
-    "Legislativa Plurinacional, experto en la CPE 2009 y la jurisprudencia del TCP. "
+    "Legislativa Plurinacional, experto en la CPE 2009 y el marco jurídico boliviano. "
     "Tu tarea es elaborar una JUSTIFICACIÓN DETALLADA Y EXHAUSTIVA de por qué el proyecto de ley es "
-    "CONFORME y se encuentra A FAVOR del artículo de la Constitución Política del Estado (CPE) evaluado.\n\n"
+    "CONFORME y se encuentra A FAVOR del artículo de la Constitución Política del Estado (CPE) evaluado. "
+    "La evaluación es técnica preliminar; no inventes jurisprudencia TCP ni citas constitucionales.\n\n"
     "METODOLOGÍA DE EVALUACIÓN (debes evaluar PÁRRAFO POR PÁRRAFO Y ARTÍCULO POR ARTÍCULO):\n"
     "1. justificacion_por_que: Fundamentación jurídica detallada y rigurosa explicando el POR QUÉ "
     "   este artículo constitucional respalda al proyecto de ley y cómo el proyecto materializa, desarrolla "
@@ -154,7 +155,8 @@ _SISTEMA_ANALISIS_AFAVOR = (
     "3. fortaleza_constitucional: 'ALTA' (cumplimiento directo y vinculante), 'MEDIA' (cumplimiento por principio o mandato general) o 'MODERADA'.\n"
     "4. principios_constitucionales_aplicados: Principios o valores de la CPE 2009 fortalecidos (ej: Vivir Bien - Suma Qamaña, "
     "   Descolonización, Soberanía, Legalidad, Debido Proceso, Igualdad y no Discriminación).\n"
-    "5. articulos_cpe_conexos: Lista de otros artículos de la CPE 2009 conexos o que sirven de respaldo concurrente (ej: ['1', '9', '14']).\n"
+    "5. articulos_cpe_conexos: Lista solo los artículos incluidos en <articulos_conexos_validados>; "
+    "   si no hay, devuelve lista vacía.\n"
     "6. recomendacion_blindaje: Recomendación de técnica legislativa para robustecer aún más la solidez constitucional "
     "   del articulado y evitar cualquier ambigüedad en su aplicación futura (≤70 palabras).\n\n"
     "SALIDA: JSON válido con exactamente estos campos, sin markdown ni texto adicional:\n"
@@ -292,10 +294,10 @@ class VerificadorConstitucional:
                     temperature=0.0,
                     max_tokens=MAX_TOKENS_CRIBA * (intento + 1),
                     response_format={"type": "json_object"},
-                    modelo_preferido="openai/gpt-oss-20b",
+                    modelo_preferido=settings.LLM_MODEL_CONSISTENCIA,
                 )
                 data = extraer_json_de_llm(contenido)
-                clases = {"A_FAVOR", "EN_CONTRA", "NEUTRAL", "RAF", "REQUIERE_ANALISIS_DE_FONDO"}
+                clases = {"A_FAVOR", "EN_CONTRA"}
                 if (not isinstance(data, dict) or data.get("c") not in clases
                     or data.get("s") not in {"bloqueante", "grave", "leve", "ninguna"}
                     or not isinstance(data.get("ok"), bool)):
@@ -312,7 +314,7 @@ class VerificadorConstitucional:
         """
         Cribado estructurado con un reintento de formato.
         Devuelve {'clasificacion', 'severidad', 'verificado', '_fase'}.
-        Los artículos NEUTRAL con ok=True se descartan sin segunda pasada.
+        Todo candidato recibe una de las dos etiquetas binarias; la evidencia insuficiente se marca aparte.
         """
         num      = articulo_cpe.get("numero", "")
         titulo   = articulo_cpe.get("titulo", "")
@@ -327,14 +329,15 @@ class VerificadorConstitucional:
         try:
             data = self._solicitar_criba_json(usuario)
             return {
-                "clasificacion": data.get("c", "NEUTRAL"),
+                "clasificacion": data.get("c", "A_FAVOR"),
                 "severidad":     data.get("s", "ninguna"),
                 "verificado":    bool(data.get("ok", False)),
+                "evidencia_suficiente": bool(data.get("evidencia_suficiente", False)),
                 "_fase":         "criba",
             }
         except Exception as e:
             logger.debug(f"[Criba] Art. {num}: pendiente por error LLM o formato JSON: {e}")
-            return {"clasificacion": "NEUTRAL", "severidad": "ninguna", "verificado": False, "_fase": "criba_fallback", "pendiente_revision": True, "motivo": str(e)}
+            return {"clasificacion": "A_FAVOR", "severidad": "ninguna", "verificado": False, "evidencia_suficiente": False, "_fase": "criba_fallback", "motivo_limitacion": str(e)}
 
     # ── FASE B: Deep-check de candidatos ──────────────────────────────────────
 
@@ -342,8 +345,8 @@ class VerificadorConstitucional:
         self, texto_proyecto: str, articulo_cpe: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Segunda pasada con árbol de decisión completo, citas obligatorias y
-        campo 'recomendacion'. Sólo se llama para artículos no-NEUTRAL de la criba.
+        Segunda pasada binaria con árbol de decisión, citas obligatorias y
+        campo 'recomendacion'.
         """
         num      = articulo_cpe.get("numero", "")
         titulo   = articulo_cpe.get("titulo", "")
@@ -355,7 +358,9 @@ class VerificadorConstitucional:
             f"</articulo_cpe>\n\n"
             f"<proyecto_ley>\n{texto_proyecto[:MAX_CHARS_PROYECTO]}\n</proyecto_ley>\n\n"
             "TAREA: aplica el ÁRBOL DE DECISIÓN en orden. Devuelve SOLO el JSON. "
-            "Si dudas entre EN_CONTRA y NEUTRAL, elige NEUTRAL y 'verificado'=false."
+            "No afirmes EN_CONTRA sin colisión directa tipificada ni A_FAVOR sin nexo explícito y dos citas literales. "
+            "La clasificación debe ser A_FAVOR o EN_CONTRA. Si no se prueba una incompatibilidad directa, usa A_FAVOR "
+            "provisional con evidencia_suficiente=false, baja confianza y motivo_limitacion; nunca uses neutral ni pendiente."
         )
 
         try:
@@ -368,28 +373,35 @@ class VerificadorConstitucional:
                 timeout=(5, 30),
                 max_model_attempts=2,
                 max_tokens=MAX_TOKENS_DEEPCHECK,
-                modelo_preferido="openai/gpt-oss-20b",
+                modelo_preferido=settings.LLM_MODEL_CONSISTENCIA,
             )
             data = extraer_json_de_llm(contenido)
             if not isinstance(data, dict):
                 raise ValueError("Respuesta constitucional invalida")
-            if data.get("clasificacion") not in {"A_FAVOR", "EN_CONTRA", "NEUTRAL", "REQUIERE_ANALISIS_DE_FONDO"}:
+            if data.get("clasificacion") not in {"A_FAVOR", "EN_CONTRA"}:
                 raise ValueError("Cotejo constitucional incompleto")
         except Exception as e:
             logger.warning(f"[DeepCheck] Art. {num}: cotejo pendiente por error LLM: {e}")
-            return {"clasificacion": "PENDIENTE_REVISION", "verificado": False,
-                    "pendiente_revision": True, "motivo": str(e)}
+            return {"clasificacion": "A_FAVOR", "base_decision": "COMPATIBILIDAD_PROVISIONAL_SIN_INCOMPATIBILIDAD_ACREDITADA",
+                    "evidencia_suficiente": False, "confianza": 10, "verificado": False,
+                    "motivo_limitacion": str(e), "fundamento": "A_FAVOR provisional: el cotejo no pudo validarse y no se acreditó una colisión directa."}
 
-        # Validación de citas: EN_CONTRA sin cita_constitucional → NEUTRAL
+        # Validación de citas: una contradicción sin cita verificable no es admisible.
         if not data.get("cita_constitucional") and data.get("clasificacion") == "EN_CONTRA":
-            logger.warning(f"[VerificadorCPE] Art. {num}: EN_CONTRA sin cita → degradado a NEUTRAL")
-            data["clasificacion"] = "NEUTRAL"
-            data["_descartado_sin_cita"] = True
+            logger.warning(f"[VerificadorCPE] Art. {num}: EN_CONTRA sin cita; degradado a A_FAVOR provisional")
+            data["clasificacion"] = "A_FAVOR"
+            data["base_decision"] = "COMPATIBILIDAD_PROVISIONAL_SIN_INCOMPATIBILIDAD_ACREDITADA"
+            data["evidencia_suficiente"] = False
+            data["confianza"] = 10
+            data["motivo_limitacion"] = "No se pudo validar la cita constitucional para una contradicción."
 
         # Normalización de clasificación
-        CLASES_VALIDAS = {"A_FAVOR", "EN_CONTRA", "NEUTRAL", "REQUIERE_ANALISIS_DE_FONDO"}
-        if data.get("clasificacion") not in CLASES_VALIDAS:
-            data["clasificacion"] = "NEUTRAL"
+        if data.get("clasificacion") not in {"A_FAVOR", "EN_CONTRA"}:
+            data["clasificacion"] = "A_FAVOR"
+            data["base_decision"] = "COMPATIBILIDAD_PROVISIONAL_SIN_INCOMPATIBILIDAD_ACREDITADA"
+            data["evidencia_suficiente"] = False
+            data["confianza"] = 10
+            data["motivo_limitacion"] = "La salida del clasificador no pertenecía al esquema binario."
 
         data["_fase"] = "deep_check"
         return data
@@ -423,12 +435,15 @@ class VerificadorConstitucional:
             f"  Clasificación Fase B: {clasificacion}\n"
             f"  Tipo de colisión: {tipo_colision}\n"
             f"  Fundamento previo: {fundamento}\n"
+            f"  Criterios evaluados: {deep_result.get('evaluacion_criterios', {})}\n"
+            f"  Artículos conexos validados en el lote: {deep_result.get('articulos_cpe_relacionados', [])}\n"
             f"</contexto_previo>\n\n"
             f"<articulo_cpe numero=\"{num}\" titulo=\"{titulo}\">\n"
             f"{texto_cpe}\n"
             f"</articulo_cpe>\n\n"
             f"<cita_constitucional_detectada>\n{cita_cpe}\n</cita_constitucional_detectada>\n\n"
             f"<fragmento_proyecto_afectado>\n{cita_proy}\n</fragmento_proyecto_afectado>\n\n"
+            f"<articulos_conexos_validados>\n{deep_result.get('articulos_cpe_relacionados', [])}\n</articulos_conexos_validados>\n\n"
             f"<proyecto_ley_completo>\n{texto_proyecto[:MAX_CHARS_PROYECTO_C]}\n</proyecto_ley_completo>\n\n"
             "TAREA: Elabora el análisis jurídico profundo y completo. "
             "Responde TODOS los campos. Solo JSON."
@@ -444,7 +459,7 @@ class VerificadorConstitucional:
                 timeout=(5, 30),
                 max_model_attempts=2,
                 max_tokens=MAX_TOKENS_ANALISIS,
-                modelo_preferido="openai/gpt-oss-20b",
+                modelo_preferido=settings.LLM_MODEL_CONSISTENCIA,
             )
             analisis = extraer_json_de_llm(contenido)
             # Garantizar que todos los campos clave existen
@@ -456,6 +471,7 @@ class VerificadorConstitucional:
             analisis.setdefault("precedentes_tcp",           "Sin precedente conocido.")
             analisis.setdefault("dictamen",                  "REQUIERE_CONSULTA_TCP")
             analisis.setdefault("nivel_urgencia_correccion", "ANTES_DEBATE_COMISION")
+            analisis["articulos_cpe_relacionados"] = deep_result.get("articulos_cpe_relacionados", [])
             logger.info(f"[VerificadorCPE] Fase C completada para Art. {num}: dictamen={analisis.get('dictamen','?')}")
             return analisis
         except Exception as e:
@@ -499,6 +515,8 @@ class VerificadorConstitucional:
             f"{texto_cpe}\n"
             f"</articulo_cpe>\n\n"
             f"<fundamento_fase_previa>\n{fundamento}\n</fundamento_fase_previa>\n\n"
+            f"<evaluacion_criterios>\n{deep_result.get('evaluacion_criterios', {})}\n</evaluacion_criterios>\n\n"
+            f"<articulos_conexos_validados>\n{deep_result.get('articulos_cpe_relacionados', [])}\n</articulos_conexos_validados>\n\n"
             f"<fragmento_proyecto_detectado>\n{cita_proy}\n</fragmento_proyecto_detectado>\n\n"
             f"<proyecto_ley_completo>\n{texto_proyecto[:MAX_CHARS_PROYECTO_C]}\n</proyecto_ley_completo>\n\n"
             "TAREA: Evalúa minuciosamente el proyecto de ley frente a este artículo CPE. "
@@ -516,7 +534,7 @@ class VerificadorConstitucional:
                 timeout=(5, 30),
                 max_model_attempts=2,
                 max_tokens=MAX_TOKENS_ANALISIS,
-                modelo_preferido="openai/gpt-oss-20b",
+                modelo_preferido=settings.LLM_MODEL_CONSISTENCIA,
             )
             analisis = extraer_json_de_llm(contenido)
             analisis.setdefault(
@@ -527,6 +545,7 @@ class VerificadorConstitucional:
             analisis.setdefault("fortaleza_constitucional", "ALTA")
             analisis.setdefault("principios_constitucionales_aplicados", ["Seguridad Jurídica", "Supremacía Constitucional"])
             analisis.setdefault("articulos_cpe_conexos", [])
+            analisis["articulos_cpe_conexos"] = deep_result.get("articulos_cpe_relacionados", [])
             analisis.setdefault(
                 "recomendacion_blindaje",
                 "Mantener concordancia explícita con las reservas de ley y competencias constitucionales."
@@ -576,8 +595,11 @@ class VerificadorConstitucional:
                 "verificado":         False,
             }
         return {
-            "clasificacion":      "NEUTRAL",
-            "fundamento":         "Sin colisión directa detectada por reglas de deducción (heurístico).",
+            "clasificacion":      "A_FAVOR",
+            "base_decision":      "COMPATIBILIDAD_PROVISIONAL_SIN_INCOMPATIBILIDAD_ACREDITADA",
+            "evidencia_suficiente": False,
+            "confianza":          10,
+            "fundamento":         "A_FAVOR provisional: las reglas heurísticas no acreditaron colisión directa ni apoyo constitucional expreso.",
             "severidad":          "ninguna",
             "cita_proyecto":      "",
             "cita_constitucional": "",
@@ -598,6 +620,9 @@ class VerificadorConstitucional:
         Calcula nivel_riesgo, score_confianza calibrado, score_cobertura,
         matriz_riesgo por artículo y recomendaciones_globales con emojis.
         """
+        # Valor seguro para cualquier ruta de cálculo; se reemplaza al calcular
+        # la cobertura con el conjunto de artículos realmente consultados.
+        cobertura = 0.0
         sevs = [c.get("severidad", "ninguna") for c in contradicciones]
 
         nivel_riesgo = (
@@ -608,16 +633,16 @@ class VerificadorConstitucional:
             else "NINGUNO"
         )
 
-        # Score de confianza calibrado: base 90, penaliza por gravedad, premia a_favor
-        score = 90
-        score -= sum({"bloqueante": 20, "grave": 12, "leve": 6}.get(s, 0) for s in sevs)
-        score += min(len(a_favor) * 2, 10)
-        score  = max(30, min(score, 98))
-
-        # Cobertura CPE: % de artículos consultados con resultado conclusivo
+        # Cobertura CPE: % de artículos consultados con resultado conclusivo.
         total_consultados = len(articulos_consultados)
         conclusivos       = len(contradicciones) + len(a_favor)
-        cobertura         = round(conclusivos / total_consultados * 100, 1) if total_consultados else 0.0
+        cobertura         = min(100.0, round(conclusivos / total_consultados * 100, 1)) if total_consultados else 0.0
+
+        # La confianza mide cobertura de cotejos con conclusión jurídica,
+        # no ausencia de hallazgos. Muchos neutrales no prueban conformidad.
+        score = round(40 + min(cobertura, 100) * 0.5)
+        score -= sum({"bloqueante": 20, "grave": 12, "leve": 6}.get(s, 0) for s in sevs)
+        score  = max(0, min(score, 90))
 
         bloqueantes = [c for c in contradicciones if c.get("severidad") == "bloqueante"]
         graves      = [c for c in contradicciones if c.get("severidad") == "grave"]
@@ -646,8 +671,8 @@ class VerificadorConstitucional:
             )
         if not contradicciones and not requieren_fondo:
             recomendaciones_globales.append(
-                "✅ PROYECTO CONSTITUCIONALMENTE COHERENTE: no se detectaron contradicciones "
-                "con la CPE en los artículos analizados."
+                "No se identificó incompatibilidad directa en los pares proyecto/CPE cotejados. "
+                "Resultado preliminar; no equivale a una declaración de constitucionalidad integral."
             )
 
         # Matriz de riesgo por artículo (para visualización en frontend)
@@ -668,7 +693,7 @@ class VerificadorConstitucional:
             urgencia_fc = (r.get("analisis_profundo") or {}).get("nivel_urgencia_correccion", "ANTES_DEBATE_COMISION")
             matriz_riesgo.append({
                 "articulo_cpe":  r.get("articulo_constitucional", ""),
-                "tipo":          "REQUIERE_ANALISIS_DE_FONDO",
+                "tipo":          "A_FAVOR",
                 "severidad":     "medio",
                 "dictamen":      dictamen_fc,
                 "urgencia":      urgencia_fc,
@@ -731,6 +756,7 @@ class VerificadorConstitucional:
 
         contradicciones, a_favor, requieren_fondo = [], [], []
         articulos_consultados, analisis, pendientes = [], [], []
+        evaluaciones_unidad, limitaciones_revision = [], []
         consultados_vistos = set()
 
         def numero_cpe(item):
@@ -742,6 +768,19 @@ class VerificadorConstitucional:
             return match.group(1).strip() if match else ""
 
         for unidad, parcial in parciales:
+            dictamen_unidad = parcial.get("dictamen_articulo", {})
+            clasificacion_binaria_unidad = dictamen_unidad.get("clasificacion", "A_FAVOR")
+            evaluaciones_unidad.append({
+                "articulo": str(unidad.get("articulo", "Documento completo")),
+                "parrafo": str(unidad.get("parrafo", "")),
+                "texto": str(unidad.get("texto", "")),
+                **parcial.get("dictamen_articulo", {}),
+            })
+            limitaciones_revision.extend({
+                **limitacion,
+                "articulo_proyecto": f"Artículo {unidad['articulo']}",
+                "parrafo_proyecto": unidad["parrafo"],
+            } for limitacion in parcial.get("limitaciones_revision", []))
             pendientes.extend({
                 **pendiente,
                 "articulo_proyecto": f"Artículo {unidad['articulo']}",
@@ -782,8 +821,15 @@ class VerificadorConstitucional:
                     continue
                 if cpe_num not in consultados_vistos:
                     consultados_vistos.add(cpe_num)
-                    articulos_consultados.append({**cpe, "norma": "CPE 2009"})
-                tipo_relacion, relacionado = relaciones.get(cpe_num, ("sin_relacion", {}))
+                    articulos_consultados.append({
+                        **cpe,
+                        "norma": "CPE 2009",
+                        "clasificacion": clasificacion_binaria_unidad,
+                        "clasificacion_articulo_proyecto": clasificacion_binaria_unidad,
+                    })
+                tipo_relacion, relacionado = relaciones.get(
+                    cpe_num, ("sin_relacion", cpe)
+                )
                 deep = relacionado.get("analisis_profundo", {}) or {}
                 cita_proyecto = relacionado.get("cita_proyecto") or relacionado.get("fragmento_proyecto") or unidad["texto"]
                 cita_cpe = relacionado.get("cita_constitucional") or cpe.get("texto", cpe.get("extracto", ""))
@@ -802,86 +848,132 @@ class VerificadorConstitucional:
                     "texto_constitucional_verificado": cita_cpe,
                     "similitud": float(cpe.get("similitud", 0) or 0),
                     "tipo_relacion": tipo_relacion,
-                    "verificado": True,
-                    "estado": "COMPLETADO",
+                    "clasificacion": clasificacion_binaria_unidad,
+                    "tipo_relacion_cotejo": tipo_relacion,
+                    "evaluacion_criterios": relacionado.get("evaluacion_criterios", {}),
+                    "analisis_constitucional": relacionado.get("analisis_constitucional", ""),
+                    "comentario_analitico": relacionado.get("comentario_analitico", relacionado.get("fundamento", "")),
+                    "alcance_vicio": relacionado.get("alcance_vicio", "no_aplica"),
+                    "articulos_cpe_relacionados": relacionado.get("articulos_cpe_relacionados", []),
+                    "verificado": bool(cpe.get("verificado", False)),
+                    "estado": "COMPLETADO" if cpe.get("verificado") else "LIMITADO_PROVISIONAL",
                     "justificacion": relacionado.get("fundamento") or relacionado.get("razon") or deep.get("argumento_constitucional", "Sin colisión directa detectada en este cotejo."),
-                    "sugerencia": relacionado.get("recomendacion") or deep.get("redaccion_corregida", "Mantener el texto revisado."),
+                    "sugerencia": relacionado.get("recomendacion") or deep.get("redaccion_corregida", "Revisar el texto con base en las citas constitucionales."),
                     "riesgo": riesgo,
                     "severidad": severidad,
                     "tipo_colision": relacionado.get("tipo_colision", ""),
                     "analisis_profundo": deep,
                 })
 
-            for pendiente in parcial.get("pendientes_revision", []):
-                cpe_num = str(pendiente.get("articulo_constitucional", "")).strip()
-                cpe_label = f"Art. {cpe_num}" if cpe_num else "Artículo CPE no recuperado"
-                if any(fila.get("articulo_proyecto") == f"Artículo {unidad['articulo']}"
-                       and fila.get("parrafo_proyecto") == unidad["parrafo"]
-                       and (fila.get("numero_articulo") == cpe_num or (not cpe_num and fila.get("tipo_relacion") == "pendiente_revision")) for fila in analisis):
-                    continue
-                analisis.append({
-                    "articulo_proyecto": f"Artículo {unidad['articulo']}",
-                    "parrafo_proyecto": unidad["parrafo"],
-                    "texto_parrafo": unidad["texto"],
-                    "cita_proyecto": unidad["texto"],
-                    "fragmento_proyecto": unidad["texto"],
-                    "numero_articulo": cpe_num or "N/D",
-                    "articulo_constitucional": cpe_label,
-                    "norma": "Constitución Política del Estado (CPE 2009)",
-                    "cita_constitucional": "Cotejo pendiente: no se pudo recuperar o validar el texto constitucional.",
-                    "texto_constitucional_verificado": "",
-                    "similitud": 0,
-                    "tipo_relacion": "pendiente_revision",
-                    "verificado": False,
-                    "estado": "PENDIENTE_REVISION",
-                    "motivo": pendiente.get("motivo"),
-                    "justificacion": pendiente.get("motivo", "Requiere revisión manual."),
-                    "sugerencia": "Reintentar el cotejo o remitirlo a revisión jurídica manual.",
-                    "riesgo": "desconocido",
-                    "severidad": "desconocida",
-                    "tipo_colision": "",
-                    "analisis_profundo": {},
-                })
+        # Consolidar unidades (párrafos) en un dictamen binario por artículo del proyecto.
+        evaluaciones_por_articulo = {}
+        for evaluacion in evaluaciones_unidad:
+            clave = evaluacion["articulo"]
+            grupo = evaluaciones_por_articulo.setdefault(clave, [])
+            grupo.append(evaluacion)
+        dictamenes_por_articulo = []
+        for articulo, grupo in evaluaciones_por_articulo.items():
+            en_contra = [e for e in grupo if e.get("clasificacion") == "EN_CONTRA"]
+            favor = [e for e in grupo if e.get("clasificacion") == "A_FAVOR"]
+            # Un conflicto directo verificado en cualquier párrafo prevalece para el artículo.
+            elegido = en_contra or favor
+            citas = [cita for e in elegido for cita in (e.get("citas") or [])]
+            justificaciones = [e.get("justificacion_tecnica", "") for e in elegido if e.get("justificacion_tecnica")]
+            comentarios = [e.get("comentario_analitico", "") for e in elegido if e.get("comentario_analitico")]
+            sugerencias = [e.get("sugerencia", "") for e in elegido if e.get("sugerencia")]
+            hay_limitacion = any(not e.get("evidencia_suficiente", False) for e in grupo)
+            if en_contra:
+                base = "INCOMPATIBILIDAD_DIRECTA_VERIFICADA"
+                justificacion = " ".join(justificaciones)
+                suficiente = True
+                confianza_art = max((float(e.get("confianza", 0) or 0) for e in en_contra), default=80)
+            elif favor and not hay_limitacion:
+                base = "COMPATIBILIDAD_CONSTITUCIONAL_IDENTIFICADA"
+                justificacion = " ".join(justificaciones)
+                suficiente = True
+                confianza_art = min((float(e.get("confianza", 0) or 0) for e in favor), default=70)
+            else:
+                base = "COMPATIBILIDAD_PROVISIONAL_SIN_INCOMPATIBILIDAD_ACREDITADA"
+                justificacion = "No se acreditó una contradicción directa con los textos constitucionales cotejados. La etiqueta A_FAVOR es provisional porque la evidencia disponible no permite afirmar apoyo constitucional expreso; consulte las limitaciones y citas recuperadas."
+                suficiente = False
+                confianza_art = min((float(e.get("confianza", 0) or 0) for e in grupo), default=20)
+            relacionados_por_numero = {}
+            for evaluacion in grupo:
+                for relacionado in evaluacion.get("articulos_relacionados", []):
+                    numero = str(relacionado.get("numero", "")).strip()
+                    if numero:
+                        anterior = relacionados_por_numero.get(numero)
+                        if anterior is None or (relacionado.get("estado_cotejo") == "COTEJADO" and anterior.get("estado_cotejo") != "COTEJADO"):
+                            relacionados_por_numero[numero] = relacionado
+            dictamenes_por_articulo.append({
+                "articulo_proyecto": articulo,
+                "clasificacion": "EN_CONTRA" if en_contra else "A_FAVOR",
+                "base_decision": base,
+                "justificacion_tecnica": justificacion or "La evaluación binaria se basa en la evidencia constitucional citada; no constituye declaración vinculante del TCP.",
+                "comentario_analitico": " ".join(dict.fromkeys(comentarios)) or "No se acreditó colisión directa en las fuentes recuperadas; la etiqueta favorable es provisional y requiere validar la evidencia relacionada.",
+                "sugerencia": " ".join(dict.fromkeys(sugerencias)) or "Confirmar los artículos CPE relacionados y completar el cotejo antes de usar el dictamen como fundamento legislativo.",
+                "evidencia_suficiente": suficiente,
+                "confianza": confianza_art,
+                "parrafos_evaluados": [e["parrafo"] for e in grupo],
+                "citas": citas,
+                "articulos_relacionados": list(relacionados_por_numero.values())[:TOP_K_CPE],
+                "total_articulos_relacionados": min(len(relacionados_por_numero), TOP_K_CPE),
+                "limitaciones": [l for l in limitaciones_revision if l.get("articulo_proyecto") == f"Artículo {articulo}"],
+            })
 
         resumen = self._generar_resumen_ejecutivo(contradicciones, a_favor, requieren_fondo, articulos_consultados)
         resumen_por_tipo = {}
         for fila in analisis:
             resumen_por_tipo[fila["tipo_relacion"]] = resumen_por_tipo.get(fila["tipo_relacion"], 0) + 1
-        riesgo_global = "DESCONOCIDO" if pendientes else (
+        riesgo_global = (
             "ALTO" if any(fila["riesgo"] == "alto" for fila in analisis) else
-            "MEDIO" if requieren_fondo or any(fila["riesgo"] == "medio" for fila in analisis) else "NINGUNO"
+            "MEDIO" if requieren_fondo or limitaciones_revision or any(fila["riesgo"] == "medio" for fila in analisis) else "NINGUNO"
         )
         resumen.update({
             "nivel_riesgo": riesgo_global,
             "nivel_riesgo_global": riesgo_global,
-            "score_confianza": 0 if pendientes else resumen.get("score_confianza", 0),
+            "score_confianza": min(resumen.get("score_confianza", 0), 35) if limitaciones_revision else resumen.get("score_confianza", 0),
             "resumen_por_tipo": resumen_por_tipo,
             "total_hallazgos": sum(fila["tipo_relacion"] != "sin_relacion" for fila in analisis),
             "total_parrafos_evaluados": len(unidades),
             "total_cotejos": len(analisis),
             "score_cobertura_cpe_pct": round(100 * sum(1 for fila in analisis if fila["verificado"]) / max(1, len(analisis)), 1),
+            "total_a_favor": len(a_favor),
+            "total_contradicciones": len(contradicciones),
+            "total_requieren_analisis_fondo": len(requieren_fondo),
+            "articulos_cpe_relacionados": list({
+                str(ref.get("numero")) for fila in analisis
+                for ref in fila.get("articulos_cpe_relacionados", [])
+                if isinstance(ref, dict) and ref.get("numero")
+            }),
         })
-        valido = not pendientes and not contradicciones and not requieren_fondo
+        valido = not contradicciones and not requieren_fondo and not limitaciones_revision
         severidad_maxima = "bloqueante" if any(c.get("severidad") == "bloqueante" for c in contradicciones) else (
             "grave" if any(c.get("severidad") == "grave" for c in contradicciones) else "leve" if contradicciones else "ninguna"
         )
         return {
-            "estado": "PENDIENTE_REVISION" if pendientes else "COMPLETADO",
-            "pendientes_revision": pendientes,
-            "total_pendientes": len(pendientes),
-            "resultado_final": "PENDIENTE_REVISION" if pendientes else "CONTRADICCIONES_DETECTADAS" if contradicciones else "ARTICULADO_VALIDO",
+            "estado": "COMPLETADO",
+            "pendientes_revision": [],
+            "total_pendientes": 0,
+            "resultado_final": "CONTRADICCIONES_DETECTADAS" if contradicciones else "EVALUACION_BINARIA_COMPLETADA",
+            "alcance_revision": "Cotejo preliminar de los artículos CPE recuperados; no sustituye el control del TCP ni acredita por sí solo la constitucionalidad integral del proyecto.",
             "valido": valido,
-            "confianza": 0 if pendientes else resumen.get("score_confianza", 0),
+            "confianza": resumen.get("score_confianza", 0),
             "severidad_maxima": severidad_maxima,
             "num_contradicciones": len(contradicciones),
+            "total_a_favor": len(a_favor),
+            "total_requieren_analisis_fondo": len(requieren_fondo),
             "contradicciones": contradicciones,
             "requieren_analisis_fondo": requieren_fondo,
             "articulos_a_favor": a_favor,
             "articulos_consultados": articulos_consultados,
             "analisis": analisis,
+            "evaluaciones_por_articulo": dictamenes_por_articulo,
+            "limitaciones_revision": limitaciones_revision,
             "total_hallazgos": resumen["total_hallazgos"],
             "total_parrafos_evaluados": len(unidades),
             "total_cotejos": len(analisis),
+            "articulos_cpe_relacionados": resumen.get("articulos_cpe_relacionados", []),
             "nivel_riesgo_global": riesgo_global,
             "resumen_por_tipo": resumen_por_tipo,
             "resumen_ejecutivo": resumen,
@@ -895,25 +987,27 @@ class VerificadorConstitucional:
         task_id_mongo: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Recupera los candidatos CPE, los coteja juntos y consolida las
-        relaciones. Reutiliza el fundamento del lote sin rondas redundantes.
+        Recupera hasta 15 candidatos CPE relacionados, los coteja en lotes
+        concurrentes acotados y consolida clasificación, comentarios y sugerencias.
         """
-        articulos_cpe = self._recuperar_articulos_cpe(texto_proyecto)
-        if not articulos_cpe:
+        articulos_recuperados = self._recuperar_articulos_cpe(texto_proyecto)
+        articulos_cpe = articulos_recuperados[:TOP_K_COTEJO_CPE]
+        if not articulos_recuperados:
             logger.warning("[VerificadorCPE] Sin artículos CPE recuperados.")
 
         from concurrent.futures import ThreadPoolExecutor
 
-        # Un único cotejo conjunto por párrafo sustituye cribas, deep-checks
-        # y ampliaciones repetidas por cada candidato constitucional.
-        from sma_unified.agents.cotejo_constitucional import cotejar_lote
-        deep_resultados = cotejar_lote(texto_proyecto, articulos_cpe,
-            solicitar=chat_completion_auditoria, parsear=extraer_json_de_llm)
-        neutrales_directos = []
+        # Un solo lote por disposición evita tres solicitudes paralelas de cinco
+        # candidatos. El worker externo limita a dos las disposiciones concurrentes.
+        from sma_unified.agents.cotejo_constitucional import cotejar_lote, _fallback_binario
+        deep_resultados = cotejar_lote(
+            texto_proyecto, articulos_cpe,
+            solicitar=chat_completion_auditoria, parsear=extraer_json_de_llm,
+        ) if articulos_cpe else []
         pendientes_revision = []
-        if not articulos_cpe:
-            pendientes_revision.append({"fase": "recuperacion", "motivo": "Sin articulos CPE disponibles"})
-        logger.info(f"[VerificadorCPE] Cotejo por lote: {len(articulos_cpe)} candidatos constitucionales")
+        if not articulos_recuperados:
+            pendientes_revision.append({"fase": "recuperacion", "motivo": "Sin artículos CPE recuperados desde la base de datos para este texto."})
+        logger.info(f"[VerificadorCPE] Recuperados {len(articulos_recuperados)} artículos relacionados; cotejo profundo de {len(articulos_cpe)}")
 
         # ── Consolidación Fase B ───────────────────────────────────────────────
         contradicciones:  List[Dict[str, Any]] = []
@@ -928,9 +1022,13 @@ class VerificadorConstitucional:
 
         for art, clasificacion in deep_resultados:
             if clasificacion.get("pendiente_revision"):
-                pendientes_revision.append({"articulo_constitucional": art.get("numero"),
-                    "fase": "deep_check", "motivo": clasificacion.get("motivo")})
-                continue
+                # Migración segura de salidas legacy: mantener clase binaria y
+                # registrar el fallo como limitación de evidencia.
+                clasificacion = _fallback_binario(
+                    clasificacion.get("motivo") or "El cotejo anterior quedó sin validar.",
+                    texto_proyecto,
+                    art,
+                )
             num       = art.get("numero", "")
             titulo    = art.get("titulo", "")
             texto_cpe = art.get("texto", "")
@@ -948,11 +1046,38 @@ class VerificadorConstitucional:
                 "similitud": float(art.get("similitud", 0) or 0),
             })
 
-            tipo = clasificacion.get("clasificacion", "NEUTRAL")
+            tipo = clasificacion.get("clasificacion", "A_FAVOR")
+            if tipo not in {"A_FAVOR", "EN_CONTRA"}:
+                tipo = "A_FAVOR"
+                clasificacion.update({
+                    "base_decision": "COMPATIBILIDAD_PROVISIONAL_SIN_INCOMPATIBILIDAD_ACREDITADA",
+                    "evidencia_suficiente": False,
+                    "confianza": 10,
+                    "motivo_limitacion": "Respuesta fuera del esquema binario; normalizada a A_FAVOR provisional.",
+                })
+            if not clasificacion.get("verificado") or not clasificacion.get("evidencia_suficiente", False):
+                pendientes_revision.append({
+                    "articulo_constitucional": art.get("numero"),
+                    "fase": "validacion_binaria",
+                    "motivo": clasificacion.get("motivo_limitacion") or "Evidencia insuficiente; salida binaria provisional.",
+                })
+            articulos_consultados[-1].update({
+                "clasificacion": tipo,
+                "fundamento": clasificacion.get("fundamento", ""),
+                "evaluacion_criterios": clasificacion.get("evaluacion_criterios", {}),
+                "analisis_constitucional": clasificacion.get("analisis_constitucional", ""),
+                "alcance_vicio": clasificacion.get("alcance_vicio", "no_aplica"),
+                "articulos_cpe_relacionados": clasificacion.get("articulos_cpe_relacionados", []),
+                "evidencia_suficiente": clasificacion.get("evidencia_suficiente", False),
+                "comentario_analitico": clasificacion.get("comentario_analitico", clasificacion.get("fundamento", "")),
+                "recomendacion": clasificacion.get("recomendacion", "Revisar el cotejo con las citas constitucionales recuperadas."),
+                "verificado": clasificacion.get("verificado", False),
+            })
 
             if tipo == "EN_CONTRA":
                 if clasificacion.get("verificado", True):
                     entrada = {
+                        "clasificacion":                 tipo,
                         "articulo_proyecto":               clasificacion.get("cita_proyecto", "Documento evaluado"),
                         "articulo_constitucional":         f"Art. {num} - {titulo}",
                         "cita_proyecto":                   clasificacion.get("cita_proyecto", ""),
@@ -960,6 +1085,10 @@ class VerificadorConstitucional:
                         "texto_constitucional_verificado": texto_cpe[:400],
                         "fundamento":                      clasificacion.get("fundamento", ""),
                         "tipo_colision":                   clasificacion.get("tipo_colision", ""),
+                        "evaluacion_criterios":             clasificacion.get("evaluacion_criterios", {}),
+                        "analisis_constitucional":          clasificacion.get("analisis_constitucional", ""),
+                        "alcance_vicio":                    clasificacion.get("alcance_vicio", "articulo"),
+                        "articulos_cpe_relacionados":       clasificacion.get("articulos_cpe_relacionados", []),
                         "severidad":                       clasificacion.get("severidad", "leve"),
                         "recomendacion":                   clasificacion.get("recomendacion", ""),
                         "verificado":                      clasificacion.get("verificado", True),
@@ -971,7 +1100,13 @@ class VerificadorConstitucional:
                     logger.info(f"[VerificadorCPE] Art. {num}: EN_CONTRA no verificado — excluido.")
 
             elif tipo == "A_FAVOR":
+                if not clasificacion.get("verificado") or not clasificacion.get("evidencia_suficiente", False):
+                    continue
+                fundamento_favor = clasificacion.get("fundamento", "")
+                cita_proyecto_favor = clasificacion.get("cita_proyecto", "")
+                cita_cpe_favor = clasificacion.get("cita_constitucional", "")
                 entrada_af = {
+                    "clasificacion":      tipo,
                     "numero":              num,
                     "titulo":              titulo,
                     "extracto":            extracto,
@@ -979,41 +1114,52 @@ class VerificadorConstitucional:
                     "cita_proyecto":       clasificacion.get("cita_proyecto", ""),
                     "cita_constitucional": clasificacion.get("cita_constitucional", ""),
                     "tipo_colision":       clasificacion.get("tipo_colision", "desarrollo"),
+                    "evaluacion_criterios": clasificacion.get("evaluacion_criterios", {}),
+                    "analisis_constitucional": clasificacion.get("analisis_constitucional", ""),
+                    "articulos_cpe_relacionados": clasificacion.get("articulos_cpe_relacionados", []),
                     "recomendacion":       clasificacion.get("recomendacion", ""),
-                    "analisis_profundo":   {},  # se rellena en Fase C
+                    "justificacion_detallada": fundamento_favor,
+                    "parrafos_evaluados": [{
+                        "articulo_proyecto": clasificacion.get("articulo_proyecto", "Disposición cotejada"),
+                        "texto_parrafo": cita_proyecto_favor,
+                        "cita_constitucional": cita_cpe_favor,
+                        "explicacion_concordancia": fundamento_favor,
+                    }],
+                    "fortaleza_constitucional": "MEDIA",
+                    "principios": [],
+                    "recomendacion_blindaje": clasificacion.get("recomendacion", ""),
+                    # El cotejo por lote ya aporta citas y criterios verificados;
+                    # no repetir una llamada generativa por cada resultado favorable.
+                    "analisis_profundo": {
+                        "justificacion_por_que": fundamento_favor,
+                        "argumento_constitucional": fundamento_favor,
+                        "evaluacion_detallada_articulos_parrafos": [{
+                            "articulo_proyecto": clasificacion.get("articulo_proyecto", "Disposición cotejada"),
+                            "texto_parrafo": cita_proyecto_favor,
+                            "cita_constitucional": cita_cpe_favor,
+                            "explicacion_concordancia": fundamento_favor,
+                        }],
+                        "fortaleza_constitucional": "MEDIA",
+                        "principios_constitucionales_aplicados": [],
+                        "articulos_cpe_conexos": clasificacion.get("articulos_cpe_relacionados", []),
+                        "recomendacion_blindaje": clasificacion.get("recomendacion", ""),
+                        "metodo": "Cotejo por lote con citas literales validadas; sin segunda llamada generativa.",
+                    },
                 }
                 a_favor.append(entrada_af)
-                afavor_para_fase_c.append((art, clasificacion, entrada_af))
 
-            elif tipo == "REQUIERE_ANALISIS_DE_FONDO":
-                entrada_raf = {
-                    "articulo_constitucional": f"Art. {num} - {titulo}",
-                    "razon":                   clasificacion.get("fundamento", "Requiere ponderación de derechos"),
-                    "cita_constitucional":     clasificacion.get("cita_constitucional", texto_cpe[:400]),
-                    "tipo_colision":           clasificacion.get("tipo_colision", ""),
-                    "recomendacion":           clasificacion.get("recomendacion", ""),
-                    "analisis_profundo":       {},  # se rellena en Fase C
-                }
-                requieren_fondo.append(entrada_raf)
-                criticos_para_fase_c.append((art, clasificacion, entrada_raf))
 
-        # Añadir neutrales directos al listado de consultados
-        for art, _ in neutrales_directos:
-            num = art.get("numero", "")
-            if num and num not in vistos_consultados:
-                vistos_consultados.add(num)
-                articulos_consultados.append({
-                    "numero":   num,
-                    "titulo":   art.get("titulo", ""),
-                    "extracto": art.get("texto", "")[:250],
-                    "texto":    art.get("texto", ""),
-                    "similitud": float(art.get("similitud", 0) or 0),
-                })
-
-        # ── Fase C: Análisis profundo paralelo (Críticos y A FAVOR) ───────────
         logger.info(
-            f"[VerificadorCPE] Fase C: análisis profundo de {len(criticos_para_fase_c)} hallazgo(s) crítico(s) "
-            f"y {len(afavor_para_fase_c)} artículo(s) A FAVOR."
+            "[VerificadorCPE] Clasificación por lote: "
+            f"A_FAVOR_SUSTENTADO={sum(1 for _,r in deep_resultados if r.get('clasificacion') == 'A_FAVOR' and r.get('evidencia_suficiente') and r.get('verificado'))}, "
+            f"A_FAVOR_PROVISIONAL={sum(1 for _,r in deep_resultados if r.get('clasificacion') == 'A_FAVOR' and (not r.get('evidencia_suficiente') or not r.get('verificado')))}, "
+            f"EN_CONTRA_VERIFICADO={len(contradicciones)}, LIMITACIONES_EVIDENCIA={len(pendientes_revision)}"
+        )
+
+        # ── Fase C: análisis adicional solo para contradicciones/fondo ────────
+        logger.info(
+            f"[VerificadorCPE] Fase C: análisis profundo de {len(criticos_para_fase_c)} hallazgo(s) crítico(s); "
+            f"{len(afavor_para_fase_c)} A_FAVOR requieren llamada adicional."
         )
 
         def _analizar_profundo_critico(triple: Tuple) -> Dict[str, Any]:
@@ -1022,7 +1168,7 @@ class VerificadorConstitucional:
 
         def _analizar_profundo_afavor(triple: Tuple) -> Dict[str, Any]:
             art, deep_result, _ = triple
-            return deep_result.get("analisis_profundo") or self._analizar_afavor_profundo(texto_proyecto, art, deep_result)
+            return deep_result.get("analisis_profundo") or {}
 
         # Ejecución concurrente Fase C
         with ThreadPoolExecutor(max_workers=2) as exe:
@@ -1046,7 +1192,7 @@ class VerificadorConstitucional:
         for i, (_, _, entrada_ref) in enumerate(criticos_para_fase_c):
             entrada_ref["analisis_profundo"] = futuros_criticos[i]
 
-        # Inyectar análisis profundo y justificación detallada en A_FAVOR
+        # Compatibilidad para resultados A_FAVOR antiguos que sí usaban Fase C.
         for i, (_, _, entrada_ref) in enumerate(afavor_para_fase_c):
             af_res = futuros_afavor[i]
             entrada_ref["analisis_profundo"] = af_res
@@ -1068,12 +1214,75 @@ class VerificadorConstitucional:
             contradicciones, a_favor, requieren_fondo, articulos_consultados
         )
 
-        valido          = not pendientes_revision and len(contradicciones) == 0
-        resultado_final = "ARTICULADO_VALIDO" if valido else "CONTRADICCIONES_DETECTADAS"
-        if pendientes_revision:
-            resultado_final = "PENDIENTE_REVISION"
-            resumen["nivel_riesgo"] = "DESCONOCIDO"
-            resumen["score_confianza"] = 0
+        # La salida por disposición siempre es binaria. Las incidencias de recuperación,
+        # cotejo o análisis profundo se conservan como limitaciones, nunca como tercera etiqueta.
+        limitaciones_revision = list(pendientes_revision)
+        en_contra_verificado = [c for c in contradicciones if c.get("verificado", True)]
+        if en_contra_verificado:
+            clasificacion_articulo = "EN_CONTRA"
+            base_decision = "INCOMPATIBILIDAD_DIRECTA_VERIFICADA"
+            fundamento_binario = " ".join(c.get("fundamento", "") for c in en_contra_verificado if c.get("fundamento"))
+            citas_binarias = [{"norma": "CPE", "articulo": c.get("articulo_constitucional", ""), "texto": c.get("cita_constitucional", ""), "cita_proyecto": c.get("cita_proyecto", "")} for c in en_contra_verificado]
+            evidencia_suficiente = True
+            confianza_binaria = 85
+        elif a_favor and not limitaciones_revision and not requieren_fondo:
+            clasificacion_articulo = "A_FAVOR"
+            base_decision = "COMPATIBILIDAD_CONSTITUCIONAL_IDENTIFICADA"
+            fundamento_binario = " ".join(a.get("fundamento", "") for a in a_favor if a.get("fundamento"))
+            citas_binarias = [{"norma": "CPE", "articulo": f"Art. {a.get('numero', '')} - {a.get('titulo', '')}", "texto": a.get("cita_constitucional", ""), "cita_proyecto": a.get("cita_proyecto", "")} for a in a_favor]
+            evidencia_suficiente = True
+            confianza_binaria = 75
+        else:
+            clasificacion_articulo = "A_FAVOR"
+            base_decision = "COMPATIBILIDAD_PROVISIONAL_SIN_INCOMPATIBILIDAD_ACREDITADA"
+            fundamento_binario = "No se acreditó una contradicción directa con la evidencia CPE recuperada. Esta etiqueta A_FAVOR es provisional y no afirma apoyo constitucional expreso; la revisión queda limitada por la falta de evidencia suficiente o por cotejos que requieren ponderación."
+            citas_binarias = [{"norma": "CPE", "articulo": f"Art. {a.get('numero', '')} - {a.get('titulo', '')}", "texto": a.get("texto", ""), "cita_proyecto": texto_proyecto} for a in articulos_consultados]
+            evidencia_suficiente = False
+            confianza_binaria = 20
+            if requieren_fondo:
+                limitaciones_revision.extend({"fase": "ponderacion", "motivo": r.get("razon", "El cotejo requiere ponderación jurídica adicional."), "articulo_constitucional": r.get("articulo_constitucional", "")} for r in requieren_fondo)
+        cotejados_por_numero = {
+            str(a.get("numero", "")): a
+            for a in articulos_consultados if a.get("numero")
+        }
+        articulos_relacionados = [{
+            "numero": str(a.get("numero", "")),
+            "titulo": str(a.get("titulo", "")),
+            "texto": str(a.get("texto", ""))[:1200],
+            "texto_completo_disponible": len(str(a.get("texto", ""))) > 1200,
+            "relevancia_busqueda": a.get("relevancia", a.get("similitud", 0)),
+            "estado_cotejo": ("COTEJADO" if cotejados_por_numero.get(str(a.get("numero", "")), {}).get("verificado") else "COTEJADO_PROVISIONAL") if str(a.get("numero", "")) in cotejados_por_numero else "RELACIONADO_NO_COTEJADO",
+            "clasificacion_cotejo": cotejados_por_numero.get(str(a.get("numero", "")), {}).get("clasificacion", "A_FAVOR"),
+            "evidencia_suficiente": cotejados_por_numero.get(str(a.get("numero", "")), {}).get("evidencia_suficiente", False),
+            "comentario_analitico": cotejados_por_numero.get(str(a.get("numero", "")), {}).get("comentario_analitico", "Relación temática recuperada; no se pudo validar un análisis individual."),
+            "sugerencia": cotejados_por_numero.get(str(a.get("numero", "")), {}).get("sugerencia") or cotejados_por_numero.get(str(a.get("numero", "")), {}).get("recomendacion", "Revisar el artículo CPE junto con el texto del proyecto y confirmar su pertinencia."),
+            "justificacion_tecnica": cotejados_por_numero.get(str(a.get("numero", "")), {}).get("fundamento", ""),
+            "fundamento_relacion": (
+                "Candidato cotejado individualmente contra esta disposición."
+                if str(a.get("numero", "")) in cotejados_por_numero
+                else "Recuperado por coincidencia temática en la CPE; no hay conclusión jurídica individual validada."
+            ),
+        } for a in articulos_recuperados[:TOP_K_CPE]]
+        dictamen_articulo = {
+            "clasificacion": clasificacion_articulo,
+            "base_decision": base_decision,
+            "justificacion_tecnica": fundamento_binario or ("No se acreditó una incompatibilidad directa. La clasificación favorable se limita a la compatibilidad identificada en los artículos CPE citados." if clasificacion_articulo == "A_FAVOR" else "Se verificó una colisión directa; véanse los fundamentos y citas CPE adjuntos."),
+            "evidencia_suficiente": evidencia_suficiente,
+            "confianza": confianza_binaria,
+            "citas": citas_binarias,
+            "comentario_analitico": " ".join(
+                e.get("comentario_analitico", "") for e in (en_contra_verificado or a_favor)
+                if e.get("comentario_analitico")
+            ) or "No se comprobó una colisión directa con la evidencia disponible; se registra A_FAVOR provisional.",
+            "sugerencia": " ".join(
+                e.get("recomendacion", "") for e in (en_contra_verificado or a_favor)
+                if e.get("recomendacion")
+            ) or "Validar los artículos CPE relacionados y completar el cotejo antes de usar esta conclusión como fundamento legislativo.",
+            "articulos_relacionados": articulos_relacionados,
+        }
+        valido          = clasificacion_articulo == "A_FAVOR" and evidencia_suficiente
+        resultado_final = "CONTRADICCIONES_DETECTADAS" if clasificacion_articulo == "EN_CONTRA" else "EVALUACION_BINARIA_COMPLETADA"
+        resumen["score_confianza"] = min(resumen.get("score_confianza", 0), 35) if limitaciones_revision else resumen.get("score_confianza", 0)
         dist_sev        = resumen["distribucion_severidad"]
         severidad_maxima = (
             "bloqueante" if dist_sev["bloqueante"] > 0
@@ -1083,10 +1292,13 @@ class VerificadorConstitucional:
         )
 
         return {
-            "estado": "PENDIENTE_REVISION" if pendientes_revision else "COMPLETADO",
-            "pendientes_revision": pendientes_revision,
-            "total_pendientes": len(pendientes_revision),
+            "estado": "COMPLETADO",
+            "pendientes_revision": [],
+            "total_pendientes": 0,
+            "limitaciones_revision": limitaciones_revision,
+            "dictamen_articulo": dictamen_articulo,
             "resultado_final":          resultado_final,
+            "alcance_revision": "Cotejo preliminar de los artículos CPE recuperados; no sustituye el control del TCP ni acredita por sí solo la constitucionalidad integral del proyecto.",
             "valido":                   valido,
             "confianza":                resumen["score_confianza"],
             "severidad_maxima":         severidad_maxima,

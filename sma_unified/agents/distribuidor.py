@@ -51,6 +51,7 @@ def _get_llm():
         model=f"openai/{settings.LLM_MODEL_CREW}",
         api_key=settings.NVIDIA_API_KEY,
         base_url=settings.NVIDIA_BASE_URL,
+        additional_params={"chat_template_kwargs": {"enable_thinking": False}},
     )
 
 

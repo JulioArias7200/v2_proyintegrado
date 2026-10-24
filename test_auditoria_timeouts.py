@@ -96,9 +96,10 @@ class AuditoriaTimeoutTests(unittest.TestCase):
         activos = 0
         maximo = 0
         lock = Lock()
+        modelo_principal = 'nvidia/nemotron-3.5-lightning-30b-a3b'
         def responder(**kwargs):
             nonlocal activos, maximo
-            self.assertEqual(kwargs['modelos'][0], 'openai/gpt-oss-20b')
+            self.assertEqual(kwargs['modelos'][0], modelo_principal)
             self.assertNotIn('z-ai/glm-5.2', kwargs['modelos'])
             self.assertEqual(kwargs['timeout'], (30, 60))
             with lock:
@@ -110,7 +111,10 @@ class AuditoriaTimeoutTests(unittest.TestCase):
             return '{}', 'prueba'
         funcion = cargar_funcion('llm_client.py', 'chat_completion_auditoria', {
             '_AUDITORIA_LLM_SLOTS': BoundedSemaphore(2),
-            '_lista_modelos_razonamiento': lambda: ['respaldo', 'z-ai/glm-5.2', 'openai/gpt-oss-20b'],
+            'settings': SimpleNamespace(LLM_MODEL_CONSISTENCIA=modelo_principal,
+                LLM_MODEL_CREW=modelo_principal,
+                LLM_MODEL_NVIDIA='nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'),
+            '_lista_modelos_razonamiento': lambda: [modelo_principal, 'respaldo', 'z-ai/glm-5.2'],
             '_MODELOS_RETIRADOS': {'z-ai/glm-5.2'},
             'chat_completion_resiliente': responder,
         })

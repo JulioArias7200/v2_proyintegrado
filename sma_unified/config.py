@@ -36,13 +36,13 @@ try:
         # ── LLM ────────────────────────────────────────────────────────────
         NVIDIA_API_KEY: str = Field(default="")
         NVIDIA_BASE_URL: str = Field(default="https://integrate.api.nvidia.com/v1")
-        LLM_MODEL_CREW: str = Field(default="openai/gpt-oss-20b")
-        LLM_MODEL_NVIDIA: str = Field(default="openai/gpt-oss-20b")
+        LLM_MODEL_CREW: str = Field(default="nvidia/nemotron-3.5-lightning-30b-a3b")
+        LLM_MODEL_NVIDIA: str = Field(default="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning")
 
         # ── Agente de Consistencia Normativa (embeddings + pgvector) ────────
         NVIDIA_EMBED_MODEL: str = Field(default="nvidia/nemotron-3-embed-1b")
         NVIDIA_EMBED_DIM: int = Field(default=2048)
-        LLM_MODEL_CONSISTENCIA: str = Field(default="openai/gpt-oss-20b")
+        LLM_MODEL_CONSISTENCIA: str = Field(default="nvidia/nemotron-3.5-lightning-30b-a3b")
         UMBRAL_CONSISTENCIA: float = Field(default=0.55)
         TOP_K_CONSISTENCIA: int = Field(default=8)
 
@@ -76,11 +76,11 @@ except Exception:
         def __init__(self):
             self.NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
             self.NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
-            self.LLM_MODEL_CREW = os.getenv("LLM_MODEL_CREW", "openai/gpt-oss-20b")
-            self.LLM_MODEL_NVIDIA = os.getenv("LLM_MODEL_NVIDIA", "openai/gpt-oss-20b")
+            self.LLM_MODEL_CREW = os.getenv("LLM_MODEL_CREW", "nvidia/nemotron-3.5-lightning-30b-a3b")
+            self.LLM_MODEL_NVIDIA = os.getenv("LLM_MODEL_NVIDIA", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning")
             self.NVIDIA_EMBED_MODEL = os.getenv("NVIDIA_EMBED_MODEL", "nvidia/nemotron-3-embed-1b")
             self.NVIDIA_EMBED_DIM = int(os.getenv("NVIDIA_EMBED_DIM", "2048"))
-            self.LLM_MODEL_CONSISTENCIA = os.getenv("LLM_MODEL_CONSISTENCIA", "openai/gpt-oss-20b")
+            self.LLM_MODEL_CONSISTENCIA = os.getenv("LLM_MODEL_CONSISTENCIA", "nvidia/nemotron-3.5-lightning-30b-a3b")
             self.UMBRAL_CONSISTENCIA = float(os.getenv("UMBRAL_CONSISTENCIA", "0.55"))
             self.TOP_K_CONSISTENCIA = int(os.getenv("TOP_K_CONSISTENCIA", "8"))
             self.MONGO_URI = os.getenv("MONGO_URI", "")

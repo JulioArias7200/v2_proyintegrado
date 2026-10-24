@@ -7,7 +7,8 @@ CORPUS NORMATIVO VIGENTE boliviano cargado en la base de datos:
   - Leyes Sectoriales, Decretos Supremos, Resoluciones
   - Cualquier PDF/norma ingresado en "Base Legal" del sistema
 
-Fuente de datos: public.articulos_normativos (Neon PostgreSQL + pgvector)
+Fuente principal de datos: sistema.articulos_normativos (Neon PostgreSQL + pgvector),
+con fallback al corpus documental public.normativas_vigentes.
 
 Lógica DIFERENTE a la constitucional:
   * NO consulta la CPE — esa es competencia del VerificadorConstitucional.
@@ -55,6 +56,7 @@ from sma_unified.db.mongo_atlas import (
 )
 from sma_unified.db.neon_postgres import (
     buscar_articulos_normativos_semantico,
+    obtener_articulos_normativos,
     guardar_analisis_consistencia,
     guardar_correccion_proyecto,
     obtener_email_autor_proyecto,
@@ -71,9 +73,10 @@ MAX_CHARS_EMBEDDING = 1500  # Máximo de caracteres enviados al modelo de embedd
 class AgenteConsistenciaNormativa:
     """
     Compara el proyecto de ley (artículo por artículo) contra el corpus
-    de leyes vigentes cargado en public.articulos_normativos.
+    de leyes vigentes cargado en sistema.articulos_normativos o
+    public.normativas_vigentes.
 
-    Usa embedding semántico (NVIDIA NIM) + LLM para:
+    Usa búsqueda semántica (NVIDIA NIM) y fallback léxico + LLM para:
       1. Recuperar normas vigentes similares.
       2. Clasificar la relación jurídica.
       3. Detectar derogación tácita y conflictos de especialidad.
@@ -200,17 +203,34 @@ class AgenteConsistenciaNormativa:
         Coteja UN artículo contra los cuerpos normativos vigentes en paralelo,
         filtrando y deduplicando los candidatos más relevantes.
         """
-        embedding = self._embed(texto_nuevo)
+        try:
+            embedding = self._embed(texto_nuevo)
+        except Exception as e:
+            # El análisis textual sigue siendo útil si NVIDIA Embeddings no
+            # responde; la búsqueda por palabras permite recuperar normas ya
+            # cargadas aunque su embedding esté ausente.
+            logger.warning(f"[Consistencia] Embedding no disponible; se usará búsqueda léxica: {e}")
+            embedding = None
         # neon_postgres usa una conexión psycopg2 singleton; serializar su uso
         # entre las unidades paralelas evita compartir cursores entre hilos.
         with ANALISIS_NEON_LOCK:
-            candidatos = buscar_articulos_normativos_semantico(
-                embedding, documento=None, top_k=self.top_k, umbral=self.umbral
-            )
-            if not candidatos:
+            candidatos = []
+            if embedding:
                 candidatos = buscar_articulos_normativos_semantico(
-                    embedding, documento=None, top_k=self.top_k, umbral=0.35
+                    embedding, documento=None, top_k=self.top_k, umbral=self.umbral
                 )
+                if not candidatos:
+                    candidatos = buscar_articulos_normativos_semantico(
+                        embedding, documento=None, top_k=self.top_k, umbral=0.35
+                    )
+            if not candidatos:
+                candidatos = obtener_articulos_normativos(
+                    texto_query=texto_nuevo, limit=self.top_k
+                )
+                for candidato in candidatos:
+                    candidato.setdefault("similitud", 0.0)
+                if candidatos:
+                    logger.info(f"[Consistencia] Recuperados {len(candidatos)} candidatos por palabras clave")
 
         # Deduplicación de candidatos por (documento, numero) y límite a top 6
         vistos_cand = set()

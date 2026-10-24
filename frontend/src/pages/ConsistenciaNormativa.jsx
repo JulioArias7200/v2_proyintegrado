@@ -223,7 +223,7 @@ export default function ConsistenciaNormativa() {
       <div className="glass-card" style={{ padding: '24px', marginBottom: '32px' }}>
         <h2 style={{ fontSize: '1.2rem', color: '#ffffff', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Layers size={18} color="#34d399" />
-          Cuerpos Normativos en Base de Datos (public.articulos_normativos)
+          Cuerpos Normativos en Base de Datos (sistema.articulos_normativos)
         </h2>
 
         {documentos.length === 0 ? (

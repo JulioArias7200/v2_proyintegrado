@@ -4,7 +4,8 @@ from typing import Dict, Any, Optional, List
 import yaml
 import os
 import json
-from crewai import Agent
+from crewai import Agent, LLM
+from sma_unified.config import settings
 
 class BaseAgenteLegislativo:
     """Clase base para la inicialización y orquestación de agentes legislativos CrewAI"""
@@ -42,11 +43,29 @@ class BaseAgenteLegislativo:
         goal = cfg.get('objetivo') or cfg.get('goal', f"Ejecutar tareas de {nombre_agente}")
         backstory = cfg.get('backstory', f"Especialista parlamentario en {nombre_agente}")
         allow_delegation = cfg.get('allow_delegation', False)
+        llm_cfg = cfg.get('configuracion_llm', {}) or {}
+        model_name = (
+            cfg.get('modelo_llm')
+            or llm_cfg.get('modelo')
+            or settings.LLM_MODEL_CREW
+        )
+        llm = LLM(
+            model=f"openai/{model_name}",
+            api_key=settings.NVIDIA_API_KEY,
+            base_url=settings.NVIDIA_BASE_URL,
+            temperature=llm_cfg.get('temperatura', 0.2),
+            max_tokens=llm_cfg.get('max_tokens', 1200),
+            additional_params=(
+                {"chat_template_kwargs": {"enable_thinking": False}}
+                if model_name.startswith("nvidia/nemotron-") else {}
+            ),
+        )
         
         agent = Agent(
             role=role,
             goal=goal,
             backstory=backstory,
+            llm=llm,
             verbose=False,
             allow_delegation=allow_delegation
         )

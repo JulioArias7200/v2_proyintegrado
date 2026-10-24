@@ -19,6 +19,7 @@ Gestiona todas las operaciones con la BD PostgreSQL en Neon:
 """
 
 import os
+import re
 from threading import Lock
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -1458,49 +1459,91 @@ def _ensure_articulos_normativos_table(conn) -> None:
 
 def obtener_articulos_constitucion(texto_query: str, limit: int = 15) -> List[Dict[str, Any]]:
     """
-    Busca artículos constitucionales en sistema.articulos_constitucion.
-    Intenta las columnas 'contenido' y 'texto_articulo' con fallback.
+    Busca artículos en la tabla CPE instalada por las migraciones (public) o
+    por instalaciones antiguas (sistema), tolerando sus nombres de columnas.
     """
     try:
         conn = get_conn()
         cur = conn.cursor()
-        palabras = [p for p in texto_query.split()[:10] if len(p) > 3]
+        tabla, columnas = _resolver_tabla_constitucion(cur)
+        if not tabla:
+            cur.close()
+            logger.warning("No existe public.articulos_constitucion ni sistema.articulos_constitucion en Neon")
+            return []
+        numero_col = "articulo_numero" if "articulo_numero" in columnas else "numero"
+        titulo_col = "articulo_titulo" if "articulo_titulo" in columnas else "titulo"
+        texto_col = next((c for c in ("contenido", "texto_articulo", "texto") if c in columnas), None)
+        if not texto_col or numero_col not in columnas:
+            cur.close()
+            logger.warning("La tabla CPE de Neon no contiene columnas de número y texto compatibles")
+            return []
+        stopwords = {
+            "para", "como", "este", "esta", "estos", "estas", "desde", "sobre", "entre",
+            "donde", "cuando", "mediante", "conforme", "segun", "todo", "toda", "todos",
+            "todas", "debe", "deberan", "sera", "seran", "cual", "cuales", "cada", "proyecto",
+            "articulo", "articulos", "ley", "norma", "bolivia", "boliviano", "boliviana",
+        }
+        consulta_normalizada = (texto_query or "").lower().translate(str.maketrans("áéíóúüñ", "aeiouun"))
+        palabras = []
+        for palabra in re.findall(r"[a-z]{4,}", consulta_normalizada):
+            if palabra not in stopwords and palabra not in palabras:
+                palabras.append(palabra)
+            if len(palabras) >= 14:
+                break
         if not palabras:
             cur.close()
             return []
 
-        for col in ("contenido", "texto_articulo"):
-            try:
-                like_clause = " OR ".join([f"{col} ILIKE %s" for _ in palabras])
-                params = [f"%{p}%" for p in palabras]
-                cur.execute(
-                    f"""
-                    SELECT
-                        COALESCE(articulo_numero, '') AS numero,
-                        COALESCE(articulo_titulo, '') AS titulo,
-                        COALESCE({col}, '')            AS texto,
-                        COALESCE(capitulo, '')         AS capitulo,
-                        COALESCE(seccion, '')          AS seccion
-                    FROM sistema.articulos_constitucion
-                    WHERE {like_clause}
-                    LIMIT %s
-                    """,
-                    params + [limit],
-                )
-                rows = cur.fetchall()
-                cur.close()
-                return [
-                    {"numero": r[0], "titulo": r[1], "texto": r[2], "capitulo": r[3], "seccion": r[4]}
-                    for r in rows
-                ]
-            except Exception:
-                try:
-                    conn.rollback()
-                except Exception:
-                    pass
-                continue
+        titulo_src = titulo_col if titulo_col in columnas else "''"
+        capitulo_src = "capitulo" if "capitulo" in columnas else "''"
+        seccion_src = "seccion" if "seccion" in columnas else "''"
+        # La ingesta CPE guarda snapshots acumulativos: cada chunk contiene
+        # el anterior más texto nuevo. Tomar el último evita repetir párrafos.
+        texto_agregado = (
+            f"(ARRAY_AGG({texto_col}::text ORDER BY chunk_index DESC))[1]"
+            if "chunk_index" in columnas else f"MAX({texto_col}::text)"
+        )
+        # No usar los campos de título/ubicación: en el corpus actual aparecen
+        # copiados entre artículos y provocan falsos positivos (p.ej. “Órgano Legislativo”).
+        texto_busqueda = "translate(lower(contenido), 'áéíóúüñ', 'aeiouun')"
+        like_clause = " OR ".join([f"{texto_busqueda} LIKE %s" for _ in palabras])
+        patron_params = [f"%{p}%" for p in palabras]
+        relevancia = " + ".join(
+            [f"(CASE WHEN {texto_busqueda} LIKE %s THEN 1 ELSE 0 END)" for _ in palabras]
+        )
+        coincidencias_minimas = 1  # recuperar candidatos suficientes y ordenarlos por relevancia
+        cur.execute(
+            f"""
+            WITH articulos AS (
+                SELECT {numero_col}::text AS numero,
+                       MAX({titulo_src}::text) AS titulo,
+                       {texto_agregado} AS contenido,
+                       MAX({capitulo_src}::text) AS capitulo,
+                       MAX({seccion_src}::text) AS seccion
+                FROM {tabla}
+                GROUP BY {numero_col}
+            )
+            , coincidencias AS (
+                SELECT numero, contenido, {relevancia} AS relevancia
+                FROM articulos
+                WHERE {like_clause}
+            )
+            SELECT COALESCE(numero, ''), '' AS titulo, COALESCE(contenido, ''),
+                   '' AS capitulo, '' AS seccion, relevancia
+            FROM coincidencias
+            WHERE relevancia >= %s
+            ORDER BY relevancia DESC, numero
+            LIMIT %s
+            """,
+            patron_params + patron_params + [coincidencias_minimas, limit],
+        )
+        rows = cur.fetchall()
         cur.close()
-        return []
+        logger.info(f"[CPE/Neon] Recuperados {len(rows)} artículos desde {tabla}")
+        return [
+            {"numero": r[0], "titulo": r[1], "texto": r[2], "capitulo": r[3], "seccion": r[4],
+             "relevancia": int(r[5] or 0)} for r in rows
+        ]
     except Exception as e:
         logger.warning(f"No se pudieron obtener artículos constitucionales: {e}")
         return []
@@ -1515,16 +1558,37 @@ def obtener_articulos_normativos(texto_query: str, limit: int = 15, documento: O
     try:
         conn = get_conn()
         cur = conn.cursor()
-        palabras = [p for p in texto_query.split()[:10] if len(p) > 3]
+        query_normalizada = (texto_query or "").lower().translate(str.maketrans("áéíóúüñ", "aeiouun"))
+        stopwords = {
+            "para", "como", "este", "esta", "estos", "estas", "desde", "sobre", "entre",
+            "donde", "cuando", "mediante", "conforme", "segun", "todo", "toda", "todos",
+            "todas", "debe", "deberan", "sera", "seran", "cual", "cuales", "cada",
+            "articulo", "articulos", "proyecto", "norma", "ley", "los", "las", "del",
+            "una", "uno", "por", "con", "sin", "que", "sus", "son", "tiene",
+        }
+        palabras = []
+        for palabra in re.findall(r"[a-z0-9]{4,}", query_normalizada):
+            if palabra not in stopwords and palabra not in palabras:
+                palabras.append(palabra)
+            if len(palabras) >= 12:
+                break
         if not palabras:
             cur.close()
             return []
 
-        like_clause = " OR ".join(["contenido ILIKE %s" for _ in palabras])
-        params: List[Any] = [f"%{p}%" for p in palabras]
+        body_norm = "translate(lower(contenido), 'áéíóúüñ', 'aeiouun')"
+        title_norm = "translate(lower(COALESCE(articulo_titulo, '')), 'áéíóúüñ', 'aeiouun')"
+        like_clause = " OR ".join([f"({body_norm} LIKE %s OR {title_norm} LIKE %s)" for _ in palabras])
+        pattern_params = [pat for p in palabras for pat in (f"%{p}%", f"%{p}%")]
+        relevancia = " + ".join(
+            [f"(CASE WHEN {body_norm} LIKE %s THEN 1 ELSE 0 END) + "
+             f"(CASE WHEN {title_norm} LIKE %s THEN 2 ELSE 0 END)" for _ in palabras]
+        )
         doc_clause = ""
         if documento:
             doc_clause = " AND documento ILIKE %s"
+        params: List[Any] = pattern_params + pattern_params
+        if documento:
             params.append(f"%{documento}%")
         cur.execute(
             f"""
@@ -1535,14 +1599,49 @@ def obtener_articulos_normativos(texto_query: str, limit: int = 15, documento: O
                 COALESCE(capitulo, '')         AS capitulo,
                 COALESCE(seccion, '')          AS seccion,
                 documento,
-                tipo_documento
+                tipo_documento,
+                {relevancia} AS relevancia
             FROM sistema.articulos_normativos
-            WHERE ({like_clause}){doc_clause}
+            WHERE estado = 'vigente' AND ({like_clause}){doc_clause}
+            ORDER BY relevancia DESC
             LIMIT %s
             """,
             params + [limit],
         )
         rows = cur.fetchall()
+        if not rows and not documento:
+            # Instalaciones anteriores pudieron cargar artículos en public.
+            cur.execute("SELECT to_regclass('public.articulos_normativos')")
+            if cur.fetchone()[0]:
+                cur.execute(
+                    f"""SELECT COALESCE(articulo_numero, ''), COALESCE(articulo_titulo, ''),
+                               COALESCE(contenido, ''), COALESCE(capitulo, ''), COALESCE(seccion, ''),
+                               documento, tipo_documento, {relevancia} AS relevancia
+                        FROM public.articulos_normativos
+                        WHERE estado = 'vigente' AND ({like_clause})
+                        ORDER BY relevancia DESC LIMIT %s""",
+                    pattern_params + pattern_params + [limit],
+                )
+                rows = cur.fetchall()
+        if not rows and not documento:
+            # Compatibilidad con la tabla de corpus creada por la migración
+            # pública, que almacena el texto de cada norma como documento.
+            cur.execute("SELECT to_regclass('public.normativas_vigentes')")
+            if cur.fetchone()[0]:
+                contenido_publico = "translate(lower(contenido), 'áéíóúüñ', 'aeiouun')"
+                titulo_publico = "translate(lower(titulo_norma), 'áéíóúüñ', 'aeiouun')"
+                like_public = " OR ".join([f"{contenido_publico} LIKE %s OR {titulo_publico} LIKE %s" for _ in palabras])
+                params_public = [pat for p in palabras for pat in (f"%{p}%", f"%{p}%")]
+                cur.execute(
+                    f"""SELECT COALESCE(articulos_principales[1], 'Norma completa'),
+                               COALESCE(titulo_norma, ''), COALESCE(contenido, ''),
+                               '', '', titulo_norma, COALESCE(tipo_norma, 'norma')
+                        FROM public.normativas_vigentes
+                        WHERE ({like_public}) AND (fecha_derogacion IS NULL OR fecha_derogacion > CURRENT_DATE)
+                        LIMIT %s""",
+                    params_public + [limit],
+                )
+                rows = cur.fetchall()
         cur.close()
         return [
             {"numero": r[0], "titulo": r[1], "texto": r[2], "capitulo": r[3], "seccion": r[4],
@@ -1585,13 +1684,41 @@ def buscar_articulos_normativos_semantico(
                 tipo_documento,
                 1 - (embedding <=> %s::vector) AS similitud
             FROM sistema.articulos_normativos
-            WHERE embedding IS NOT NULL {doc_clause}
+            WHERE estado = 'vigente' AND embedding IS NOT NULL {doc_clause}
             ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
             params,
         )
         filas = cur.fetchall()
+        if not filas and not documento:
+            cur.execute("SELECT to_regclass('public.articulos_normativos')")
+            if cur.fetchone()[0]:
+                cur.execute(
+                    """SELECT COALESCE(articulo_numero, ''), COALESCE(articulo_titulo, ''),
+                              COALESCE(contenido, ''), documento, tipo_documento,
+                              1 - (embedding <=> %s::vector) AS similitud
+                       FROM public.articulos_normativos
+                       WHERE estado = 'vigente' AND embedding IS NOT NULL
+                       ORDER BY embedding <=> %s::vector LIMIT %s""",
+                    (literal, literal, top_k),
+                )
+                filas = cur.fetchall()
+        if not filas and not documento:
+            cur.execute("SELECT to_regclass('public.normativas_vigentes')")
+            if cur.fetchone()[0]:
+                cur.execute(
+                    """SELECT COALESCE(articulos_principales[1], 'Norma completa'),
+                              COALESCE(titulo_norma, ''), COALESCE(contenido, ''),
+                              titulo_norma, COALESCE(tipo_norma, 'norma'),
+                              1 - (embedding <=> %s::vector) AS similitud
+                       FROM public.normativas_vigentes
+                       WHERE embedding IS NOT NULL
+                         AND (fecha_derogacion IS NULL OR fecha_derogacion > CURRENT_DATE)
+                       ORDER BY embedding <=> %s::vector LIMIT %s""",
+                    (literal, literal, top_k),
+                )
+                filas = cur.fetchall()
         cur.close()
         resultado = [
             {"numero": f[0], "titulo": f[1], "texto": f[2], "documento": f[3],
@@ -1605,7 +1732,54 @@ def buscar_articulos_normativos_semantico(
         except Exception:
             pass
         logger.warning(f"Búsqueda semántica en articulos_normativos falló: {e}")
-        return []
+        # Fallback por vector para esquemas que cargaron el RAG en public.
+        try:
+            conn = get_conn()
+            cur = conn.cursor()
+            literal = _embedding_a_literal_pgvector(embedding)
+            cur.execute("SELECT to_regclass('public.articulos_normativos')")
+            if cur.fetchone()[0]:
+                cur.execute(
+                    """SELECT COALESCE(articulo_numero, ''), COALESCE(articulo_titulo, ''),
+                              COALESCE(contenido, ''), documento, tipo_documento,
+                              1 - (embedding <=> %s::vector)
+                       FROM public.articulos_normativos
+                       WHERE estado = 'vigente' AND embedding IS NOT NULL
+                       ORDER BY embedding <=> %s::vector LIMIT %s""",
+                    (literal, literal, top_k),
+                )
+                filas = cur.fetchall()
+                if filas:
+                    cur.close()
+                    return [
+                        {"numero": f[0], "titulo": f[1], "texto": f[2], "documento": f[3],
+                         "tipo_documento": f[4], "similitud": float(f[5])}
+                        for f in filas if float(f[5]) >= umbral
+                    ]
+            cur.execute("SELECT to_regclass('public.normativas_vigentes')")
+            if not cur.fetchone()[0]:
+                cur.close()
+                return []
+            cur.execute(
+                """SELECT COALESCE(articulos_principales[1], 'Norma completa'),
+                          COALESCE(titulo_norma, ''), COALESCE(contenido, ''),
+                          titulo_norma, COALESCE(tipo_norma, 'norma'),
+                          1 - (embedding <=> %s::vector)
+                   FROM public.normativas_vigentes WHERE embedding IS NOT NULL
+                     AND (fecha_derogacion IS NULL OR fecha_derogacion > CURRENT_DATE)
+                   ORDER BY embedding <=> %s::vector LIMIT %s""",
+                (literal, literal, top_k),
+            )
+            filas = cur.fetchall()
+            cur.close()
+            return [
+                {"numero": f[0], "titulo": f[1], "texto": f[2], "documento": f[3],
+                 "tipo_documento": f[4], "similitud": float(f[5])}
+                for f in filas if float(f[5]) >= umbral
+            ]
+        except Exception as fallback_error:
+            logger.warning(f"Fallback public.normativas_vigentes también falló: {fallback_error}")
+            return []
 
 
 def insertar_o_actualizar_articulo_normativo(
@@ -1839,47 +2013,66 @@ def listar_documentos_normativos() -> List[Dict[str, Any]]:
 
 
 def buscar_articulos_constitucion_exacto(numero_articulo: str) -> Optional[Dict[str, Any]]:
-    """Busca un artículo exacto por número en sistema.articulos_constitucion."""
+    """Busca un artículo exacto en la tabla CPE disponible en Neon."""
     try:
         conn = get_conn()
         cur = conn.cursor()
-        for col in ("contenido", "texto_articulo"):
-            try:
-                cur.execute(
-                    f"""
-                    SELECT
-                        COALESCE(articulo_numero, '') AS numero,
-                        COALESCE(articulo_titulo, '') AS titulo,
-                        COALESCE({col}, '')            AS texto,
-                        COALESCE(capitulo, '')         AS capitulo,
-                        COALESCE(seccion, '')          AS seccion
-                    FROM sistema.articulos_constitucion
-                    WHERE articulo_numero ILIKE %s OR articulo_numero = %s
-                    LIMIT 1
-                    """,
-                    (f"%{numero_articulo}%", numero_articulo),
-                )
-                row = cur.fetchone()
-                if row:
-                    cur.close()
-                    return {
-                        "numero": row[0],
-                        "titulo": row[1],
-                        "texto": row[2],
-                        "capitulo": row[3],
-                        "seccion": row[4],
-                    }
-            except Exception:
-                try:
-                    conn.rollback()
-                except Exception:
-                    pass
-                continue
+        tabla, columnas = _resolver_tabla_constitucion(cur)
+        if not tabla:
+            cur.close()
+            return None
+        numero_col = "articulo_numero" if "articulo_numero" in columnas else "numero"
+        titulo_col = "articulo_titulo" if "articulo_titulo" in columnas else "titulo"
+        texto_col = next((c for c in ("contenido", "texto_articulo", "texto") if c in columnas), None)
+        if not texto_col:
+            cur.close()
+            return None
+        if numero_col not in columnas:
+            cur.close()
+            return None
+        titulo_expr = titulo_col if titulo_col in columnas else "''"
+        capitulo_expr = "capitulo" if "capitulo" in columnas else "''"
+        seccion_expr = "seccion" if "seccion" in columnas else "''"
+        texto_expr = (
+            f"(ARRAY_AGG({texto_col}::text ORDER BY chunk_index DESC))[1]"
+            if "chunk_index" in columnas else f"MAX({texto_col}::text)"
+        )
+        cur.execute(
+            f"""SELECT COALESCE({numero_col}::text,''), COALESCE(MAX({titulo_expr}::text),''),
+                       COALESCE({texto_expr},''), COALESCE(MAX({capitulo_expr}::text),''),
+                       COALESCE(MAX({seccion_expr}::text),'')
+                FROM {tabla} WHERE regexp_replace({numero_col}::text, '\\D', '', 'g') = %s
+                GROUP BY {numero_col} LIMIT 1""",
+            (re.sub(r"\D", "", numero_articulo),),
+        )
+        row = cur.fetchone()
         cur.close()
+        if row:
+            return {"numero": row[0], "titulo": row[1], "texto": row[2], "capitulo": row[3], "seccion": row[4]}
         return None
     except Exception as e:
         logger.warning(f"Error buscando artículo exacto {numero_articulo}: {e}")
         return None
+
+
+def _resolver_tabla_constitucion(cur):
+    """Detecta tabla CPE con datos; soporta migración public e instalaciones antiguas."""
+    candidatas = []
+    for schema in ("public", "sistema"):
+        cur.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = %s AND table_name = 'articulos_constitucion'",
+            (schema,),
+        )
+        columnas = {r[0] for r in cur.fetchall()}
+        if columnas:
+            cur.execute(f"SELECT COUNT(*) FROM {schema}.articulos_constitucion")
+            cantidad = cur.fetchone()[0]
+            candidatas.append((cantidad, schema, columnas))
+    if candidatas:
+        _, schema, columnas = max(candidatas, key=lambda x: x[0])
+        return f"{schema}.articulos_constitucion", columnas
+    return None, set()
 
 
 def _ensure_consistencia_tables(conn) -> None:
